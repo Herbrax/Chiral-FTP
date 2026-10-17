@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chiral-ftp · FTP client</title>
+<meta name="description" content="chiral-ftp: the ultimate file manager and FTP interface for PS5">
+<link rel="icon" href="/mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div id="app">
+  <header class="toolbar" id="toolbar">
+    <a class="brand" href="/" title="chiral-ftp"><img class="dark-mark" src="/mark.svg" alt=""><img class="light-mark" src="/mark-light.svg" alt=""><span class="wordmark">chiral<span class="ftp">-ftp</span></span></a>
+    <a class="btn" href="/" style="text-decoration:none" title="Browse the PS5's files, upload from and download to this device">&#128193; PS5 files</a>
+    <button class="btn" id="btn-sites" title="Site Manager">&#9776; Site Manager</button>
+    <div class="dropdown" id="recent-wrap">
+      <button class="btn" id="btn-recent" title="Recent connections">Recent &#9662;</button>
+      <div class="dropdown-menu" id="recent-menu"></div>
+    </div>
+    <form class="quick" id="quick" autocomplete="off">
+      <select id="q-proto" title="Protocol"><option value="ftp">FTP</option><option value="sftp">SFTP</option></select>
+      <label>Host <input id="q-host" placeholder="192.168.1.20" spellcheck="false"></label>
+      <label>Username <input id="q-user" placeholder="anonymous" spellcheck="false"></label>
+      <label>Password <input id="q-pass" type="password"></label>
+      <label class="port">Port <input id="q-port" placeholder="21" inputmode="numeric"></label>
+      <button class="btn primary" id="btn-connect" type="submit">Quickconnect</button>
+    </form>
+    <button class="btn" id="btn-disconnect" disabled>Disconnect</button>
+    <span class="spacer"></span>
+    <button class="btn" id="btn-settings" title="Settings">&#9881; Settings</button>
+  </header>
+
+  <section class="log" id="log-pane">
+    <div class="log-lines" id="log"></div>
+    <form class="log-cmd" id="cmd-form">
+      <span class="prompt">&gt;</span>
+      <input id="cmd" placeholder="Enter a custom FTP command (e.g. SITE HELP, or KILL/MTRW/SELF on ftpsrv)" spellcheck="false" autocomplete="off">
+      <button class="btn small" type="submit">Send</button>
+      <button class="btn small" type="button" id="btn-log-clear">Clear</button>
+      <button class="btn small" type="button" id="btn-log-toggle" title="Collapse log">&#9650;</button>
+    </form>
+  </section>
+
+  <nav class="mobile-tabs" id="mobile-tabs">
+    <button class="active" data-pane="local">PS5</button>
+    <button data-pane="remote">Server</button>
+    <button data-pane="queue">Queue <span id="mt-queue"></span></button>
+  </nav>
+
+  <main class="panes" id="panes">
+    <section class="pane" id="pane-local" data-side="local"></section>
+    <section class="pane" id="pane-remote" data-side="remote"></section>
+  </main>
+
+  <section class="queue" id="queue-pane">
+    <div class="queue-head">
+      <div class="tabs" id="queue-tabs">
+        <button class="active" data-tab="queued">Queued files <b id="qc-queued">0</b></button>
+        <button data-tab="failed">Failed transfers <b id="qc-failed">0</b></button>
+        <button data-tab="done">Successful transfers <b id="qc-done">0</b></button>
+      </div>
+      <span class="spacer"></span>
+      <button class="btn small" id="btn-pause">Pause queue</button>
+      <button class="btn small" id="btn-retry-all">Retry failed</button>
+      <button class="btn small" id="btn-cancel-all">Cancel all</button>
+      <button class="btn small" id="btn-clear">Clear list</button>
+    </div>
+    <div class="queue-body">
+      <table class="qtable">
+        <thead><tr><th class="c-dir"></th><th>PS5 file</th><th>Server file</th><th class="c-size">Size</th><th class="c-prog">Progress</th><th class="c-status">Status</th><th class="c-act"></th></tr></thead>
+        <tbody id="queue-rows"></tbody>
+      </table>
+      <div class="empty" id="queue-empty">Nothing here yet. Select files and press Upload or Download, or drag them to the other side.</div>
+    </div>
+  </section>
+
+  <footer class="statusbar">
+    <span id="sb-conn" class="dot off">Not connected</span>
+    <span id="sb-workers"></span>
+    <span class="spacer"></span>
+    <span id="sb-speed"></span>
+    <span id="sb-version"></span>
+  </footer>
+</div>
+
+<div class="modal-back hidden" id="modal-back"></div>
+
+<div class="modal hidden" id="sites-modal" role="dialog" aria-label="Site Manager">
+  <div class="modal-head">Site Manager<button class="x" data-close>&times;</button></div>
+  <div class="sites">
+    <div class="site-list-wrap">
+      <ul class="site-list" id="site-list"></ul>
+      <div class="row">
+        <button class="btn small" id="site-new">New site</button>
+        <button class="btn small" id="site-dup">Duplicate</button>
+        <button class="btn small danger" id="site-del">Delete</button>
+      </div>
+    </div>
+    <form class="site-form" id="site-form" autocomplete="off">
+      <label>Name <input name="name" placeholder="My laptop"></label>
+      <label>Protocol
+        <select name="protocol">
+          <option value="ftp">FTP - File Transfer Protocol</option>
+          <option value="sftp">SFTP - SSH File Transfer Protocol (Mac/Linux "Remote Login")</option>
+        </select>
+      </label>
+      <div class="grid2">
+        <label>Host <input name="host" placeholder="192.168.1.20" spellcheck="false"></label>
+        <label>Port <input name="port" placeholder="21" inputmode="numeric"></label>
+      </div>
+      <label class="check"><input type="checkbox" name="anonymous"> Anonymous login</label>
+      <div class="grid2">
+        <label>Username <input name="user" spellcheck="false"></label>
+        <label>Password <input name="pass" type="password"></label>
+      </div>
+      <label class="sftp-only">Private key file on the PS5 (optional)
+        <input name="keyfile" placeholder="/data/chiral-ftp/id_rsa" spellcheck="false">
+        <small>Put the matching .pub file next to it. With a key, the password field is the key's passphrase.</small>
+      </label>
+      <label class="ftp-only">Transfer mode
+        <select name="pasv_mode">
+          <option value="0">Passive (automatic PASV/EPSV)</option>
+          <option value="1">Passive, PASV only</option>
+          <option value="2">Extended passive, EPSV only</option>
+        </select>
+      </label>
+      <div class="grid2">
+        <label>Default PS5 folder <input name="local_dir" placeholder="/data" spellcheck="false"></label>
+        <label>Default server folder <input name="remote_dir" placeholder="/" spellcheck="false"></label>
+      </div>
+      <label>Comments <textarea name="comment" rows="2"></textarea></label>
+      <div class="row end">
+        <button class="btn" type="button" id="site-save">Save</button>
+        <button class="btn primary" type="submit">Connect</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal hidden" id="settings-modal" role="dialog" aria-label="Settings">
+  <div class="modal-head">Settings<button class="x" data-close>&times;</button></div>
+  <form class="settings" id="settings-form">
+    <label>Simultaneous transfers: <b id="conn-value">5</b>
+      <input type="range" name="connections" min="1" max="30" value="5">
+      <small>Each transfer opens its own login to the server (like FileZilla). Some servers limit connections per IP; lower this if you see "421 Too many connections".</small>
+    </label>
+    <label>When the target file already exists
+      <select name="policy">
+        <option value="0">Resume if smaller, skip if identical size, else overwrite</option>
+        <option value="1">Always overwrite</option>
+        <option value="2">Skip</option>
+        <option value="3">Keep both (rename new file)</option>
+      </select>
+    </label>
+    <label>Automatic retries after a dropped connection
+      <input type="number" name="retries" min="0" max="10" value="2">
+    </label>
+    <label class="check"><input type="checkbox" name="preserve_mtime" checked> Preserve file timestamps</label>
+    <label class="check"><input type="checkbox" name="show_hidden" checked> Show hidden files on servers that need LIST -a</label>
+    <label class="check"><input type="checkbox" name="save_pass" checked> Remember passwords in Recent connections</label>
+    <label>SFTP host keys
+      <small>Each SFTP server's key is remembered on first connect; a changed key is refused. Forget them if you reinstalled a server.</small>
+      <button class="btn small" type="button" id="btn-forget-keys" style="align-self:flex-start">Forget saved host keys</button>
+    </label>
+    <div class="row end">
+      <button class="btn danger" type="button" id="btn-exit" title="Stop the web server in chiral-ftp on the PS5">Stop web server</button>
+      <span class="spacer"></span>
+      <button class="btn primary" type="submit">Save</button>
+    </div>
+  </form>
+</div>
+
+<div class="modal hidden small" id="ask-modal" role="dialog">
+  <div class="modal-head"><span id="ask-title"></span><button class="x" data-close>&times;</button></div>
+  <form id="ask-form">
+    <p id="ask-text"></p>
+    <input id="ask-input" spellcheck="false" autocomplete="off">
+    <div class="row end">
+      <button class="btn" type="button" data-close>Cancel</button>
+      <button class="btn primary" type="submit" id="ask-ok">OK</button>
+    </div>
+  </form>
+</div>
+
+<div class="menu hidden" id="context-menu"></div>
+<div class="toast hidden" id="toast"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

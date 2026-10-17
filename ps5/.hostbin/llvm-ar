@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# macOS host shim: zlib's configure uses libtool-style "-o" archive flags on Darwin.
+real=/opt/homebrew/opt/llvm@18/bin/llvm-ar
+if [[ "${1:-}" == "-o" ]]; then shift; exec "$real" rcs "$@"; fi
+exec "$real" "$@"

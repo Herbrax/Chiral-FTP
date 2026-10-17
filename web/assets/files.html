@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chiral-ftp · PS5 files</title>
+<meta name="description" content="chiral-ftp: the ultimate file manager and FTP interface for PS5">
+<link rel="icon" href="/mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/files.css">
+</head>
+<body>
+<div id="app" class="fm">
+  <header class="toolbar fm-top">
+    <a class="brand" href="/" title="chiral-ftp"><img class="dark-mark" src="/mark.svg" alt=""><img class="light-mark" src="/mark-light.svg" alt=""><span class="wordmark">chiral<span class="ftp">-ftp</span></span></a>
+    <nav class="fm-tabs">
+      <a class="active" href="/">PS5 files</a>
+      <a href="/index.html">FTP client</a>
+    </nav>
+    <span class="spacer"></span>
+    <label class="check fm-replace" title="Replace files that already have the same name; otherwise uploads are kept as &quot;name (2)&quot;">
+      <input type="checkbox" id="replace"> Replace existing
+    </label>
+    <button class="btn" id="btn-mkdir" type="button">New folder</button>
+    <button class="btn primary" id="btn-upload" type="button">&#8679; Upload files</button>
+    <input type="file" id="file-input" multiple hidden>
+  </header>
+
+  <div class="fm-path">
+    <button class="btn small" id="btn-drives" type="button" title="Drives">Drives</button>
+    <button class="btn small" id="btn-up" type="button" title="Parent folder">&#8593; Up</button>
+    <div class="crumbs" id="crumbs"></div>
+    <button class="btn small" id="btn-refresh" type="button" title="Refresh">&#8635;</button>
+  </div>
+
+  <div class="fm-selbar hidden" id="selbar">
+    <span id="sel-count"></span>
+    <button class="btn small" id="sel-download" type="button">Download</button>
+    <button class="btn small" id="sel-copy" type="button">Copy to&hellip;</button>
+    <button class="btn small" id="sel-move" type="button">Move to&hellip;</button>
+    <button class="btn small danger" id="sel-delete" type="button">Delete</button>
+    <button class="btn small" id="sel-clear" type="button">Clear</button>
+  </div>
+
+  <main class="fm-list" id="list" tabindex="0">
+    <div class="fm-drop hidden" id="drop">Drop files to upload them to <b id="drop-target"></b></div>
+    <table>
+      <thead>
+        <tr>
+          <th class="c-check"><input type="checkbox" id="check-all" title="Select all"></th>
+          <th class="c-name">Name</th>
+          <th class="c-size">Size</th>
+          <th class="c-date">Modified</th>
+          <th class="c-more"></th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty hidden" id="empty">This folder is empty. Drop files here or use Upload files.</div>
+  </main>
+
+  <footer class="fm-status" id="status">
+    <div class="fm-job hidden" id="job">
+      <div class="bar"><div id="job-bar"></div></div>
+      <span id="job-text"></span>
+      <button class="btn small danger" id="job-cancel" type="button">Stop</button>
+    </div>
+    <div class="fm-uploads hidden" id="uploads"></div>
+    <span id="status-text"></span>
+  </footer>
+</div>
+
+<div class="modal-back hidden" id="picker">
+  <div class="modal">
+    <div class="modal-head"><b id="picker-title">Copy to</b><button class="x" type="button" data-close>&times;</button></div>
+    <div class="fm-picker">
+      <div class="fm-path"><button class="btn small" id="pick-up" type="button">&#8593; Up</button><div class="crumbs" id="pick-path"></div></div>
+      <ul id="pick-list"></ul>
+      <div class="fm-picker-actions">
+        <button class="btn" type="button" data-close>Cancel</button>
+        <button class="btn primary" id="pick-ok" type="button">Copy here</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="fm-menu hidden" id="menu"></div>
+<div class="toast hidden" id="toast"></div>
+<script src="/files.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+.build/
+gen/
+dist/
+.deps/
+chiral-ftp-host
+data/
+tests/test_listparse
+ps5/.deps/
+ps5/build/
+.DS_Store
+__pycache__/
+*.dSYM/
+release/

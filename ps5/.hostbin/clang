@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# macOS host shim: Homebrew's clang-18 doesn't find the macOS SDK on its own.
+# Only host builds (no --target) get the SDK; PS5 target builds pass through.
+real=/opt/homebrew/opt/llvm@18/bin/clang-18
+for a in "$@"; do
+  case "$a" in --target=*|-target|--sysroot*|-nostdlib|-nostdinc) exec "$real" "$@";; esac
+done
+sdk="$(xcrun --show-sdk-path)"; exec "$real" -isysroot "$sdk" -L"$sdk/usr/lib" -Wno-unused-command-line-argument "$@"

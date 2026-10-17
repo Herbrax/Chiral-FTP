@@ -1,0 +1,97 @@
+/* The PS5 file manager page; colors and buttons come from app.css. */
+
+.fm-top { gap: 10px; }
+.fm-tabs { display: flex; gap: 4px; }
+.fm-tabs a {
+  padding: 6px 12px; border-radius: 6px; color: var(--muted); text-decoration: none;
+}
+.fm-tabs a.active { background: var(--sel); color: var(--text); }
+.fm-tabs a:hover { color: var(--text); }
+.fm-replace { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+
+.fm-path {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  background: var(--panel-2); border-bottom: 1px solid var(--line);
+}
+.crumbs { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; min-width: 0; }
+.crumbs a { color: var(--text); text-decoration: none; padding: 2px 6px; border-radius: 4px; cursor: pointer; }
+.crumbs a:hover { background: var(--hover); }
+.crumbs .sep { color: var(--muted); }
+
+.fm-selbar {
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+  background: var(--sel); border-bottom: 1px solid var(--line);
+}
+.fm-selbar span { margin-right: 6px; font-weight: 600; }
+
+.fm-list { flex: 1; overflow: auto; position: relative; outline: none; }
+.fm-list table { width: 100%; border-collapse: collapse; }
+.fm-list th {
+  position: sticky; top: 0; background: var(--panel); text-align: left; font-weight: 600;
+  color: var(--muted); font-size: 13px; padding: 6px 10px; border-bottom: 1px solid var(--line); z-index: 1;
+}
+.fm-list td { padding: 0 10px; height: calc(var(--row) + 8px); border-bottom: 1px solid var(--line); }
+.fm-list tr:hover td { background: var(--hover); }
+.fm-list tr.selected td { background: var(--sel); }
+.c-check { width: 36px; }
+.c-size { width: 110px; text-align: right; color: var(--muted); white-space: nowrap; }
+.c-date { width: 170px; color: var(--muted); white-space: nowrap; }
+.c-more { width: 44px; text-align: right; }
+th.c-size { text-align: right; }
+.fm-name { display: flex; align-items: center; gap: 10px; cursor: pointer; min-width: 0; }
+.fm-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm-name .ico { flex: none; width: 20px; text-align: center; }
+.fm-name .ico.dir { color: var(--accent-2); }
+.fm-name .ico.file { color: var(--muted); }
+.fm-name .drive-label { color: var(--muted); font-size: 13px; margin-left: 6px; }
+.fm-list .empty { padding: 40px; text-align: center; color: var(--muted); }
+
+.fm-drop {
+  position: absolute; inset: 10px; z-index: 5; display: flex; align-items: center; justify-content: center;
+  border: 3px dashed var(--accent); border-radius: 14px; background: rgba(47, 140, 255, .14);
+  font-size: 20px; pointer-events: none;
+}
+
+.fm-status {
+  display: flex; flex-direction: column; gap: 6px; padding: 8px 12px;
+  background: var(--panel-2); border-top: 1px solid var(--line); font-size: 13px; color: var(--muted);
+}
+.fm-job, .fm-up { display: flex; align-items: center; gap: 10px; color: var(--text); }
+.fm-job .bar, .fm-up .bar {
+  flex: none; width: 220px; height: 10px; border-radius: 5px; background: var(--bg); overflow: hidden;
+}
+.fm-job .bar div, .fm-up .bar div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.fm-up.failed .bar div { background: var(--err); }
+.fm-up.done .bar div { background: var(--ok); }
+.fm-up span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fm-uploads { display: flex; flex-direction: column; gap: 4px; max-height: 120px; overflow: auto; }
+
+.fm-menu {
+  position: fixed; z-index: 30; min-width: 190px; padding: 4px; border-radius: 8px;
+  background: var(--panel); border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(0, 0, 0, .35);
+}
+.fm-menu button {
+  display: block; width: 100%; text-align: left; padding: 7px 12px; border: 0; border-radius: 6px;
+  background: none; cursor: pointer;
+}
+.fm-menu button:hover { background: var(--hover); }
+.fm-menu button.danger { color: var(--err); }
+
+.fm-picker { padding: 0 0 12px; }
+.fm-picker ul { list-style: none; margin: 0; padding: 4px 0; height: 320px; overflow: auto; }
+.fm-picker li { padding: 8px 16px; cursor: pointer; display: flex; gap: 10px; }
+.fm-picker li:hover { background: var(--hover); }
+.fm-picker li .ico { color: var(--accent-2); }
+.fm-picker-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px 0; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 70px; transform: translateX(-50%); z-index: 40;
+  padding: 10px 18px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .35); max-width: calc(100vw - 32px);
+}
+.toast.err { border-color: var(--err); color: var(--err); }
+
+@media (max-width: 700px) {
+  .c-date, .fm-replace, .brand .wordmark { display: none; }
+  .fm-job .bar, .fm-up .bar { width: 100px; }
+}

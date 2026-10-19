@@ -384,6 +384,10 @@ bool take_typed(std::string &text, bool &backspace, bool &enter, bool &escape) {
   return any;
 }
 
+bool keyboard_failed() {
+  return backend::keyboard_failed();
+}
+
 bool has_native_keyboard() {
   return backend::has_native_keyboard();
 }

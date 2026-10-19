@@ -412,6 +412,7 @@ api_local_list(req_t *r) {
   if(!realpath(path, real)) snprintf(real, sizeof(real), "%s", path);
   strbuf_append(&b, "{\"ok\":true,\"path\":");
   json_str(&b, real);
+  strbuf_printf(&b, ",\"free\":%lld", localfs_free_space(real, NULL));
   strbuf_append(&b, ",\"entries\":");
   if(localfs_list_json(&b, real)) {
     strbuf_free(&b);
@@ -446,7 +447,7 @@ api_local_rename(req_t *r) {
   const char *to = arg(r, "to", NULL);
 
   if(!valid_path(from) || !valid_path(to)) return fail(r->conn, "Invalid path");
-  if(rename(from, to)) return fail_errno(r->conn, "Could not rename");
+  if(localfs_rename(from, to)) return fail_errno(r->conn, "Could not rename");
   return ok(r->conn);
 }
 

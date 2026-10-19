@@ -55,6 +55,7 @@ void inject_text(const std::string &text, bool enter);  // scripted typing for t
 bool native_text_prompt(const char *title, const std::string &initial, TextKind kind,
                         std::string &out);
 bool has_native_keyboard();
+bool keyboard_failed();
 // Text typed on a computer keyboard while a prompt is open.
 bool take_typed(std::string &text, bool &backspace, bool &enter, bool &escape);
 void set_text_input(bool on);

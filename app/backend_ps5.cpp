@@ -42,6 +42,8 @@ int sceImeDialogGetResult(void *result);
 int sceImeDialogTerm(void);
 }
 
+extern "C" void startup_trace(const char *fmt, ...);
+
 namespace backend {
 namespace {
 
@@ -241,6 +243,7 @@ constexpr int kStatusNone = 0, kStatusRunning = 1, kStatusFinished = 2;
 
 int g_ime_module = -1;
 bool g_dialogs_ready = false;
+bool g_keyboard_failed = false;
 
 std::vector<std::uint16_t> to_utf16(const std::string &in, std::size_t limit) {
   std::vector<std::uint16_t> out;
@@ -297,8 +300,6 @@ bool init(bool headless) {
   (void)sceUserServiceInitialize(nullptr);
   (void)scePadInit();
   pad_open();
-  // The keyboard's module must be loaded before its functions exist.
-  g_ime_module = sceSysmoduleLoadModule(kImeDialogModule);
   return true;
 }
 
@@ -334,11 +335,26 @@ bool has_native_keyboard() {
   return true;
 }
 
+void prepare_keyboard() {
+  if(g_ime_module < 0) g_ime_module = sceSysmoduleLoadModule(kImeDialogModule);
+}
+
+bool keyboard_failed() {
+  return g_keyboard_failed;
+}
+
 bool native_text_prompt(const char *title, const std::string &initial, TextKind kind, std::string &out) {
-  if(g_ime_module < 0 && (g_ime_module = sceSysmoduleLoadModule(kImeDialogModule)) < 0) return false;
+  g_keyboard_failed = true;  // until the dialog really opens
+  if(g_ime_module < 0 && (g_ime_module = sceSysmoduleLoadModule(kImeDialogModule)) < 0) {
+    startup_trace("The PS5 keyboard's module did not load (%#x)", (unsigned)g_ime_module);
+    return false;
+  }
   if(!g_dialogs_ready) {
     int r = sceCommonDialogInitialize();
-    if(r < 0 && (std::uint32_t)r != kCommonDialogAlreadyInitialized) return false;
+    if(r < 0 && (std::uint32_t)r != kCommonDialogAlreadyInitialized) {
+      startup_trace("The PS5's dialogs did not start (%#x)", (unsigned)r);
+      return false;
+    }
     g_dialogs_ready = true;
   }
   const std::size_t limit = 255;
@@ -358,7 +374,11 @@ bool native_text_prompt(const char *title, const std::string &initial, TextKind 
   param.pos_y = 540;
   param.placeholder = placeholder.data();
   param.title = wtitle.data();
-  if(sceImeDialogInit(&param, nullptr) != 0) return false;
+  if(int r = sceImeDialogInit(&param, nullptr); r != 0) {
+    startup_trace("The PS5 keyboard did not open (%#x)", (unsigned)r);
+    return false;
+  }
+  g_keyboard_failed = false;  // open: from here on, false means cancelled
 
   bool ok = false;
   const std::uint64_t since = ticks_ms();

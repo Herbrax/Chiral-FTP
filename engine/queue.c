@@ -320,7 +320,7 @@ download_file(ftp_conn_t *c, qitem_t *it, const settings_t *st) {
 
   memset(&p, 0, sizeof(p));
   p.it = it;
-  p.fd = open(it->local, O_WRONLY | O_CREAT | (offset ? 0 : O_TRUNC), PS5_FILE_MODE);
+  p.fd = localfs_open_write(it->local, O_WRONLY | O_CREAT | (offset ? 0 : O_TRUNC), PS5_FILE_MODE);
   if(p.fd >= 0) fchmod(p.fd, PS5_FILE_MODE);  // also when replacing a file
   if(p.fd < 0) {
     snprintf(it->error, sizeof(it->error), "Could not open local file: %s", strerror(errno));

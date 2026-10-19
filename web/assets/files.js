@@ -94,6 +94,7 @@
       var data = await call("/api/local/list", { path: path }, "GET");
       if (!keep || data.path !== state.path) state.selected.clear();
       state.path = data.path;
+      state.free = data.free;
       state.entries = data.entries.slice().sort(function (a, b) {
         if (a.dir !== b.dir) return b.dir - a.dir;
         return a.name.localeCompare(b.name, undefined, { sensitivity: "base", numeric: true });
@@ -172,7 +173,8 @@
     $("empty").classList.toggle("hidden", state.entries.length > 0);
     var files = state.entries.filter(function (e) { return !e.dir; });
     var bytes = files.reduce(function (s, e) { return s + Math.max(0, e.size || 0); }, 0);
-    status(state.path ? files.length + " files, " + (state.entries.length - files.length) + " folders · " + fmtSize(bytes) : "");
+    status(state.path ? files.length + " files, " + (state.entries.length - files.length) + " folders · " + fmtSize(bytes) +
+      (state.free >= 0 ? " · " + fmtSize(state.free) + " free" : "") : "");
     selbar();
   }
 

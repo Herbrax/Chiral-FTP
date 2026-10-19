@@ -4,17 +4,21 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <unistd.h>
 
 #ifdef __SCE__
 #include <sys/mount.h>
 #endif
 
+
+static int denied(void);  /* the last call failed for permissions */
 void
 path_join(char *out, size_t size, const char *dir, const char *name) {
   size_t len = strlen(dir);
@@ -166,18 +170,7 @@ root_info(const char *path, const char *label, localfs_root_t *r) {
   memset(r, 0, sizeof(*r));
   snprintf(r->path, sizeof(r->path), "%s", path);
   snprintf(r->label, sizeof(r->label), "%s", label);
-  r->free_bytes = r->total_bytes = -1;
-  /* The native title can't use the SDK's statfs (a raw system call, which a
-     dashboard app may not make), so it shows no free space. */
-#if defined(__SCE__) && !defined(__PROSPERO__)
-  {
-    struct statfs fs;
-    if(!statfs(path, &fs)) {
-      r->free_bytes = (long long)fs.f_bavail * (long long)fs.f_bsize;
-      r->total_bytes = (long long)fs.f_blocks * (long long)fs.f_bsize;
-    }
-  }
-#endif
+  r->free_bytes = localfs_free_space(path, &r->total_bytes);
   return 1;
 }
 
@@ -335,6 +328,7 @@ delete_tree(const char *path, int depth) {
     errno = ELOOP;
     return -1;
   }
+  chmod(path, PS5_FILE_MODE);  // its entries can only go if it's writable
   /* A few passes: anything a pass couldn't see is picked up by the next. */
   for(int pass = 0; pass < 4; pass++) {
     names_t n;
@@ -352,7 +346,7 @@ delete_tree(const char *path, int depth) {
 
       path_join(child, sizeof(child), path, n.name[i]);
       if(n.type[i] == DT_UNKNOWN && !lstat(child, &st)) is_dir = S_ISDIR(st.st_mode);
-      if(is_dir ? delete_tree(child, depth + 1) : unlink(child)) {
+      if(is_dir ? delete_tree(child, depth + 1) : localfs_unlink(child)) {
         if(!first_err) first_err = errno;
       } else {
         deleted++;
@@ -361,7 +355,7 @@ delete_tree(const char *path, int depth) {
     names_free(&n);
     if(!deleted) break;  // nothing more can go
   }
-  if(rmdir(path)) {
+  if(rmdir(path) && (!denied() || localfs_open_up_parent(path) || rmdir(path))) {
     if(!first_err) first_err = errno;
   }
   if(first_err) {
@@ -376,7 +370,7 @@ localfs_delete(const char *path) {
   struct stat st;
 
   if(lstat(path, &st)) return -1;
-  if(!S_ISDIR(st.st_mode)) return unlink(path);
+  if(!S_ISDIR(st.st_mode)) return localfs_unlink(path);
   return delete_tree(path, 0);
 }
 
@@ -396,9 +390,69 @@ localfs_free_name(char *out, size_t size, const char *dir, const char *name) {
   return 0;
 }
 
+static int
+denied(void) {
+  return errno == EACCES || errno == EPERM;
+}
+
+int
+localfs_open_up_parent(const char *path) {
+  char dir[PATH_MAX];
+
+  path_parent(dir, sizeof(dir), path);
+  return chmod(dir, PS5_FILE_MODE);
+}
+
 int
 localfs_mkdir(const char *path) {
-  if(mkdir(path, PS5_FILE_MODE)) return -1;
+  if(mkdir(path, PS5_FILE_MODE) && (!denied() || localfs_open_up_parent(path) || mkdir(path, PS5_FILE_MODE)))
+    return -1;
   chmod(path, PS5_FILE_MODE);
   return 0;
+}
+
+int
+localfs_rename(const char *from, const char *to) {
+  if(!rename(from, to)) return 0;
+  if(!denied()) return -1;
+  localfs_open_up_parent(from);
+  localfs_open_up_parent(to);
+  chmod(from, PS5_FILE_MODE);  // a folder being moved needs its own write access too
+  return rename(from, to);
+}
+
+int
+localfs_open_write(const char *path, int flags, int mode) {
+  int fd = open(path, flags, mode);
+  if(fd >= 0 || !denied()) return fd;
+  localfs_open_up_parent(path);
+  chmod(path, PS5_FILE_MODE);  // replacing a file that isn't writable
+  return open(path, flags, mode);
+}
+
+int
+localfs_rmdir(const char *path) {
+  if(!rmdir(path)) return 0;
+  if(!denied() || localfs_open_up_parent(path)) return -1;
+  return rmdir(path);
+}
+
+int
+localfs_unlink(const char *path) {
+  if(!unlink(path)) return 0;
+  if(!denied() || localfs_open_up_parent(path)) return -1;
+  return unlink(path);
+}
+
+/* Free space on the drive holding path (-1 if unknown). statvfs comes from
+   libkernel on the PS5; the SDK's own statfs is a raw system call a title
+   may not make. */
+long long
+localfs_free_space(const char *path, long long *total) {
+  struct statvfs vfs;
+
+  if(total) *total = -1;
+  if(statvfs(path, &vfs)) return -1;
+  if(total) *total = (long long)vfs.f_blocks * (long long)vfs.f_frsize;
+  return (long long)vfs.f_bavail * (long long)vfs.f_frsize;
 }

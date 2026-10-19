@@ -17,6 +17,12 @@ void present(const std::uint32_t *pixels);
 std::uint64_t ticks_ms();
 
 bool has_native_keyboard();
+// Loads the system keyboard's module. On the PS5 this must happen before the
+// storage access request, which changes what the app may load (as in
+// ProsperoEden's PrepareSystemKeyboard).
+void prepare_keyboard();
+// True when the last native_text_prompt failed to open (not just cancelled).
+bool keyboard_failed();
 bool native_text_prompt(const char *title, const std::string &initial, TextKind kind,
                         std::string &out);
 void set_text_input(bool on);

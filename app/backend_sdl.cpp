@@ -116,6 +116,12 @@ bool has_native_keyboard() {
   return false;
 }
 
+void prepare_keyboard() {}
+
+bool keyboard_failed() {
+  return false;
+}
+
 bool native_text_prompt(const char *, const std::string &, TextKind, std::string &) {
   return false;
 }

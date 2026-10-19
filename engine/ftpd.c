@@ -659,8 +659,8 @@ cmd_stor(client_t *c, const char *arg, int append) {
 
   c->rest = 0;
   if(resolve(c, arg, real, sizeof(real), NULL)) return 0;
-  if(append) fd = open(real, O_WRONLY | O_CREAT | O_APPEND, PS5_FILE_MODE);
-  else fd = open(real, O_WRONLY | O_CREAT | (offset ? 0 : O_TRUNC), PS5_FILE_MODE);
+  if(append) fd = localfs_open_write(real, O_WRONLY | O_CREAT | O_APPEND, PS5_FILE_MODE);
+  else fd = localfs_open_write(real, O_WRONLY | O_CREAT | (offset ? 0 : O_TRUNC), PS5_FILE_MODE);
   if(fd < 0) return reply_errno(c, 550);
   fchmod(fd, PS5_FILE_MODE);  // also when replacing a file, and regardless of the umask
   if(!append && offset && lseek(fd, (off_t)offset, SEEK_SET) < 0) {
@@ -775,12 +775,12 @@ cmd_simple_path(client_t *c, const char *verb, const char *arg) {
     return reply(c, "257 \"%s\" created", virt);
   }
   if(!strcmp(verb, "RMD")) {
-    if(rmdir(real)) return reply_errno(c, 550);
+    if(localfs_rmdir(real)) return reply_errno(c, 550);
     event(tr("%s removed folder %s"), c->who, virt);
     return reply(c, "250 Folder removed");
   }
   if(!strcmp(verb, "DELE")) {
-    if(unlink(real)) return reply_errno(c, 550);
+    if(localfs_unlink(real)) return reply_errno(c, 550);
     event(tr("%s deleted %s"), c->who, virt);
     return reply(c, "250 File deleted");
   }
@@ -804,7 +804,7 @@ cmd_simple_path(client_t *c, const char *verb, const char *arg) {
   }
   if(!strcmp(verb, "RNTO")) {
     if(!c->rename_from[0]) return reply(c, "503 Send RNFR first");
-    int r = rename(c->rename_from, real);
+    int r = localfs_rename(c->rename_from, real);
     c->rename_from[0] = 0;
     if(r) return reply_errno(c, 550);
     event(tr("%s renamed to %s"), c->who, virt);

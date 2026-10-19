@@ -140,6 +140,10 @@ int main(int argc, char **argv) {
      looks empty). Like ProsperoEden, ask the jailbreak's resident service
      for full access, or send the packaged upstream Lapy helper to elfldr on
      port 9021. Single-threaded startup, before anything opens a file. */
+  /* The keyboard's module first: after the access request the app may no
+     longer load it, and every text field (new folder, rename, passwords)
+     would silently do nothing (ProsperoEden loads it first too). */
+  backend::prepare_keyboard();
   const elevation::Status access = elevation::request(elevation::Capability::filesystem);
   /* Elevation leaves the effective group (1) apart from the real one (0);
      match them, as ProsperoEden does. Root may set its group. */

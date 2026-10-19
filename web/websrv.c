@@ -101,7 +101,7 @@ upload_open(struct MHD_Connection *conn, request_context_t *ctx) {
     ctx->err = ENAMETOOLONG;
     return;
   }
-  if((ctx->fd = open(ctx->tmp, O_WRONLY | O_CREAT | O_TRUNC, PS5_FILE_MODE)) < 0) ctx->err = errno;
+  if((ctx->fd = localfs_open_write(ctx->tmp, O_WRONLY | O_CREAT | O_TRUNC, PS5_FILE_MODE)) < 0) ctx->err = errno;
   else fchmod(ctx->fd, PS5_FILE_MODE);  // regardless of the umask
 }
 
@@ -126,7 +126,7 @@ upload_finish(struct MHD_Connection *conn, request_context_t *ctx) {
 
   if(ctx->fd >= 0 && close(ctx->fd) && !ctx->err) ctx->err = errno;
   ctx->fd = -1;
-  if(!ctx->err && rename(ctx->tmp, ctx->final)) ctx->err = errno;
+  if(!ctx->err && localfs_rename(ctx->tmp, ctx->final)) ctx->err = errno;
   if(ctx->err) {
     if(ctx->tmp[0]) unlink(ctx->tmp);
     log_msg(0, LOG_ERROR, "Upload from the browser failed: %s", strerror(ctx->err));

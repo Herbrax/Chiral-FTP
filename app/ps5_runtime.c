@@ -92,15 +92,6 @@ __wrap_lstat(const char *path, struct stat *st) {
 }
 
 int
-chmod(const char *path, mode_t mode) {
-  int fd = open(path, O_RDONLY), ret;
-  if(fd < 0) return -1;
-  ret = fchmod(fd, mode);
-  close(fd);
-  return ret;
-}
-
-int
 utimes(const char *path, const struct timeval times[2]) {
   struct utimbuf t = {times[0].tv_sec, times[1].tv_sec};
   return utime(path, &t);

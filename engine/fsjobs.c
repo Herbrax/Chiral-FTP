@@ -91,7 +91,7 @@ copy_file(const char *src, const char *dst, const struct stat *st) {
     free(buf);
     return -1;
   }
-  if((out = open(dst, O_WRONLY | O_CREAT | O_EXCL, PS5_FILE_MODE)) < 0) {
+  if((out = localfs_open_write(dst, O_WRONLY | O_CREAT | O_EXCL, PS5_FILE_MODE)) < 0) {
     err = errno;
     close(in);
     free(buf);
@@ -183,7 +183,7 @@ run(const job_t *j) {
     return -1;
   }
   if(j->move) {
-    if(!rename(j->src, dst)) {  // same drive: instant
+    if(!localfs_rename(j->src, dst)) {  // same drive: instant
       pthread_mutex_lock(&g_lock);
       g_stats.done = g_stats.total;
       pthread_mutex_unlock(&g_lock);

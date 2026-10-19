@@ -914,15 +914,15 @@
    "ar": "تنزيل {0}"
   },
   {
-   "en": "Downloading {0} items  ·  press TOUCHPAD to watch",
-   "es": "Descargando {0} elementos  ·  pulsa TOUCHPAD para verlo",
-   "fr": "Téléchargement de {0} éléments  ·  appuyez sur TOUCHPAD pour suivre",
-   "it": "Download di {0} elementi  ·  premi TOUCHPAD per seguirlo",
-   "ja": "{0} 件をダウンロード中  ·  TOUCHPADで表示",
-   "ko": "{0}개 항목 다운로드 중  ·  TOUCHPAD로 보기",
-   "zh": "正在下载 {0} 项  ·  按 TOUCHPAD 查看",
-   "ru": "Скачивание {0} элементов  ·  нажмите TOUCHPAD, чтобы смотреть",
-   "ar": "جارٍ تنزيل {0} عنصر  ·  اضغط TOUCHPAD للمتابعة"
+   "en": "Downloading {0} items  ·  OPTIONS > Transfers to watch",
+   "es": "Descargando {0} elementos  ·  OPTIONS > Transferencias para verlo",
+   "fr": "Téléchargement de {0} éléments  ·  OPTIONS > Transferts pour suivre",
+   "it": "Download di {0} elementi  ·  OPTIONS > Trasferimenti per seguirlo",
+   "ja": "{0} 件をダウンロード中  ·  OPTIONS > 転送 で表示",
+   "ko": "{0}개 항목 다운로드 중  ·  OPTIONS > 전송에서 보기",
+   "zh": "正在下载 {0} 项  ·  在 OPTIONS > 传输 中查看",
+   "ru": "Скачивание {0} элементов  ·  OPTIONS > Передачи, чтобы смотреть",
+   "ar": "جارٍ تنزيل {0} عنصر  ·  OPTIONS > عمليات النقل للمتابعة"
   },
   {
    "en": "Drives",
@@ -2553,6 +2553,17 @@
    "ar": "لا يمكن ترك كلمة المرور فارغة؛ فعّل تسجيل الدخول المجهول بدلًا من ذلك"
   },
   {
+   "en": "The PS5 keyboard couldn't open",
+   "es": "No se pudo abrir el teclado de la PS5",
+   "fr": "Impossible d'ouvrir le clavier de la PS5",
+   "it": "Impossibile aprire la tastiera della PS5",
+   "ja": "PS5のキーボードを開けませんでした",
+   "ko": "PS5 키보드를 열 수 없습니다",
+   "zh": "无法打开 PS5 键盘",
+   "ru": "Не удалось открыть клавиатуру PS5",
+   "ar": "تعذّر فتح لوحة مفاتيح PS5"
+  },
+  {
    "en": "The ultimate file manager and FTP interface for PS5:",
    "es": "El gestor de archivos y la interfaz FTP definitivos para PS5:",
    "fr": "Le gestionnaire de fichiers et l'interface FTP ultimes pour PS5 :",
@@ -2707,15 +2718,15 @@
    "ar": "رفع {0}"
   },
   {
-   "en": "Uploading {0} items  ·  press TOUCHPAD to watch",
-   "es": "Subiendo {0} elementos  ·  pulsa TOUCHPAD para verlo",
-   "fr": "Envoi de {0} éléments  ·  appuyez sur TOUCHPAD pour suivre",
-   "it": "Caricamento di {0} elementi  ·  premi TOUCHPAD per seguirlo",
-   "ja": "{0} 件をアップロード中  ·  TOUCHPADで表示",
-   "ko": "{0}개 항목 업로드 중  ·  TOUCHPAD로 보기",
-   "zh": "正在上传 {0} 项  ·  按 TOUCHPAD 查看",
-   "ru": "Загрузка {0} элементов  ·  нажмите TOUCHPAD, чтобы смотреть",
-   "ar": "جارٍ رفع {0} عنصر  ·  اضغط TOUCHPAD للمتابعة"
+   "en": "Uploading {0} items  ·  OPTIONS > Transfers to watch",
+   "es": "Subiendo {0} elementos  ·  OPTIONS > Transferencias para verlo",
+   "fr": "Envoi de {0} éléments  ·  OPTIONS > Transferts pour suivre",
+   "it": "Caricamento di {0} elementi  ·  OPTIONS > Trasferimenti per seguirlo",
+   "ja": "{0} 件をアップロード中  ·  OPTIONS > 転送 で表示",
+   "ko": "{0}개 항목 업로드 중  ·  OPTIONS > 전송에서 보기",
+   "zh": "正在上传 {0} 项  ·  在 OPTIONS > 传输 中查看",
+   "ru": "Загрузка {0} элементов  ·  OPTIONS > Передачи, чтобы смотреть",
+   "ar": "جارٍ رفع {0} عنصر  ·  OPTIONS > عمليات النقل للمتابعة"
   },
   {
    "en": "Use an octal mode like 755",

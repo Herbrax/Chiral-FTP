@@ -261,6 +261,7 @@ struct Pane {
   std::set<std::string> marked;
   int loading = 0;
   std::string error;
+  long long free_bytes = -1;  // on the drive of the folder shown (PS5 side)
 };
 
 struct ServerItem {
@@ -485,6 +486,7 @@ void load_local(const std::string &path, bool keep = false, Pane *target = nullp
   }
   ftp_listing_free(&l);
   set_entries(p, path, v, keep);
+  p.free_bytes = localfs_free_space(path.c_str(), nullptr);
 }
 
 struct ListCtx {
@@ -675,6 +677,7 @@ void prompt(const std::string &title, const std::string &initial, TextKind kind,
   if(platform::has_native_keyboard()) {
     std::string out;
     if(platform::native_text_prompt(title.c_str(), initial, kind, out)) done(out);
+    else if(platform::keyboard_failed()) show_toast(tr("The PS5 keyboard couldn't open"), true);
     return;
   }
   push(new TextEntry(title, initial, kind, done));
@@ -1331,8 +1334,8 @@ void transfer(Pane &from) {
   }
   from.marked.clear();
   char buf[128];
-  snprintf(buf, sizeof(buf), "%s", trf(from.remote ? N_("Downloading {0} items  ·  press TOUCHPAD to watch")
-                                                   : N_("Uploading {0} items  ·  press TOUCHPAD to watch"), {std::to_string(added)}).c_str());
+  snprintf(buf, sizeof(buf), "%s", trf(from.remote ? N_("Downloading {0} items  ·  OPTIONS > Transfers to watch")
+                                                   : N_("Uploading {0} items  ·  OPTIONS > Transfers to watch"), {std::to_string(added)}).c_str());
   show_toast(buf);
 }
 
@@ -1418,7 +1421,7 @@ void rename_item(Pane &p, const Entry &e) {
         return session_run(run_rename, &x, e, n);
       }, trf("Renamed to {0}", {name}));
     } else {
-      if(rename(from.c_str(), to.c_str())) show_toast(trf("Could not rename: {0}", {strerror(errno)}), true);
+      if(localfs_rename(from.c_str(), to.c_str())) show_toast(trf("Could not rename: {0}", {strerror(errno)}), true);
       load_local(dir, true, pp);
     }
   });
@@ -1770,6 +1773,10 @@ void draw_pane(Pane &p, int idx, bool fm, float x, float y, float w, float h) {
     }
     if(!p.marked.empty()) snprintf(foot, sizeof(foot), "%s", trf("{0} marked  ·  {1}", {std::to_string(p.marked.size()), fmt_size(mbytes)}).c_str());
     else snprintf(foot, sizeof(foot), "%s", trf("Files: {0}  ·  Folders: {1}  ·  {2}", {std::to_string(files), std::to_string(dirs), fmt_size(bytes)}).c_str());
+    if(!server_side && p.free_bytes >= 0) {
+      size_t used = strlen(foot);
+      snprintf(foot + used, sizeof(foot) - used, "  ·  %s", trf("{0} free", {fmt_size(p.free_bytes)}).c_str());
+    }
   }
   draw::text(x + 28, y + h - PANE_FOOT + 8, FS_SMALL, p.marked.empty() ? draw::MUTED : draw::OK, foot);
 }
@@ -1837,7 +1844,7 @@ void draw_bottom() {
   }
   x += draw::hint(x, y, ACT_R1, tr("Switch side"));
   x += draw::hint(x, y, ACT_OPTIONS, tr("Menu"));
-  draw::hint(x, y, ACT_TOUCHPAD, tr("Transfers"));
+  draw::hint(x, y, ACT_TOUCHPAD, tr("Start screen"));
 }
 
 /* ---------- log & queue polling ---------- */
@@ -2441,6 +2448,13 @@ void handle(Action a) {
     g.quit = true;
     return;
   }
+  // The touchpad goes back to the start screen from anywhere, closing
+  // whatever menu is open.
+  if(a == ACT_TOUCHPAD) {
+    g.overlays.clear();
+    go_mode(MODE_HOME);
+    return;
+  }
   if(!g.overlays.empty()) {
     Overlay *top = g.overlays.back().get();
     size_t depth = g.overlays.size();
@@ -2478,7 +2492,6 @@ void handle(Action a) {
   case ACT_RIGHT: g.active = 1; break;
   case ACT_L1: case ACT_R1: g.active = 1 - g.active; break;
   case ACT_OPTIONS: main_menu(); break;
-  case ACT_TOUCHPAD: push(new QueueView); break;
   case ACT_CROSS:
     if(servers) server_action(a);
     else open_entry(p);

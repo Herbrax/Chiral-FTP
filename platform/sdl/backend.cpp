@@ -2,6 +2,7 @@
 // keyboard shortcuts (and an SDL game controller when one is connected).
 
 #include "backend.h"
+#include "i18n.h"
 
 #include <SDL.h>
 
@@ -92,6 +93,16 @@ bool init(bool headless) {
   return g_texture != nullptr;
 }
 
+void shutdown() {
+  if(g_texture) SDL_DestroyTexture(g_texture);
+  if(g_renderer) SDL_DestroyRenderer(g_renderer);
+  if(g_window) SDL_DestroyWindow(g_window);
+  g_texture = nullptr;
+  g_renderer = nullptr;
+  g_window = nullptr;
+  SDL_Quit();
+}
+
 void pump(int timeout_ms) {
   SDL_Event e;
   if(timeout_ms > 0 ? SDL_WaitEventTimeout(&e, timeout_ms) : SDL_PollEvent(&e)) {
@@ -99,6 +110,14 @@ void pump(int timeout_ms) {
     while(SDL_PollEvent(&e)) handle(e);
   }
 }
+
+std::uint32_t *frame_begin(int *stride_pixels) {
+  // SDL wants a finished frame handed to a texture; nothing to draw into.
+  (void)stride_pixels;
+  return nullptr;
+}
+
+void frame_end() {}
 
 void present(const std::uint32_t *pixels) {
   if(!g_texture) return;
@@ -110,6 +129,32 @@ void present(const std::uint32_t *pixels) {
 
 std::uint64_t ticks_ms() {
   return SDL_GetTicks64();
+}
+
+bool touch(int *x, int *y, bool *down) {
+  // A window has a mouse, not a finger; not worth pretending otherwise.
+  (void)x;
+  (void)y;
+  (void)down;
+  return false;
+}
+
+bool startup_notice(bool *ok, const char **detail, int *status) {
+  /* A window on a computer has nothing to explain about how it started. */
+  (void)ok;
+  (void)detail;
+  (void)status;
+  return false;
+}
+
+void report_startup_services(void (*trace)(const char *fmt, ...)) {
+  (void)trace;  /* no services to bring up */
+}
+
+void early_init() {}
+
+bool keyboard_failed() {
+  return false;  // there is no native prompt to fail
 }
 
 bool has_native_keyboard() {
@@ -124,6 +169,19 @@ void set_text_input(bool on) {
   g_text_input = on;
   if(on) SDL_StartTextInput();
   else SDL_StopTextInput();
+}
+
+const char *about_file_manager() {
+  return N_("  File manager: copy, move and delete files on this computer.");
+}
+
+int about_thanks(const char *const **lines) {
+  static const char *const kThanks[] = {
+      "websrv and ftpsrv (John T\xc3\xb6rnblom), SDL2, libssh2, Mbed TLS, GNU libmicrohttpd, Dear ImGui,",
+      "Noto Sans, IBM Plex Mono.",
+  };
+  *lines = kThanks;
+  return (int)(sizeof(kThanks) / sizeof(kThanks[0]));
 }
 
 bool can_quit() {

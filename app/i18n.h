@@ -22,7 +22,7 @@ extern "C" {
    may call it at any time once i18n_init() has run. */
 const char *tr(const char *english);
 
-/* Picks the language: "auto" (the PS5's system language, else English) or a
+/* Picks the language: "auto" (the console's system language, else English) or a
    code from i18n_code(). Call from the UI thread. */
 void i18n_init(const char *choice);
 void i18n_set(const char *choice);

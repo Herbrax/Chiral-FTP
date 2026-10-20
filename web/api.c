@@ -13,17 +13,19 @@
 #include <unistd.h>
 
 #include "config.h"
+#include "platform_config.h"
 #include "form.h"
 #include "fsjobs.h"
 #include "ftp.h"
 #include "localfs.h"
+#include "system.h"
 #include "log.h"
 #include "queue.h"
 #include "remote_ops.h"
 #include "session.h"
 #include "settings.h"
 #include "strbuf.h"
-#include "websrv.h"
+#include "websrv_mhd.h"
 
 #define QUEUE_ITEMS_LIMIT 300
 
@@ -127,11 +129,7 @@ api_state(req_t *r) {
   }
   strbuf_append(&b, ",\"settings\":");
   settings_json(&b);
-#ifdef __SCE__
-  strbuf_append(&b, ",\"platform\":\"ps5\"}");
-#else
-  strbuf_append(&b, ",\"platform\":\"host\"}");
-#endif
+  strbuf_printf(&b, ",\"platform\":\"%s\"}", CHIRAL_PLATFORM_ID);
   return send_json(r->conn, MHD_HTTP_OK, &b);
 }
 
@@ -409,9 +407,15 @@ api_local_list(req_t *r) {
   strbuf_t b = {0};
 
   if(!valid_path(path)) return fail(r->conn, "Invalid path");
-  if(!realpath(path, real)) snprintf(real, sizeof(real), "%s", path);
+  /* Not plain realpath(): on the Switch that comes back with a device
+     prefix ("sdmc:/..."), the browser stores it as its current folder, and
+     every path built from it afterwards fails valid_path(). */
+  localfs_realpath(path, real, sizeof(real));
   strbuf_append(&b, "{\"ok\":true,\"path\":");
   json_str(&b, real);
+  /* -1 where the platform won't say (see system_free_space); the page
+     leaves the figure out then. */
+  strbuf_printf(&b, ",\"free\":%lld", system_free_space(real, NULL));
   strbuf_append(&b, ",\"entries\":");
   if(localfs_list_json(&b, real)) {
     strbuf_free(&b);
@@ -446,7 +450,7 @@ api_local_rename(req_t *r) {
   const char *to = arg(r, "to", NULL);
 
   if(!valid_path(from) || !valid_path(to)) return fail(r->conn, "Invalid path");
-  if(rename(from, to)) return fail_errno(r->conn, "Could not rename");
+  if(localfs_rename(from, to)) return fail_errno(r->conn, "Could not rename");
   return ok(r->conn);
 }
 

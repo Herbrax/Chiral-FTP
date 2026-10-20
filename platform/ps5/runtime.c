@@ -60,6 +60,21 @@ rdrand64(uint64_t *out) {
   return 0;
 }
 
+/* mbedTLS is built with MBEDTLS_ENTROPY_HARDWARE_ALT, so it asks us for
+   randomness rather than reading /dev/urandom -- which this title has no
+   way to open anyway. It lived in engine/sftp.c behind #ifdef __SCE__
+   before the tree was unified; it belongs here, beside the RDRAND it uses. */
+void arc4random_buf(void *buf, size_t len);
+int mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t *olen);
+
+int
+mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t *olen) {
+  (void)data;
+  arc4random_buf(output, len);
+  if(olen) *olen = len;
+  return 0;
+}
+
 void
 arc4random_buf(void *buf, size_t len) {
   unsigned char *p = buf;
@@ -89,15 +104,6 @@ int
 __wrap_lstat(const char *path, struct stat *st) {
   if(!__real_lstat(path, st)) return 0;
   return errno == EPERM || errno == EACCES ? stat(path, st) : -1;
-}
-
-int
-chmod(const char *path, mode_t mode) {
-  int fd = open(path, O_RDONLY), ret;
-  if(fd < 0) return -1;
-  ret = fchmod(fd, mode);
-  close(fd);
-  return ret;
 }
 
 int

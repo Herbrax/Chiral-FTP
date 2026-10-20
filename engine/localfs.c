@@ -4,6 +4,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,10 +12,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#ifdef __SCE__
-#include <sys/mount.h>
-#endif
+#include "platform_config.h"
+#include "system.h"
 
+
+static int denied(void);  /* the last call failed for permissions */
 void
 path_join(char *out, size_t size, const char *dir, const char *name) {
   size_t len = strlen(dir);
@@ -166,18 +168,7 @@ root_info(const char *path, const char *label, localfs_root_t *r) {
   memset(r, 0, sizeof(*r));
   snprintf(r->path, sizeof(r->path), "%s", path);
   snprintf(r->label, sizeof(r->label), "%s", label);
-  r->free_bytes = r->total_bytes = -1;
-  /* The native title can't use the SDK's statfs (a raw system call, which a
-     dashboard app may not make), so it shows no free space. */
-#if defined(__SCE__) && !defined(__PROSPERO__)
-  {
-    struct statfs fs;
-    if(!statfs(path, &fs)) {
-      r->free_bytes = (long long)fs.f_bavail * (long long)fs.f_bsize;
-      r->total_bytes = (long long)fs.f_blocks * (long long)fs.f_bsize;
-    }
-  }
-#endif
+  r->free_bytes = system_free_space(path, &r->total_bytes);
   return 1;
 }
 
@@ -206,35 +197,19 @@ add_root(localfs_root_t *out, int *n, int max, const char *path, const char *lab
   return 1;
 }
 
-/* The drive list, for the TV and the web app alike: shortcuts first. */
+/* The drive list, for the screen and the web app alike. Which drives
+   exist is the platform's business (platform/<name>/system.c); what is
+   worth showing -- a removable one only when something is actually in it,
+   and how much room is left -- is this file's. */
 int
 localfs_roots(localfs_root_t *out, int max) {
+  system_root_t roots[24];
+  int count = system_storage_roots(roots, (int)(sizeof(roots) / sizeof(roots[0])));
   int n = 0;
-#ifdef __SCE__
-  add_root(out, &n, max, "/data", "Internal storage", 0);
-  add_root(out, &n, max, "/data/homebrew", "Homebrew", 0);
-  for(int i = 0; i < 8; i++) {
-    char path[32];
-    char label[32];
-    snprintf(path, sizeof(path), "/mnt/usb%d", i);
-    snprintf(label, sizeof(label), "USB drive %d", i);
-    add_root(out, &n, max, path, label, 1);
+
+  for(int i = 0; i < count; i++) {
+    add_root(out, &n, max, roots[i].path, roots[i].label, roots[i].removable);
   }
-  add_root(out, &n, max, "/mnt/ext0", "Extended storage", 1);
-  add_root(out, &n, max, "/mnt/ext1", "Extended storage 2", 1);
-  add_root(out, &n, max, "/mnt/disc", "Disc", 1);
-  add_root(out, &n, max, "/user", "User data", 0);
-  add_root(out, &n, max, "/", "Root", 0);
-#else
-  {
-    const char *home = getenv("HOME");
-    const char *test = getenv("PS5FTP_TEST_ROOT");  /* automated UI tests */
-    if(test) add_root(out, &n, max, test, "Test drive", 0);
-    if(home) add_root(out, &n, max, home, "Home", 0);
-  }
-  add_root(out, &n, max, "/tmp", "/tmp", 0);
-  add_root(out, &n, max, "/", "Root", 0);
-#endif
   return n;
 }
 
@@ -252,6 +227,21 @@ localfs_roots_json(strbuf_t *b) {
     strbuf_printf(b, ",\"free\":%lld,\"total\":%lld}", roots[i].free_bytes, roots[i].total_bytes);
   }
   strbuf_append(b, "]");
+}
+
+void
+localfs_realpath(const char *in, char *out, size_t size) {
+  char resolved[PATH_MAX];
+  const char *p = in;
+  const char *colon;
+
+  if(realpath(in, resolved)) p = resolved;
+  /* Strip a leading device name: letters and digits, then a colon, then the
+     path -- "sdmc:/switch", "ums0:/". A colon with a slash before it is
+     part of a filename, not a device. */
+  colon = strchr(p, ':');
+  if(colon && colon[1] == '/' && !memchr(p, '/', (size_t)(colon - p))) p = colon + 1;
+  snprintf(out, size, "%s", p);
 }
 
 int
@@ -335,6 +325,7 @@ delete_tree(const char *path, int depth) {
     errno = ELOOP;
     return -1;
   }
+  chmod(path, CHIRAL_FILE_MODE);  // its entries can only go if it's writable
   /* A few passes: anything a pass couldn't see is picked up by the next. */
   for(int pass = 0; pass < 4; pass++) {
     names_t n;
@@ -352,7 +343,7 @@ delete_tree(const char *path, int depth) {
 
       path_join(child, sizeof(child), path, n.name[i]);
       if(n.type[i] == DT_UNKNOWN && !lstat(child, &st)) is_dir = S_ISDIR(st.st_mode);
-      if(is_dir ? delete_tree(child, depth + 1) : unlink(child)) {
+      if(is_dir ? delete_tree(child, depth + 1) : localfs_unlink(child)) {
         if(!first_err) first_err = errno;
       } else {
         deleted++;
@@ -361,7 +352,7 @@ delete_tree(const char *path, int depth) {
     names_free(&n);
     if(!deleted) break;  // nothing more can go
   }
-  if(rmdir(path)) {
+  if(rmdir(path) && (!denied() || localfs_open_up_parent(path) || rmdir(path))) {
     if(!first_err) first_err = errno;
   }
   if(first_err) {
@@ -376,7 +367,7 @@ localfs_delete(const char *path) {
   struct stat st;
 
   if(lstat(path, &st)) return -1;
-  if(!S_ISDIR(st.st_mode)) return unlink(path);
+  if(!S_ISDIR(st.st_mode)) return localfs_unlink(path);
   return delete_tree(path, 0);
 }
 
@@ -396,9 +387,57 @@ localfs_free_name(char *out, size_t size, const char *dir, const char *name) {
   return 0;
 }
 
+static int
+denied(void) {
+  return errno == EACCES || errno == EPERM;
+}
+
+int
+localfs_open_up_parent(const char *path) {
+  char dir[PATH_MAX];
+
+  path_parent(dir, sizeof(dir), path);
+  return chmod(dir, CHIRAL_FILE_MODE);
+}
+
 int
 localfs_mkdir(const char *path) {
-  if(mkdir(path, PS5_FILE_MODE)) return -1;
-  chmod(path, PS5_FILE_MODE);
+  if(mkdir(path, CHIRAL_FILE_MODE) && (!denied() || localfs_open_up_parent(path) || mkdir(path, CHIRAL_FILE_MODE)))
+    return -1;
+  chmod(path, CHIRAL_FILE_MODE);
   return 0;
 }
+
+int
+localfs_rename(const char *from, const char *to) {
+  if(!rename(from, to)) return 0;
+  if(!denied()) return -1;
+  localfs_open_up_parent(from);
+  localfs_open_up_parent(to);
+  chmod(from, CHIRAL_FILE_MODE);  // a folder being moved needs its own write access too
+  return rename(from, to);
+}
+
+int
+localfs_open_write(const char *path, int flags, int mode) {
+  int fd = open(path, flags, mode);
+  if(fd >= 0 || !denied()) return fd;
+  localfs_open_up_parent(path);
+  chmod(path, CHIRAL_FILE_MODE);  // replacing a file that isn't writable
+  return open(path, flags, mode);
+}
+
+int
+localfs_rmdir(const char *path) {
+  if(!rmdir(path)) return 0;
+  if(!denied() || localfs_open_up_parent(path)) return -1;
+  return rmdir(path);
+}
+
+int
+localfs_unlink(const char *path) {
+  if(!unlink(path)) return 0;
+  if(!denied() || localfs_open_up_parent(path)) return -1;
+  return unlink(path);
+}
+

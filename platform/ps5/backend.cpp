@@ -11,8 +11,16 @@
 #include <cstdint>
 #include <cstring>
 #include <ctime>
+#include <cstdio>
 #include <string>
 #include <vector>
+
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+#include "elevation/elevation.hpp"
+#include "i18n.h"
 
 extern "C" {
 int sceSystemServiceHideSplashScreen(void);
@@ -41,6 +49,8 @@ int sceImeDialogGetStatus(void);
 int sceImeDialogGetResult(void *result);
 int sceImeDialogTerm(void);
 }
+
+extern "C" void startup_trace(const char *fmt, ...);
 
 namespace backend {
 namespace {
@@ -241,6 +251,7 @@ constexpr int kStatusNone = 0, kStatusRunning = 1, kStatusFinished = 2;
 
 int g_ime_module = -1;
 bool g_dialogs_ready = false;
+bool g_keyboard_failed = false;
 
 std::vector<std::uint16_t> to_utf16(const std::string &in, std::size_t limit) {
   std::vector<std::uint16_t> out;
@@ -297,8 +308,6 @@ bool init(bool headless) {
   (void)sceUserServiceInitialize(nullptr);
   (void)scePadInit();
   pad_open();
-  // The keyboard's module must be loaded before its functions exist.
-  g_ime_module = sceSysmoduleLoadModule(kImeDialogModule);
   return true;
 }
 
@@ -309,6 +318,34 @@ void pump(int timeout_ms) {
     if(ticks_ms() >= until) return;
     (void)sceKernelUsleep(8000);
   }
+}
+
+/* The PS5's framebuffer is tiled (see the offset tables above), so the
+   software renderer can't draw into it directly the way it can on a linear
+   one -- declining here keeps platform_common on the copy-then-present
+   path, and present() does the swizzle. */
+std::uint32_t *frame_begin(int *stride_pixels) {
+  (void)stride_pixels;
+  return nullptr;
+}
+
+void frame_end() {}
+
+/* Horizon needs its framebuffer handed back before the process exits or the
+   compositor is left holding it. VideoOut's buffers live in direct memory
+   owned by the title and go with the process, and a dashboard title is
+   closed with the PS button rather than by returning, so there is nothing
+   to release here -- but the function exists because the contract does. */
+void shutdown() {}
+
+/* No touchscreen. The DualSense touchpad is a relative pointing surface,
+   not absolute coordinates on the TV, so it would not answer the question
+   the UI is asking (ACT_TOUCHPAD already carries its click). */
+bool touch(int *x, int *y, bool *down) {
+  (void)x;
+  (void)y;
+  (void)down;
+  return false;
 }
 
 void present(const std::uint32_t *pixels) {
@@ -334,11 +371,116 @@ bool has_native_keyboard() {
   return true;
 }
 
+/* ---------- startup: the keyboard, then the sandbox ---------- */
+
+/* What elevation::request left us with, kept for startup_notice(). It runs
+   before main has a log to write to, so the result is recorded rather than
+   reported. */
+elevation::Status g_access = elevation::Status::unavailable;
+bool g_access_full = false;
+const char *g_access_detail = "";
+char g_access_probe[160] = "";
+
+void early_init() {
+  /* The keyboard's module first. After the access request the title may no
+     longer load it, and every text field -- new folder, rename, passwords
+     -- would silently do nothing. ProsperoEden loads it first for the same
+     reason. */
+  if(g_ime_module < 0) g_ime_module = sceSysmoduleLoadModule(kImeDialogModule);
+
+  /* A title only sees a sandboxed view of the console's storage: /data
+     looks empty. Like ProsperoEden, ask the jailbreak's resident service
+     for the real filesystem, or send the packaged upstream Lapy helper to
+     elfldr on port 9021. Single-threaded, before anything opens a file. */
+  g_access = elevation::request(elevation::Capability::filesystem);
+
+  /* Elevation leaves the effective group (1) apart from the real one (0);
+     match them, as ProsperoEden does. Root may set its group. */
+  if(geteuid() == 0 && getegid() != getgid()) (void)setegid(getgid());
+
+  g_access_full = g_access == elevation::Status::ok &&
+                  std::strcmp(elevation::path(), "data-only") != 0;
+  if(g_access_full) {
+    g_access_detail = !std::strcmp(elevation::path(), "existing")
+                          ? N_("access was already granted")
+                      : !std::strcmp(elevation::path(), "resident")
+                          ? N_("granted by the jailbreak's resident service")
+                          : N_("granted by the Lapy helper (elfldr, port 9021)");
+  } else {
+    switch(g_access) {
+    case elevation::Status::ok:
+      g_access_detail = N_("nothing granted full access; only /data is writable");
+      break;
+    case elevation::Status::unavailable:
+      g_access_detail = N_("lapy.elf is missing from the app folder");
+      break;
+    case elevation::Status::transport_error:
+      g_access_detail = N_("couldn't reach elfldr on port 9021 (is it running?)");
+      break;
+    case elevation::Status::timeout:
+      g_access_detail = N_("the jailbreak didn't answer in time");
+      break;
+    case elevation::Status::target_mismatch:
+      g_access_detail = N_("lapy.elf was built for another title ID");
+      break;
+    case elevation::Status::unsupported_version:
+      g_access_detail = N_("the jailbreak's Lapy is a different version");
+      break;
+    case elevation::Status::apply_failed:
+      g_access_detail = N_("the helper ran but access didn't change");
+      break;
+    default:
+      g_access_detail = N_("elevation failed");
+      break;
+    }
+  }
+
+  /* What the request actually left behind: being root and being able to see
+     the system fonts folder both mean the sandbox is gone. For the log --
+     when access is wrong, this is what says how. */
+  {
+    const int fonts = open("/preinst/common/font", O_RDONLY | O_DIRECTORY);
+    const int fonts_err = fonts < 0 ? errno : 0;
+    if(fonts >= 0) close(fonts);
+    std::snprintf(g_access_probe, sizeof(g_access_probe),
+                  "uid %d/%d, fonts %s, path %s", (int)getuid(), (int)geteuid(),
+                  fonts_err ? std::strerror(fonts_err) : "visible", elevation::path());
+  }
+}
+
+bool startup_notice(bool *ok, const char **detail, int *status) {
+  /* Whether the app can see the console's real storage is the single most
+     useful thing to tell the user: without it /data looks empty and
+     nothing works, and the fix is on their side, not ours. */
+  *ok = g_access_full;
+  *detail = g_access_detail;
+  *status = static_cast<int>(g_access);
+  return true;
+}
+
+void report_startup_services(void (*trace)(const char *fmt, ...)) {
+  /* A native title inherits its services from the system, so there is
+     nothing to bring up -- but the elevation probe is worth the log line,
+     since it says how the storage access actually turned out. */
+  trace("Storage access: %s (%s)", g_access_detail, g_access_probe);
+}
+
+bool keyboard_failed() {
+  return g_keyboard_failed;
+}
+
 bool native_text_prompt(const char *title, const std::string &initial, TextKind kind, std::string &out) {
-  if(g_ime_module < 0 && (g_ime_module = sceSysmoduleLoadModule(kImeDialogModule)) < 0) return false;
+  g_keyboard_failed = true;  // until the dialog really opens
+  if(g_ime_module < 0 && (g_ime_module = sceSysmoduleLoadModule(kImeDialogModule)) < 0) {
+    startup_trace("The PS5 keyboard's module did not load (%#x)", (unsigned)g_ime_module);
+    return false;
+  }
   if(!g_dialogs_ready) {
     int r = sceCommonDialogInitialize();
-    if(r < 0 && (std::uint32_t)r != kCommonDialogAlreadyInitialized) return false;
+    if(r < 0 && (std::uint32_t)r != kCommonDialogAlreadyInitialized) {
+      startup_trace("The PS5's dialogs did not start (%#x)", (unsigned)r);
+      return false;
+    }
     g_dialogs_ready = true;
   }
   const std::size_t limit = 255;
@@ -358,7 +500,11 @@ bool native_text_prompt(const char *title, const std::string &initial, TextKind 
   param.pos_y = 540;
   param.placeholder = placeholder.data();
   param.title = wtitle.data();
-  if(sceImeDialogInit(&param, nullptr) != 0) return false;
+  if(int r = sceImeDialogInit(&param, nullptr); r != 0) {
+    startup_trace("The PS5 keyboard did not open (%#x)", (unsigned)r);
+    return false;
+  }
+  g_keyboard_failed = false;  // open: from here on, false means cancelled
 
   bool ok = false;
   const std::uint64_t since = ticks_ms();
@@ -381,6 +527,20 @@ bool native_text_prompt(const char *title, const std::string &initial, TextKind 
 }
 
 void set_text_input(bool) {}
+
+const char *about_file_manager() {
+  return N_("  File manager: copy, move and delete between internal storage and USB.");
+}
+
+int about_thanks(const char *const **lines) {
+  static const char *const kThanks[] = {
+      "ps5-native-app-boilerplate and ProsperoEden (BlackBearReloaded), the PS5 Payload SDK,",
+      "Lapy (ArkSama, mpereiraesaa), websrv and ftpsrv (John T\xc3\xb6rnblom), libssh2, Mbed TLS,",
+      "GNU libmicrohttpd, Dear ImGui, Noto Sans, IBM Plex Mono.",
+  };
+  *lines = kThanks;
+  return (int)(sizeof(kThanks) / sizeof(kThanks[0]));
+}
 
 bool can_quit() {
   return false;

@@ -21,7 +21,7 @@ along with this program; see the file COPYING. If not, see
 #include <microhttpd.h>
 
 #include "asset.h"
-#include "websrv.h"
+#include "websrv_mhd.h"
 
 
 /**

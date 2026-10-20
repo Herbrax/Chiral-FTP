@@ -1,4 +1,5 @@
 #pragma once
 
-/* Shows a PS5 system notification; a no-op on host builds. */
+/* Tells the user something worth noticing, by whatever means the console
+   has (engine/system.h). */
 void notify_user(const char *fmt, ...) __attribute__((format(printf, 1, 2)));

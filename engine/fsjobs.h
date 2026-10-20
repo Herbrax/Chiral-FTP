@@ -1,6 +1,6 @@
 #pragma once
 
-/* Copying and moving files on the PS5 itself (the file manager, on the TV and
+/* Copying and moving files on the Switch itself (the file manager, on the TV and
    in the web app). One worker thread runs the jobs in order. */
 
 typedef struct fsjob_stats {
@@ -20,4 +20,8 @@ typedef struct fsjob_stats {
    name is taken, the copy becomes "name (2).ext". 0, or -1 if not queued. */
 int fsjob_add(int move, const char *src, const char *dst_dir);
 void fsjob_cancel_all(void);
+/* Cancels whatever is running, ends the worker and waits for it. For the
+   same reason as session_stop_keepalive(): nothing of ours should still be
+   running when static destructors start. */
+void fsjob_stop(void);
 void fsjob_get_stats(fsjob_stats_t *out);

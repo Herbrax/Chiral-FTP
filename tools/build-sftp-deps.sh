@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Builds the SFTP dependencies: mbedTLS (crypto) and libssh2 (SSH/SFTP).
 #
-#   tools/build-sftp-deps.sh ps5    install into $PS5_PAYLOAD_SDK/target/user/homebrew
-#   tools/build-sftp-deps.sh host   install into .deps/host for `make host`
+#   tools/build-sftp-deps.sh host   install into .deps/host, for the computer
+#                                   build (make -f Makefile.host)
+#
+# The Switch build doesn't use this: devkitPro has switch-mbedtls and
+# switch-libssh2 as packages (dkp-pacman -S switch-mbedtls switch-libssh2).
 #
 # Both are static, permissively licensed (Apache-2.0 / BSD-3-Clause) and
 # compatible with this project's GPLv3.
@@ -18,17 +21,12 @@ work="$here/.deps/src"
 mkdir -p "$work"
 
 case "$target" in
-  ps5)
-    : "${PS5_PAYLOAD_SDK:?PS5_PAYLOAD_SDK is not set}"
-    prefix="$PS5_PAYLOAD_SDK/target/user/homebrew"
-    cmake_bin="$PS5_PAYLOAD_SDK/bin/prospero-cmake"
-    ;;
   host)
     prefix="$here/.deps/host"
     cmake_bin=cmake
     ;;
   *)
-    echo "usage: $0 ps5|host" >&2
+    echo "usage: $0 host" >&2
     exit 1
     ;;
 esac
@@ -58,15 +56,9 @@ mkdir -p "$build"
 tar -xjf "$work/$mbedtls_tar" -C "$build"
 tar -xzf "$work/libssh2-$LIBSSH2_VER.tar.gz" -C "$build"
 
-# mbedTLS: only the crypto pieces libssh2 needs. On the PS5 the entropy comes
-# from libc's arc4random_buf (src/sftp.c provides mbedtls_hardware_poll).
+# mbedTLS: only the crypto pieces libssh2 needs. The computer build takes
+# entropy from the OS, so the stock config is right as it stands.
 mbed="$build/mbedtls-$MBEDTLS_VER"
-if [[ "$target" == ps5 ]]; then
-  python3 "$mbed/scripts/config.py" -f "$mbed/include/mbedtls/mbedtls_config.h" set MBEDTLS_NO_PLATFORM_ENTROPY
-  python3 "$mbed/scripts/config.py" -f "$mbed/include/mbedtls/mbedtls_config.h" set MBEDTLS_ENTROPY_HARDWARE_ALT
-  python3 "$mbed/scripts/config.py" -f "$mbed/include/mbedtls/mbedtls_config.h" unset MBEDTLS_TIMING_C
-  python3 "$mbed/scripts/config.py" -f "$mbed/include/mbedtls/mbedtls_config.h" unset MBEDTLS_NET_C
-fi
 "$cmake_bin" -S "$mbed" -B "$build/mbedtls-build" \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$prefix" \
   -DENABLE_PROGRAMS=OFF -DENABLE_TESTING=OFF -DUSE_SHARED_MBEDTLS_LIBRARY=OFF \
@@ -74,8 +66,8 @@ fi
 "$cmake_bin" --build "$build/mbedtls-build" --parallel 8 >/dev/null
 "$cmake_bin" --install "$build/mbedtls-build" >/dev/null
 
-# The PS5 toolchain prefers CMake package configs, and mbedTLS's config doesn't
-# set what libssh2's FindMbedTLS checks. Remove it so libssh2's finder runs.
+# mbedTLS's CMake package config doesn't set what libssh2's FindMbedTLS
+# checks. Remove it so libssh2's own finder runs instead.
 rm -rf "$prefix/lib/cmake/MbedTLS"
 "$cmake_bin" -S "$build/libssh2-$LIBSSH2_VER" -B "$build/libssh2-build" \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$prefix" \

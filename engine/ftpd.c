@@ -35,12 +35,9 @@
    in the app's language. */
 const char *tr(const char *english);
 #include "localfs.h"
+#include "system.h"
 
-#ifdef __PROSPERO__
-int chiral_peer_name(const struct in_addr *address, char *out, int size);  // ps5_net.c
-#else
 #include <netdb.h>
-#endif
 
 #define LINE_MAX_LEN 4096
 #define IO_BUFSIZE (512 * 1024)
@@ -76,6 +73,8 @@ static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static ftpd_config_t g_cfg;
 static volatile int g_stop;
 static int g_running;
+static int g_listen_fd = -1;
+static time_t g_health_checked;
 static client_t *g_clients[FTPD_MAX_CLIENTS];
 static ftpd_stats_t g_stats;
 static long long g_rate_bytes;     // bytes since g_rate_start
@@ -169,11 +168,45 @@ ftpd_recent(char lines[][160], int max) {
   return n;
 }
 
+/* Is the listening socket still real?
+
+   A console that has slept can come back with its sockets quietly dead.
+   Nothing fails loudly: the listener thread's poll() just stops reporting
+   anything, g_running is still 1, and the screen goes on saying the server
+   is up and reachable at an address that answers nothing. So the flag is
+   not trusted on its own -- every FTPD_HEALTH_SECONDS the socket is asked
+   whether it still exists, which is cheap and catches exactly this. */
+#define FTPD_HEALTH_SECONDS 20
+
+/* Call with g_lock held. */
+static int
+listener_alive(void) {
+  struct sockaddr_in addr;
+  socklen_t len = sizeof(addr);
+
+  if(g_listen_fd < 0) return 0;
+  return getsockname(g_listen_fd, (struct sockaddr *)&addr, &len) == 0;
+}
+
 int
 ftpd_running(void) {
   int r;
 
   pthread_mutex_lock(&g_lock);
+  if(g_running) {
+    const time_t now = time(NULL);
+    /* Also when the clock has jumped backwards, which waking up can do. */
+    if(now - g_health_checked >= FTPD_HEALTH_SECONDS || now < g_health_checked) {
+      g_health_checked = now;
+      if(!listener_alive()) {
+        /* event() is this file's own channel into the activity list the
+           server screen shows; ftpd.c deliberately doesn't pull in log.h. */
+        event(tr("FTP server stopped: the connection was lost"));
+        g_stop = 1;
+        g_running = 0;
+      }
+    }
+  }
   r = g_running;
   pthread_mutex_unlock(&g_lock);
   return r;
@@ -181,23 +214,9 @@ ftpd_running(void) {
 
 void
 net_local_ip(char *buf, unsigned long size) {
-  struct sockaddr_in addr;
-  socklen_t len = sizeof(addr);
-  int fd = socket(AF_INET, SOCK_DGRAM, 0);
-
-  /* The source address the kernel picks for an outbound route; a UDP connect
-     sends nothing. */
-  snprintf(buf, size, "unknown");
-  if(fd < 0) return;
-  memset(&addr, 0, sizeof(addr));
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons(53);
-  inet_pton(AF_INET, "8.8.8.8", &addr.sin_addr);
-  if(!connect(fd, (struct sockaddr *)&addr, sizeof(addr)) &&
-     !getsockname(fd, (struct sockaddr *)&addr, &len) && addr.sin_addr.s_addr) {
-    inet_ntop(AF_INET, &addr.sin_addr, buf, (socklen_t)size);
-  }
-  close(fd);
+  /* How a machine finds its own address differs enough between consoles to
+     be the platform's business: platform/<name>/system.c. */
+  system_local_ip(buf, (size_t)size);
 }
 
 /* ---------- naming clients ---------- */
@@ -207,11 +226,9 @@ static void
 peer_name(client_t *c) {
   char name[256] = "";
 
-#ifdef __PROSPERO__
-  if(chiral_peer_name(&c->peer.sin_addr, name, sizeof(name))) return;
-#else
+  /* libnx resolves this through sfdnsres, so the Switch build uses the same
+     call a PC does (the PS5 needed sceNetResolver instead). */
   if(getnameinfo((struct sockaddr *)&c->peer, sizeof(c->peer), name, sizeof(name), NULL, 0, NI_NAMEREQD)) return;
-#endif
   if(!name[0] || !strcmp(name, c->ip)) return;
   char *dot = strchr(name, '.');
   if(dot && dot != name) *dot = 0;
@@ -529,7 +546,7 @@ list_entry(client_t *c, int style, const char *name, const struct stat *st) {
     mode_string(st->st_mode, mode);
     strftime(date, sizeof(date), now - st->st_mtime > 180 * 24 * 3600 || st->st_mtime > now + 3600
                                      ? "%b %e  %Y" : "%b %e %H:%M", &tm);
-    n = snprintf(line, sizeof(line), "%s 1 ps5 ps5 %13lld %s %s\r\n", mode, (long long)st->st_size, date, name);
+    n = snprintf(line, sizeof(line), "%s 1 switch switch %13lld %s %s\r\n", mode, (long long)st->st_size, date, name);
   }
   return data_send(c, line, (size_t)(n < (int)sizeof(line) ? n : (int)sizeof(line) - 1));
 }
@@ -659,10 +676,10 @@ cmd_stor(client_t *c, const char *arg, int append) {
 
   c->rest = 0;
   if(resolve(c, arg, real, sizeof(real), NULL)) return 0;
-  if(append) fd = open(real, O_WRONLY | O_CREAT | O_APPEND, PS5_FILE_MODE);
-  else fd = open(real, O_WRONLY | O_CREAT | (offset ? 0 : O_TRUNC), PS5_FILE_MODE);
+  if(append) fd = localfs_open_write(real, O_WRONLY | O_CREAT | O_APPEND, CHIRAL_FILE_MODE);
+  else fd = localfs_open_write(real, O_WRONLY | O_CREAT | (offset ? 0 : O_TRUNC), CHIRAL_FILE_MODE);
   if(fd < 0) return reply_errno(c, 550);
-  fchmod(fd, PS5_FILE_MODE);  // also when replacing a file, and regardless of the umask
+  fchmod(fd, CHIRAL_FILE_MODE);  // also when replacing a file, and regardless of the umask
   if(!append && offset && lseek(fd, (off_t)offset, SEEK_SET) < 0) {
     close(fd);
     return reply_errno(c, 550);
@@ -775,12 +792,12 @@ cmd_simple_path(client_t *c, const char *verb, const char *arg) {
     return reply(c, "257 \"%s\" created", virt);
   }
   if(!strcmp(verb, "RMD")) {
-    if(rmdir(real)) return reply_errno(c, 550);
+    if(localfs_rmdir(real)) return reply_errno(c, 550);
     event(tr("%s removed folder %s"), c->who, virt);
     return reply(c, "250 Folder removed");
   }
   if(!strcmp(verb, "DELE")) {
-    if(unlink(real)) return reply_errno(c, 550);
+    if(localfs_unlink(real)) return reply_errno(c, 550);
     event(tr("%s deleted %s"), c->who, virt);
     return reply(c, "250 File deleted");
   }
@@ -804,7 +821,7 @@ cmd_simple_path(client_t *c, const char *verb, const char *arg) {
   }
   if(!strcmp(verb, "RNTO")) {
     if(!c->rename_from[0]) return reply(c, "503 Send RNFR first");
-    int r = rename(c->rename_from, real);
+    int r = localfs_rename(c->rename_from, real);
     c->rename_from[0] = 0;
     if(r) return reply_errno(c, 550);
     event(tr("%s renamed to %s"), c->who, virt);
@@ -812,6 +829,7 @@ cmd_simple_path(client_t *c, const char *verb, const char *arg) {
   }
   return reply(c, "502 Not implemented");
 }
+
 
 static int
 cmd_mfmt(client_t *c, const char *arg) {
@@ -831,7 +849,7 @@ cmd_mfmt(client_t *c, const char *arg) {
   tm.tm_year -= 1900;
   tm.tm_mon -= 1;
   if(resolve(c, path + 1, real, sizeof(real), NULL)) return 0;
-  t.actime = t.modtime = timegm(&tm);
+  t.actime = t.modtime = system_timegm(&tm);
   if(utime(real, &t)) return reply_errno(c, 550);
   return reply(c, "213 Modify=%s; %s", stamp, path + 1);
 }
@@ -972,7 +990,14 @@ listen_main(void *arg) {
     int fd, slot = -1;
 
     if(poll(&pfd, 1, 300) <= 0) continue;
-    if((fd = accept(srv, (struct sockaddr *)&peer, &len)) < 0) continue;
+    /* The socket itself has failed -- after a sleep, typically. Without
+       this the loop spins forever on a dead listener while every flag
+       still says the server is running. */
+    if(pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) break;
+    if((fd = accept(srv, (struct sockaddr *)&peer, &len)) < 0) {
+      if(errno == EBADF || errno == ENOTSOCK || errno == EINVAL) break;
+      continue;
+    }
     pthread_mutex_lock(&g_lock);
     for(int i = 0; i < FTPD_MAX_CLIENTS; i++) if(!g_clients[i]) { slot = i; break; }
     pthread_mutex_unlock(&g_lock);
@@ -1006,6 +1031,9 @@ listen_main(void *arg) {
     }
     pthread_detach(t);
   }
+  pthread_mutex_lock(&g_lock);
+  g_listen_fd = -1;
+  pthread_mutex_unlock(&g_lock);
   close(srv);
 
   /* Wake sessions blocked in a transfer, then wait for them to finish. */
@@ -1055,6 +1083,8 @@ ftpd_start(const ftpd_config_t *cfg) {
     goto fail;
   }
   g_stop = 0;
+  g_listen_fd = srv;
+  g_health_checked = time(NULL);
   memset(&g_stats, 0, sizeof(g_stats));
   g_rate_bytes = 0;
   gettimeofday(&g_rate_start, NULL);

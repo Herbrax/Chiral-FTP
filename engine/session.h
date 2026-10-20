@@ -19,3 +19,7 @@ typedef int (*session_fn)(ftp_conn_t *c, void *ctx);
 int session_run(session_fn fn, void *ctx, char *err, size_t err_size);
 
 void session_start_keepalive(void);
+/* Ends the keepalive thread and waits for it. Call before returning from
+   main: static destructors run on the way out, and a thread still looking
+   at this module's state while that happens is a crash on exit. */
+void session_stop_keepalive(void);

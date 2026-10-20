@@ -1,23 +1,22 @@
-// Controller-first FileZilla-style UI: PS5 storage on the left, the server on
-// the right, a transfer queue on the touchpad, menus on OPTIONS.
+// Controller-first FileZilla-style UI: the SD card on the left, the server on
+// the right, the transfer queue on Minus, menus on Plus.
 
 #include "ui.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cerrno>
-#include <condition_variable>
 #include <cstring>
 #include <ctime>
+#include <pthread.h>
+
 #include <deque>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <set>
 #include <string>
 #include <strings.h>
 #include <sys/stat.h>
-#include <thread>
 #include <unistd.h>
 #include <vector>
 
@@ -35,6 +34,7 @@ extern "C" {
 #include "remote_ops.h"
 #include "session.h"
 #include "settings.h"
+#include "system.h"
 #include "strbuf.h"
 #include "websrv.h"
 }
@@ -47,6 +47,10 @@ const float TOP_H = 96, HINT_H = 76, STATUS_H = 46;
 const float PANE_Y = TOP_H + 12, PANE_GAP = 20, MARGIN = 36;
 const float ROW_H = 54, PANE_HEAD = 84, PANE_FOOT = 46;
 const float FS = 28, FS_SMALL = 23, FS_TITLE = 34;
+/* A step up from FS_SMALL for prose meant to be read rather than glanced
+   at -- the About screen's body, the start screen's card descriptions and
+   the note under its heading. On a TV across a room, FS_SMALL is small. */
+const float FS_READ = 27, FS_CARD = 32;
 
 /* ---------- small helpers ---------- */
 
@@ -182,30 +186,62 @@ std::vector<std::string> wrap_text(const std::string &text, float size, float ma
 // the UI keeps drawing; completions run back on the UI thread.
 class Jobs {
  public:
-  void start() {
-    thread_ = std::thread([this] { loop(); });
-    thread_.detach();
+  /* Raw pthreads, not std::thread / std::mutex / std::condition_variable.
+     This was the only place in the app using the C++ threading classes,
+     and on the console it was what killed startup: a build with just the
+     FTP server -- which never starts this worker -- ran fine, while the
+     file manager and client builds, which do, died inside ui::init().
+     The engine has used pthread_create throughout from the beginning and
+     works on the same hardware, so this now does too. */
+  Jobs() {
+    pthread_mutex_init(&mutex_, nullptr);
+    pthread_cond_init(&cv_, nullptr);
+  }
+
+  // False when the worker couldn't start; callers carry on without it.
+  bool start() {
+    if(started_) return true;
+    /* Joinable, not detached: stop() waits for it. A detached worker would
+       still be looking at todo_ and done_ while the static destructors take
+       them apart on the way out of main. */
+    if(pthread_create(&thread_, nullptr, &trampoline, this) != 0) return false;
+    started_ = true;
+    return true;
+  }
+
+  // Ends the worker and waits for it. Anything still queued is dropped.
+  void stop() {
+    if(!started_) return;
+    pthread_mutex_lock(&mutex_);
+    quit_ = true;
+    todo_.clear();
+    pthread_cond_signal(&cv_);
+    pthread_mutex_unlock(&mutex_);
+    pthread_join(thread_, nullptr);
+    started_ = false;
   }
 
   void run(std::function<void()> work, std::function<void()> then) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    pthread_mutex_lock(&mutex_);
     todo_.push_back({work, then});
     pending_++;
-    cv_.notify_one();
+    pthread_cond_signal(&cv_);
+    pthread_mutex_unlock(&mutex_);
   }
 
   void poll() {
     std::deque<std::function<void()>> ready;
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      ready.swap(done_);
-    }
+    pthread_mutex_lock(&mutex_);
+    ready.swap(done_);
+    pthread_mutex_unlock(&mutex_);
     for(auto &f : ready) f();
   }
 
   int pending() {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return pending_;
+    pthread_mutex_lock(&mutex_);
+    int n = pending_;
+    pthread_mutex_unlock(&mutex_);
+    return n;
   }
 
  private:
@@ -213,30 +249,42 @@ class Jobs {
     std::function<void()> work, then;
   };
 
+  static void *trampoline(void *self) {
+    static_cast<Jobs *>(self)->loop();
+    return nullptr;
+  }
+
   void loop() {
     for(;;) {
       Job job;
-      {
-        std::unique_lock<std::mutex> lock(mutex_);
-        cv_.wait(lock, [this] { return !todo_.empty(); });
-        job = todo_.front();
-        todo_.pop_front();
+      pthread_mutex_lock(&mutex_);
+      while(todo_.empty() && !quit_) pthread_cond_wait(&cv_, &mutex_);
+      if(quit_) {
+        pthread_mutex_unlock(&mutex_);
+        return;
       }
+      job = todo_.front();
+      todo_.pop_front();
+      pthread_mutex_unlock(&mutex_);
+
       job.work();
-      std::lock_guard<std::mutex> lock(mutex_);
+
+      pthread_mutex_lock(&mutex_);
       done_.push_back([this, then = job.then] {
-        {
-          std::lock_guard<std::mutex> l(mutex_);
-          pending_--;
-        }
+        pthread_mutex_lock(&mutex_);
+        pending_--;
+        pthread_mutex_unlock(&mutex_);
         if(then) then();
       });
+      pthread_mutex_unlock(&mutex_);
     }
   }
 
-  std::thread thread_;
-  std::mutex mutex_;
-  std::condition_variable cv_;
+  pthread_t thread_{};
+  bool started_ = false;
+  bool quit_ = false;
+  pthread_mutex_t mutex_;
+  pthread_cond_t cv_;
   std::deque<Job> todo_;
   std::deque<std::function<void()>> done_;
   int pending_ = 0;
@@ -255,6 +303,9 @@ struct Entry {
 
 struct Pane {
   bool remote = false;
+  /* Free space on the drive this folder is on, -1 when the platform won't
+     say (system_free_space). Shown in the footer only when it is known. */
+  long long free_bytes = -1;
   std::string path;  // "" = drive list (local) / server list (remote, disconnected)
   std::vector<Entry> entries;
   int cursor = 0, scroll = 0;
@@ -268,7 +319,52 @@ struct ServerItem {
   int index;
 };
 
-enum OverlayKind { OV_OTHER, OV_QUEUE, OV_LOG, OV_TEXT };
+enum OverlayKind { OV_OTHER, OV_QUEUE, OV_LOG, OV_TEXT, OV_MENU };
+
+/* Touch. The UI is drawn fresh every frame, so rather than keep a parallel
+   model of where everything is, each screen records the rectangles it has
+   just drawn and a tap is matched against those. The list is rebuilt during
+   draw and read on the next touch, which is a frame behind -- invisible at
+   a finger's speed, and it keeps the drawing code as the one description of
+   the layout.
+
+   Taps are deliberately not the same as presses. On a list, the first tap
+   moves the cursor and the second opens what it is on, so a mis-tap in a
+   file manager costs nothing; menus and cards act on the first tap, since
+   there the choice is the whole point. */
+enum HitKind {
+  HIT_ROW,            // a file or folder in a pane
+  HIT_SERVER,         // a saved site or recent connection
+  HIT_SETTING,        // a row on the FTP server / web app screens
+  HIT_CARD,           // a mode on the start screen
+  HIT_MENU_ITEM,
+  HIT_OVERLAY_BODY,
+  HIT_DISCONNECT,
+  HIT_SCROLL,
+};
+
+struct Hit {
+  float x, y, w, h;
+  HitKind kind;
+  int a, b;  // row: pane index, entry index. card/menu: which one.
+};
+
+std::vector<Hit> g_hits;
+bool g_touch_dirty = false;  // keeps the main loop redrawing while in use
+
+void hit_add(HitKind kind, float x, float y, float w, float h, int a = 0, int b = 0) {
+  if(!platform::has_touch()) return;
+  g_hits.push_back({x, y, w, h, kind, a, b});
+}
+
+const Hit *hit_at(float x, float y, HitKind kind) {
+  // Last drawn wins, so something drawn on top takes the tap.
+  for(size_t i = g_hits.size(); i-- > 0;) {
+    const Hit &h = g_hits[i];
+    if(h.kind == kind && x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h) return &g_hits[i];
+  }
+  return nullptr;
+}
 
 struct Overlay {
   virtual ~Overlay() {}
@@ -279,10 +375,48 @@ struct Overlay {
 
 enum Mode { MODE_HOME, MODE_CLIENT, MODE_FILES, MODE_FTPD, MODE_WEB };
 
+/* One-feature builds. -DCHIRAL_ONLY_MODE=<n> leaves the other three modes
+   on the start screen, greyed out and unselectable, and skips their startup
+   work entirely -- the point being to isolate a fault on hardware, so it is
+   not enough to merely hide them. Undefined (0) is the whole app. */
+#define CHIRAL_ONLY_FTPD   1
+#define CHIRAL_ONLY_WEB    2
+#define CHIRAL_ONLY_FILES  3
+#define CHIRAL_ONLY_CLIENT 4
+
+#ifndef CHIRAL_ONLY_MODE
+#define CHIRAL_ONLY_MODE 0
+#endif
+
+inline bool mode_enabled(Mode m) {
+#if CHIRAL_ONLY_MODE == CHIRAL_ONLY_FTPD
+  return m == MODE_HOME || m == MODE_FTPD;
+#elif CHIRAL_ONLY_MODE == CHIRAL_ONLY_WEB
+  return m == MODE_HOME || m == MODE_WEB;
+#elif CHIRAL_ONLY_MODE == CHIRAL_ONLY_FILES
+  return m == MODE_HOME || m == MODE_FILES;
+#elif CHIRAL_ONLY_MODE == CHIRAL_ONLY_CLIENT
+  return m == MODE_HOME || m == MODE_CLIENT;
+#else
+  (void)m;
+  return true;
+#endif
+}
+
+/* The two panes and the background worker belong to the file manager and
+   the client; an FTP-server-only or web-only build never touches them. */
+inline bool panes_enabled() {
+  return mode_enabled(MODE_FILES) || mode_enabled(MODE_CLIENT);
+}
+
 struct App {
   Mode mode = MODE_HOME;
   Pane panes[2];
-  Pane fm[2];  // the file manager: two PS5 panes
+  Pane fm[2];  // the file manager: two panes on the console's own storage
+  /* Disconnect sits in the server pane's header, above the list. Pressing
+     Up from the first row moves onto it, Down comes back -- so it is
+     reachable with the d-pad, and not only by tapping it. */
+  bool disconnect_focus = false;
   int fm_active = 0;
   unsigned long fm_finished = 0;
   int active = 0;
@@ -333,7 +467,7 @@ std::vector<json::Object> load_store(const char *name) {
 
 void save_store(const char *name, const std::vector<json::Object> &items) {
   std::string s = json::dump_array(items);
-  if(store_write(name, s.c_str(), s.size())) show_toast(tr("Could not save to the PS5"), true);
+  if(store_write(name, s.c_str(), s.size())) show_toast(tr("Could not save to the console"), true);
 }
 
 void load_all() {
@@ -459,9 +593,11 @@ void load_drives(Pane &p = local()) {
   clamp_cursor(p, (int)v.size());
 }
 
-// Lists a PS5 folder into a pane: the client's left side by default, or a
+// Lists a local folder into a pane: the client's left side by default, or a
 // file manager pane.
 void load_local(const std::string &path, bool keep = false, Pane *target = nullptr) {
+  Pane &lp = target ? *target : local();
+  lp.free_bytes = system_free_space(path.c_str(), nullptr);
   Pane &p = target ? *target : local();
   ftp_listing_t l;
   if(path.empty()) {
@@ -675,6 +811,7 @@ void prompt(const std::string &title, const std::string &initial, TextKind kind,
   if(platform::has_native_keyboard()) {
     std::string out;
     if(platform::native_text_prompt(title.c_str(), initial, kind, out)) done(out);
+    else if(platform::keyboard_failed()) show_toast(tr("The system keyboard couldn't open"), true);
     return;
   }
   push(new TextEntry(title, initial, kind, done));
@@ -690,6 +827,7 @@ struct MenuItem {
 };
 
 struct Menu : Overlay {
+  OverlayKind kind() override { return OV_MENU; }
   std::string title, subtitle;
   std::vector<MenuItem> items;
   int cursor = 0;
@@ -713,6 +851,7 @@ struct Menu : Overlay {
     float x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 140));
     draw::rect(x, y, w, h, draw::PANEL, 18);
+    hit_add(HIT_OVERLAY_BODY, x, y, w, h);
     draw::text_clip(x + 36, y + 28, FS_TITLE, draw::TEXT, title.c_str(), w - 72, true);
     float yy = y + 84;
     if(!subtitle.empty()) {
@@ -721,6 +860,7 @@ struct Menu : Overlay {
     }
     for(int i = 0; i < (int)items.size(); i++) {
       bool on = i == cursor;
+      if(items[i].enabled) hit_add(HIT_MENU_ITEM, x + 20, yy, w - 40, row - 6, i);
       if(on) draw::rect(x + 20, yy, w - 40, row - 6, draw::SEL, 10);
       ImU32 col = !items[i].enabled ? draw::MUTED : items[i].danger ? draw::ERR : draw::TEXT;
       draw::text(x + 44, yy + 12, FS, col, items[i].label.c_str(), on);
@@ -812,7 +952,7 @@ struct Form : Overlay {
     case ANON: return tr("Anonymous login");
     case KEY: return tr("Private key file");
     case NAME: return tr("Site name");
-    case LOCAL_DIR: return tr("Start in PS5 folder");
+    case LOCAL_DIR: return tr("Start in a console folder");
     case REMOTE_DIR: return tr("Start in server folder");
     default: return "";
     }
@@ -1049,8 +1189,8 @@ struct Settings : Overlay {
       yy += row;
     }
     const char *hint = cursor == CONNS ? tr("Each transfer logs in with its own connection, like FileZilla. Up to 30; the queue backs off if the server allows fewer.")
-                       : cursor == LANG ? tr("Automatic follows the PS5's system language.")
-                                        : tr("Left/Right to change. Settings are saved on the PS5 right away.");
+                       : cursor == LANG ? tr("Automatic follows the console's system language.")
+                                        : tr("Left/Right to change. Settings are saved on the console right away.");
     std::vector<std::string> hint_lines = wrap_text(hint, FS_SMALL, w - 88);
     for(size_t k = 0; k < hint_lines.size() && k < 2; k++)
       draw::text(x + 44, yy + 6 + 32 * (float)k, FS_SMALL, draw::MUTED, hint_lines[k].c_str());
@@ -1120,27 +1260,28 @@ struct About : Overlay {
     float ww = draw::brand_wordmark(x + 150, y + 44, 56);
     draw::text(x + 150 + ww + 24, y + 66, FS, draw::MUTED, trf("version {0}", {VERSION_TAG}).c_str());
     struct Line { float size; ImU32 col; bool bold; const char *text; };
-    const Line lines[] = {
-        {FS, draw::TEXT, false, N_("The ultimate file manager and FTP interface for PS5:")},
-        {FS_SMALL, draw::MUTED, false, N_("  FTP server: other devices connect to the PS5 with any FTP app.")},
-        {FS_SMALL, draw::MUTED, false, N_("  Web app: manage the PS5's files from a browser, upload and download.")},
-        {FS_SMALL, draw::MUTED, false, N_("  File manager: copy, move and delete between internal storage and USB.")},
-        {FS_SMALL, draw::MUTED, false, N_("  FTP / SFTP client: up to 30 transfers at once with your laptop, PC or NAS.")},
+    std::vector<Line> lines = {
+        {FS, draw::TEXT, false, N_("The ultimate file manager and FTP interface for this console:")},
+        {FS_READ, draw::MUTED, false, N_("  FTP server: other devices connect to the console with any FTP app.")},
+        {FS_READ, draw::MUTED, false, N_("  Web app: manage the console's files from a browser, upload and download.")},
+        {FS_READ, draw::MUTED, false, platform::about_file_manager()},
+        {FS_READ, draw::MUTED, false, N_("  FTP / SFTP client: up to 30 transfers at once with your laptop, PC or NAS.")},
+        {FS_READ, draw::TEXT, false, N_("chiral-ftp runs on PS5, Nintendo Switch, PC and Mac. Android, PS4 and more are coming soon.")},
         {12, 0, false, ""},
         {FS, draw::ACCENT2, true, N_("Made by Herbrax (Simo Hakim)")},
-        {FS_SMALL, draw::MUTED, false, "simohakim.com  \xc2\xb7  linkedin.com/in/simo-hakim"},
+        {FS_READ, draw::MUTED, false, "simohakim.com  \xc2\xb7  linkedin.com/in/simo-hakim"},
         {FS, draw::TEXT, false, N_("Found a bug? Please report it on GitHub. Pull requests are welcome.")},
-        {FS_SMALL, draw::ACCENT2, false, "github.com/Herbrax/Chiral-FTP-PS5"},
-        {FS_SMALL, draw::MUTED, false, N_("Tested on PS5 firmware 13.60 with ShadowMountPlus.")},
+        {FS_READ, draw::ACCENT2, false, "github.com/Herbrax/chiral-ftp"},
         {12, 0, false, ""},
-        {FS_SMALL, draw::TEXT, true, N_("Built with open-source work by others, thank you:")},
-        {FS_SMALL, draw::MUTED, false, "ps5-native-app-boilerplate and ProsperoEden (BlackBearReloaded), Lapy (ArkSama, mpereiraesaa),"},
-        {FS_SMALL, draw::MUTED, false, "ftpsrv (John T\xc3\xb6rnblom), libssh2, Mbed TLS, GNU libmicrohttpd, Dear ImGui, Noto Sans, IBM Plex Mono."},
-        {FS_SMALL, draw::MUTED, false, N_("chiral-ftp is free software under the GPL-3.0; licenses are in the app's licenses folder.")},
+        {FS_READ, draw::TEXT, true, N_("Built with open-source work by others, thank you:")},
     };
+    const char *const *thanks = nullptr;
+    for(int i = 0, n = platform::about_thanks(&thanks); i < n; i++) lines.push_back({FS_READ, draw::MUTED, false, thanks[i]});
+    lines.push_back({FS_READ, draw::MUTED, false,
+                     N_("chiral-ftp is free software under the GPL-3.0; licenses are in the app's licenses folder.")});
     float yy = y + 140;
     int first = scroll;
-    for(int i = first; i < (int)(sizeof(lines) / sizeof(lines[0])); i++) {
+    for(int i = first; i < (int)lines.size(); i++) {
       if(lines[i].text[0]) draw::text_clip(x + 50, yy, lines[i].size, lines[i].col, tr(lines[i].text), w - 100, lines[i].bold);
       yy += lines[i].size + 17;
       if(yy > y + h - 100) break;
@@ -1313,7 +1454,7 @@ void transfer(Pane &from) {
     return;
   }
   if(to.path.empty()) {
-    show_toast(from.remote ? tr("Open a PS5 folder on the left first") : tr("Open a server folder first"), true);
+    show_toast(from.remote ? tr("Open a console folder on the left first") : tr("Open a server folder first"), true);
     return;
   }
   std::vector<Entry> items = selection(from);
@@ -1331,8 +1472,8 @@ void transfer(Pane &from) {
   }
   from.marked.clear();
   char buf[128];
-  snprintf(buf, sizeof(buf), "%s", trf(from.remote ? N_("Downloading {0} items  ·  press TOUCHPAD to watch")
-                                                   : N_("Uploading {0} items  ·  press TOUCHPAD to watch"), {std::to_string(added)}).c_str());
+  snprintf(buf, sizeof(buf), "%s", trf(from.remote ? N_("Downloading {0} items")
+                                                   : N_("Uploading {0} items"), {std::to_string(added)}).c_str());
   show_toast(buf);
 }
 
@@ -1432,7 +1573,7 @@ void delete_items(Pane &p) {
   Pane *pp = &p;
   std::string what = items.size() == 1 ? "\"" + items[0].name + "\"" : trf("{0} items", {std::to_string(items.size())});
   confirm(tr("Delete"), trf(is_remote ? N_("Permanently delete {0} from the server? Folders are deleted with everything inside.")
-                                      : N_("Permanently delete {0} from the PS5? Folders are deleted with everything inside."), {what}),
+                                      : N_("Permanently delete {0} from the console? Folders are deleted with everything inside."), {what}),
           tr("Delete"), [items, is_remote, dir, pp] {
     if(is_remote) {
       auto ctx = std::make_shared<DeleteCtx>();
@@ -1510,7 +1651,7 @@ void open_entry(Pane &p) {
     m->items.push_back({tr("Copy to the other side"), [pp] { fm_copy(*pp, false); }});
     m->items.push_back({tr("Move to the other side"), [pp] { fm_copy(*pp, true); }});
   } else {
-    m->items.push_back({p.remote ? tr("Download to PS5") : tr("Upload to server"), [pp] { transfer(*pp); }, g.connected});
+    m->items.push_back({p.remote ? tr("Download to the console") : tr("Upload to server"), [pp] { transfer(*pp); }, g.connected});
   }
   m->items.push_back({p.marked.count(e.name) ? tr("Unmark") : tr("Mark"), [pp, e] {
     if(pp->marked.count(e.name)) pp->marked.erase(e.name);
@@ -1647,6 +1788,7 @@ void draw_server_list(float x, float y, float w) {
   for(int i = p.scroll; i < (int)g.servers.size() && i < p.scroll + rows; i++) {
     ServerItem it = g.servers[i];
     bool on = i == p.cursor;
+    hit_add(HIT_SERVER, x + 8, yy, w - 16, ROW_H, i);
     if(on) draw::rect(x + 8, yy + 2, w - 16, ROW_H * 1.0f - 4, focus ? draw::SEL : draw::PANEL2, 10);
     std::string title, sub;
     if(it.kind == ServerItem::NEW) {
@@ -1677,8 +1819,8 @@ void draw_server_list(float x, float y, float w) {
   }
 }
 
-// Draws one pane: the client's PS5 side (idx 0) or server side (idx 1), or a
-// file manager pane (fm: both are PS5 folders).
+// Draws one pane: the client's console side (idx 0) or server side (idx 1),
+// or a file manager pane (fm: both are folders on the console).
 void draw_pane(Pane &p, int idx, bool fm, float x, float y, float w, float h) {
   bool focus = (fm ? g.fm_active : g.active) == idx && g.overlays.empty();
   bool server_side = !fm && idx == 1;
@@ -1686,8 +1828,23 @@ void draw_pane(Pane &p, int idx, bool fm, float x, float y, float w, float h) {
   if(focus) draw::frame(x, y, w, h, draw::ACCENT, 16, 3);
 
   // Header: which side, and where we are.
-  const char *who = !server_side ? "PS5" : (g.connected ? tr("Server") : tr("Servers"));
+  const char *who = !server_side ? "Console" : (g.connected ? tr("Server") : tr("Servers"));
   draw::text(x + 28, y + 14, FS_TITLE, focus ? draw::TEXT : draw::MUTED, who, true);
+  /* Disconnect, where it is actually wanted. It was only in the menu
+     behind Plus, which is a poor place for the one thing you look for
+     while connected. */
+  if(server_side && g.connected) {
+    const char *label = tr("Disconnect");
+    const float pad = 18, bh = 44;
+    const float bw = draw::text_size(FS_SMALL, label, true).x + pad * 2;
+    const float bx = x + w - bw - 20, by = y + 16;
+    const bool on = g.disconnect_focus && focus;
+    draw::rect(bx, by, bw, bh, on ? draw::ERR : IM_COL32(86, 34, 42, 255), 12);
+    draw::frame(bx, by, bw, bh, draw::ERR, 12, on ? 3 : 2);
+    draw::text(bx + pad, by + (bh - FS_SMALL) / 2 - 2, FS_SMALL,
+               on ? IM_COL32(20, 10, 12, 255) : draw::ERR, label, true);
+    hit_add(HIT_DISCONNECT, bx - 8, by - 8, bw + 16, bh + 16);
+  }
   std::string where;
   if(!server_side) where = p.path.empty() ? tr("Choose a drive") : p.path;
   else where = g.connected ? std::string(g.server.protocol == FTP_PROTO_SFTP ? "sftp://" : "ftp://") + g.server.host + "  " + p.path
@@ -1708,10 +1865,12 @@ void draw_pane(Pane &p, int idx, bool fm, float x, float y, float w, float h) {
     if(p.scroll > std::max(0, n - rows)) p.scroll = std::max(0, n - rows);
     float yy = ly;
     if(!n && !p.loading) draw::text(x + 28, yy + 20, FS, draw::MUTED, p.path.empty() ? tr("No drives found") : tr("Empty folder"));
+    hit_add(HIT_SCROLL, x, ly, w, (float)rows * ROW_H, idx, fm ? 1 : 0);
     for(int i = p.scroll; i < n && i < p.scroll + rows; i++) {
       Entry &e = p.entries[i];
       bool on = i == p.cursor;
       bool marked = p.marked.count(e.name) > 0;
+      hit_add(HIT_ROW, x + 8, yy, w - 16, ROW_H, fm ? idx + 2 : idx, i);
       if(marked) draw::rect(x + 8, yy + 2, w - 16, ROW_H - 4, IM_COL32(30, 52, 40, 255), 10);
       if(on) draw::rect(x + 8, yy + 2, w - 16, ROW_H - 4, focus ? draw::SEL : draw::PANEL2, 10);
       if(marked) {
@@ -1770,6 +1929,11 @@ void draw_pane(Pane &p, int idx, bool fm, float x, float y, float w, float h) {
     }
     if(!p.marked.empty()) snprintf(foot, sizeof(foot), "%s", trf("{0} marked  ·  {1}", {std::to_string(p.marked.size()), fmt_size(mbytes)}).c_str());
     else snprintf(foot, sizeof(foot), "%s", trf("Files: {0}  ·  Folders: {1}  ·  {2}", {std::to_string(files), std::to_string(dirs), fmt_size(bytes)}).c_str());
+    if(!server_side && p.free_bytes >= 0) {
+      size_t used = strlen(foot);
+      snprintf(foot + used, sizeof(foot) - used, "  ·  %s",
+               trf("{0} free", {fmt_size(p.free_bytes)}).c_str());
+    }
   }
   draw::text(x + 28, y + h - PANE_FOOT + 8, FS_SMALL, p.marked.empty() ? draw::MUTED : draw::OK, foot);
 }
@@ -1834,8 +1998,11 @@ void draw_bottom() {
       x += draw::hint(x, y, ACT_TRIANGLE, t);
     }
     x += draw::hint(x, y, ACT_CIRCLE, !p.remote && p.path.empty() ? tr("Start screen") : tr("Back"));
+    if(!(!p.remote && p.path.empty())) {
+      x += draw::hint(x, y, ACT_CIRCLE_LONG, tr("Hold: start screen"));
+    }
   }
-  x += draw::hint(x, y, ACT_R1, tr("Switch side"));
+  x += draw::hint_lr(x, y, tr("Switch side"));
   x += draw::hint(x, y, ACT_OPTIONS, tr("Menu"));
   draw::hint(x, y, ACT_TOUCHPAD, tr("Transfers"));
 }
@@ -1870,11 +2037,7 @@ double g_ip_at = -100;
 
 void load_server_prefs() {
   ftpd_config_default(&g_srv.ftp);
-#ifndef __PROSPERO__
-  // On a computer the server shares a test folder, not the whole disk.
-  const char *root = getenv("CHIRAL_FTPD_ROOT");
-  snprintf(g_srv.ftp.root, sizeof(g_srv.ftp.root), "%s", root && *root ? root : data_dir());
-#endif
+  snprintf(g_srv.ftp.root, sizeof(g_srv.ftp.root), "%s", system_ftpd_default_root());
   std::vector<json::Object> v = load_store("servers");
   if(v.empty()) return;
   json::Object &o = v[0];
@@ -1963,6 +2126,7 @@ void draw_rows(const std::vector<Row> &rows, float x, float y, float w, float ro
     const Row &r = rows[i];
     bool on = i == g_row_cursor && g.overlays.empty();
     float yy = y + i * row;
+    if(r.enabled && r.run) hit_add(HIT_SETTING, x + 20, yy + 4, w - 40, row - 10, i);
     if(r.primary) {
       draw::rect(x + 20, yy + 4, w - 40, row - 10, on ? draw::ACCENT : draw::PANEL2, 12);
       ImVec2 ts = draw::text_size(FS, r.label.c_str(), true);
@@ -2078,7 +2242,7 @@ void draw_hints(std::initializer_list<std::pair<Action, const char *>> hints) {
 
 void draw_ftpd() {
   bool running = ftpd_running();
-  draw_header(tr("FTP server"), tr("Other devices connect to the PS5 with FileZilla, a file manager or any FTP app."));
+  draw_header(tr("FTP server"), tr("Other devices connect to the console with FileZilla, a file manager or any FTP app."));
   float x = MARGIN, y = TOP_H + 180, w = 860, h = H - y - HINT_H - STATUS_H - 20;
   draw::rect(x, y, w, h, draw::PANEL, 16);
   draw_status_pill(x + 30, y + 30, running, tr("Running"), tr("Stopped"));
@@ -2119,7 +2283,7 @@ void draw_web() {
   draw::text(x + 30, y + 100, FS, draw::MUTED, running ? tr("Open this address in a browser on your PC:") : tr("Start it, then open this address in a browser on your PC:"));
   draw::text_clip(x + 30, y + 150, 64, running ? draw::TEXT : draw::MUTED, web_address().c_str(), w - 60, true);
   draw::text_clip(x + 30, y + 236, FS_SMALL, draw::TEXT,
-                  tr("PS5 files: browse, download to your PC, upload from it (drag and drop works), copy, move, rename, delete."),
+                  tr("Console files: browse, download to your PC, upload from it (drag and drop works), copy, move, rename, delete."),
                   w - 60);
   draw::text_clip(x + 30, y + 268, FS_SMALL, draw::MUTED,
                   tr("FTP client tab: the client from the TV, sharing its connection and queue. Anyone on your network can open the page while it runs."),
@@ -2262,7 +2426,8 @@ void draw_fm() {
     x += draw::hint(x, y, ACT_TRIANGLE, t);
   }
   x += draw::hint(x, y, ACT_CIRCLE, p.path.empty() ? tr("Start screen") : tr("Back"));
-  x += draw::hint(x, y, ACT_R1, tr("Switch side"));
+  if(!p.path.empty()) x += draw::hint(x, y, ACT_CIRCLE_LONG, tr("Hold: start screen"));
+  x += draw::hint_lr(x, y, tr("Switch side"));
   draw::hint(x, y, ACT_OPTIONS, tr("Menu: move, rename, delete..."));
 }
 
@@ -2273,10 +2438,10 @@ struct HomeCard {
 
 const int kCardCount = 4;
 const HomeCard kCards[kCardCount] = {
-    {N_("FTP server"), N_("Turn the PS5 into an FTP server. Connect to it from your PC, phone or another console."), MODE_FTPD},
-    {N_("Web app"), N_("Open chiral-ftp in a browser on your PC: manage the PS5's files, upload and download."), MODE_WEB},
-    {N_("File manager"), N_("Copy and move files on the PS5: internal storage, USB drives and extended storage."), MODE_FILES},
-    {N_("FTP / SFTP client"), N_("Connect from the PS5 to your laptop, PC or NAS and transfer files both ways."), MODE_CLIENT},
+    {N_("FTP server"), N_("Turn the console into an FTP server. Connect to it from your PC, phone or another console."), MODE_FTPD},
+    {N_("Web app"), N_("Open chiral-ftp in a browser on your PC: manage the console's files, upload and download."), MODE_WEB},
+    {N_("File manager"), N_("Copy and move files on the console: the SD card, the homebrew folder, anywhere."), MODE_FILES},
+    {N_("FTP / SFTP client"), N_("Connect from the console to your laptop, PC or NAS and transfer files both ways."), MODE_CLIENT},
 };
 
 void draw_card_icon(Mode m, float cx, float cy) {
@@ -2300,47 +2465,62 @@ void draw_card_icon(Mode m, float cx, float cy) {
   }
 }
 
-// Set once at startup by main (PS5 only).
-bool g_access_known = false, g_access_full = false;
-std::string g_access_detail;  // English, translated when drawn
-int g_access_status = 0;
+// Set once at startup by main (Switch only).
+bool g_launch_known = false, g_launch_full = false;
+std::string g_launch_detail;  // English, translated when drawn
+int g_launch_status = 0;
 
-void draw_access_banner(float y) {
-  if(!g_access_known) return;
-  // How access was granted only goes to the startup log.
-  std::string text = g_access_full ? std::string(tr("Full access to the PS5's storage"))
-                                   : trf("Limited to the app's sandbox: {0} (status {1})",
-                                         {tr(g_access_detail.c_str()), std::to_string(g_access_status)});
+/* How much of the console the app got. hbmenu hands homebrew either a full
+   application slot (hold R while starting a game) or a library applet, and
+   the second one caps the heap well below what a 1080p font atlas plus 30
+   transfer buffers would like to use. Worth saying out loud on the start
+   screen, since it is the one thing the user can still change. */
+void draw_launch_banner(float y) {
+  if(!g_launch_known) return;
+  std::string text = g_launch_full ? std::string(tr("Full memory: launched over a game"))
+                                   : trf("Applet mode: {0} (type {1}). Hold R on a game in hbmenu for the full console.",
+                                         {tr(g_launch_detail.c_str()), std::to_string(g_launch_status)});
   ImVec2 ts = draw::text_size(FS_SMALL, text.c_str(), true);
   float w = std::min(W - 2 * MARGIN, ts.x + 70);
-  draw::rect(MARGIN, y, w, 48, g_access_full ? IM_COL32(24, 64, 44, 255) : IM_COL32(80, 56, 18, 255), 24);
-  draw::dl()->AddCircleFilled(ImVec2(MARGIN + 26, y + 24), 8, g_access_full ? draw::OK : draw::ACCENT2, 12);
-  draw::text_clip(MARGIN + 46, y + 11, FS_SMALL, g_access_full ? draw::OK : draw::ACCENT2, text.c_str(), w - 66, true);
+  draw::rect(MARGIN, y, w, 48, g_launch_full ? IM_COL32(24, 64, 44, 255) : IM_COL32(80, 56, 18, 255), 24);
+  draw::dl()->AddCircleFilled(ImVec2(MARGIN + 26, y + 24), 8, g_launch_full ? draw::OK : draw::ACCENT2, 12);
+  draw::text_clip(MARGIN + 46, y + 11, FS_SMALL, g_launch_full ? draw::OK : draw::ACCENT2, text.c_str(), w - 66, true);
 }
 
 void draw_home() {
   draw::rect(0, 0, W, H, draw::BG);
   draw_top();
   draw::text(MARGIN + 8, TOP_H + 50, 52, draw::TEXT, tr("What would you like to do?"), true);
-  draw::text(MARGIN + 8, TOP_H + 124, FS, draw::MUTED,
+  draw::text(MARGIN + 8, TOP_H + 124, FS_CARD, draw::MUTED,
              tr("Servers keep running while you use the other modes or go to the home screen. Closing chiral-ftp stops them."));
-  draw_access_banner(H - HINT_H - 64);
+  draw_launch_banner(H - HINT_H - 64);
   float gap = 30, cw = (W - 2 * MARGIN - (kCardCount - 1) * gap) / kCardCount, ch = 580, cy = TOP_H + 210;
   for(int i = 0; i < kCardCount; i++) {
     Mode mode = kCards[i].mode;
     float cx = MARGIN + i * (cw + gap);
+    const bool have = mode_enabled(mode);
+    if(have) hit_add(HIT_CARD, cx, cy, cw, ch, i);
     bool on = i == g_home_cursor && g.overlays.empty();
     draw::rect(cx, cy, cw, ch, on ? draw::PANEL2 : draw::PANEL, 22);
     if(on) draw::frame(cx, cy, cw, ch, draw::ACCENT, 22, 4);
-    draw_card_icon(mode, cx + cw / 2, cy + 120);
+    /* A mode this build was compiled without: still shown, so the start
+       screen reads the same, but dimmed and inert. */
+    const ImU32 title_col = have ? draw::TEXT : IM_COL32(90, 100, 120, 255);
+    const ImU32 body_col = have ? draw::MUTED : IM_COL32(70, 78, 96, 255);
+    if(have) draw_card_icon(mode, cx + cw / 2, cy + 120);
+    else draw::dl()->AddCircleFilled(ImVec2(cx + cw / 2, cy + 120), 62, IM_COL32(24, 30, 46, 255), 40);
     const char *card_title = tr(kCards[i].title);
     ImVec2 ts = draw::text_size(36, card_title, true);
-    draw::text(cx + (cw - ts.x) / 2, cy + 220, 36, draw::TEXT, card_title, true);
+    draw::text(cx + (cw - ts.x) / 2, cy + 220, 36, title_col, card_title, true);
     // The description, over a few lines.
     float ty = cy + 290;
-    for(const std::string &line : wrap_text(tr(kCards[i].text), FS, cw - 60)) {
-      draw::text(cx + 30, ty, FS, draw::MUTED, line.c_str());
-      ty += 40;
+    for(const std::string &line : wrap_text(tr(kCards[i].text), FS_CARD, cw - 60)) {
+      draw::text(cx + 30, ty, FS_CARD, body_col, line.c_str());
+      ty += 44;
+    }
+    if(!have) {
+      draw::text(cx + 30, ty + 10, FS_SMALL, IM_COL32(120, 92, 40, 255),
+                 tr("Not in this build"));
     }
     // What's running now.
     std::string status;
@@ -2361,7 +2541,7 @@ void draw_home() {
   draw_hints({{ACT_LEFT, tr("Choose")}, {ACT_CROSS, tr("Open")}, {ACT_OPTIONS, tr("Settings & about")}});
 }
 
-// OPTIONS on the start screen, and on the FTP server and web app screens
+// Plus on the start screen, and on the FTP server and web app screens
 // (with "Start screen" first, like every mode's menu).
 void options_menu(bool in_mode) {
   Menu *m = new Menu;
@@ -2370,7 +2550,11 @@ void options_menu(bool in_mode) {
   m->items.push_back({tr("Settings"), [] { push(new Settings); }});
   m->items.push_back({tr("Message log"), [] { push(new LogView); }});
   m->items.push_back({tr("About chiral-ftp"), [] { push(new About); }});
-  if(!platform::can_quit()) m->items.push_back({tr("To close chiral-ftp, use the PS button"), [] {}, false});
+  if(platform::can_quit()) {
+    m->items.push_back({tr("Exit chiral-ftp"), [] {
+      confirm(tr("Exit"), tr("Close chiral-ftp? Running transfers stop."), tr("Exit"), [] { g.quit = true; });
+    }, true, true});
+  }
   push(m);
 }
 
@@ -2379,10 +2563,19 @@ bool handle_home(Action a) {
     options_menu(false);
     return true;
   }
-  if(a == ACT_LEFT || a == ACT_L1) g_home_cursor = (g_home_cursor + kCardCount - 1) % kCardCount;
-  else if(a == ACT_RIGHT || a == ACT_R1) g_home_cursor = (g_home_cursor + 1) % kCardCount;
-  else if(a == ACT_CROSS) {
+  // Step over the modes this build hasn't got rather than stopping on them.
+  if(a == ACT_LEFT || a == ACT_L1 || a == ACT_RIGHT || a == ACT_R1) {
+    const int step = (a == ACT_LEFT || a == ACT_L1) ? kCardCount - 1 : 1;
+    for(int i = 0; i < kCardCount; i++) {
+      g_home_cursor = (g_home_cursor + step) % kCardCount;
+      if(mode_enabled(kCards[g_home_cursor].mode)) break;
+    }
+  } else if(a == ACT_CROSS) {
     Mode m = kCards[g_home_cursor].mode;
+    if(!mode_enabled(m)) {
+      show_toast(tr("Not in this build"), true);
+      return true;
+    }
     if(m == MODE_FILES && g.fm[0].path.empty() && g.fm[0].entries.empty()) {
       load_drives(g.fm[0]);
       load_drives(g.fm[1]);
@@ -2399,20 +2592,127 @@ void init() {
   memset(&g.server, 0, sizeof(g.server));
   g.panes[0].remote = false;
   g.panes[1].remote = true;
+  startup_trace("ui::init: loading saved sites and history");
   load_all();
+  startup_trace("ui::init: loading server settings");
   load_server_prefs();
-  rebuild_servers();
-  load_drives();
-  g_jobs.start();
-  ftp_server_t s;
-  if(session_server(&s)) {
-    g.connected = true;
-    g.server = s;
-    load_remote("");
+  if(mode_enabled(MODE_CLIENT)) {
+    startup_trace("ui::init: building the server list");
+    rebuild_servers();
+  }
+  if(panes_enabled()) {
+    startup_trace("ui::init: listing drives");
+    load_drives();
+    startup_trace("ui::init: starting the background worker");
+    if(!g_jobs.start()) {
+      startup_trace("ui::init: the background worker would not start");
+      log_msg(0, LOG_ERROR, "Could not start the background worker; "
+                            "listing and transfers will not run");
+    }
+  }
+  if(mode_enabled(MODE_CLIENT)) {
+    startup_trace("ui::init: checking for an open session");
+    ftp_server_t s;
+    if(session_server(&s)) {
+      g.connected = true;
+      g.server = s;
+      load_remote("");
+    }
+  }
+  /* Put the cursor on something this build can actually open. */
+  for(int i = 0; i < kCardCount; i++) {
+    if(mode_enabled(kCards[i].mode)) {
+      g_home_cursor = i;
+      break;
+    }
+  }
+  startup_trace("ui::init: done");
+}
+
+/* A tap, a drag, or nothing. Called from update(), so it runs on the UI
+   thread between frames like every other input. */
+void handle_touch() {
+  if(!platform::has_touch()) return;
+  platform::Touch t = platform::take_touch();
+  if(t.held || t.pressed || t.released) g_touch_dirty = true;
+
+  // Dragging a list scrolls it, a row at a time, and never counts as a tap.
+  if(t.held && t.moved && t.drag_y != 0) {
+    const Hit *z = hit_at(t.x, t.y, HIT_SCROLL);
+    if(z) {
+      Pane *p = z->b ? &g.fm[z->a] : &g.panes[z->a];
+      const int n = (int)p->entries.size();
+      const int rows = (int)(z->h / ROW_H);
+      static float carried = 0;
+      carried -= t.drag_y;
+      while(carried >= ROW_H && p->scroll < std::max(0, n - rows)) { p->scroll++; carried -= ROW_H; }
+      while(carried <= -ROW_H && p->scroll > 0) { p->scroll--; carried += ROW_H; }
+      if(p->cursor < p->scroll) p->cursor = p->scroll;
+      if(p->cursor >= p->scroll + rows) p->cursor = p->scroll + rows - 1;
+    }
+    return;
+  }
+  if(!t.released || t.moved) return;
+
+  // Menus and dialogs come first: they are on top, and they own the screen.
+  if(!g.overlays.empty()) {
+    if(const Hit *item = hit_at(t.x, t.y, HIT_MENU_ITEM)) {
+      Overlay *top = g.overlays.back().get();
+      if(top->kind() == OV_MENU) {  // no RTTI in this build; kind() is the tag
+        static_cast<Menu *>(top)->cursor = item->a;  // tap and highlight agree
+        handle(ACT_CROSS);
+        return;
+      }
+    }
+    // Outside the panel: the same as backing out of it.
+    if(!hit_at(t.x, t.y, HIT_OVERLAY_BODY)) handle(ACT_CIRCLE);
+    return;
+  }
+
+  if(g.mode == MODE_HOME) {
+    if(const Hit *card = hit_at(t.x, t.y, HIT_CARD)) {
+      // A mode is a harmless place to end up, so one tap opens it.
+      g_home_cursor = card->a;
+      handle(ACT_CROSS);
+    }
+    return;
+  }
+
+  // Disconnect, before the rows it sits over.
+  if(hit_at(t.x, t.y, HIT_DISCONNECT)) {
+    g.disconnect_focus = false;
+    disconnect();
+    return;
+  }
+
+  // The FTP server and web app screens: plain lists of controls.
+  if(const Hit *set = hit_at(t.x, t.y, HIT_SETTING)) {
+    g_row_cursor = set->a;
+    handle(ACT_CROSS);
+    return;
+  }
+
+  // A saved site or a recent connection on the client's server side.
+  if(const Hit *srv = hit_at(t.x, t.y, HIT_SERVER)) {
+    g.active = 1;
+    remote().cursor = srv->a;
+    handle(ACT_CROSS);
+    return;
+  }
+
+  if(const Hit *row = hit_at(t.x, t.y, HIT_ROW)) {
+    const bool fm = row->a >= 2;
+    const int idx = fm ? row->a - 2 : row->a;
+    Pane &p = fm ? g.fm[idx] : g.panes[idx];
+    int &active = fm ? g.fm_active : g.active;
+    active = idx;
+    p.cursor = row->b;
+    handle(ACT_CROSS);
   }
 }
 
 void update() {
+  handle_touch();
   g_jobs.poll();
   // Copies finished: show the new files on both sides.
   fsjob_stats_t js;
@@ -2439,6 +2739,13 @@ void update() {
 void handle(Action a) {
   if(a == ACT_QUIT) {
     g.quit = true;
+    return;
+  }
+  /* Back, held down: straight out to the start screen, however deep in a
+     folder tree or however many menus down. */
+  if(a == ACT_CIRCLE_LONG) {
+    g.overlays.clear();
+    if(g.mode != MODE_HOME) go_mode(MODE_HOME);
     return;
   }
   if(!g.overlays.empty()) {
@@ -2469,8 +2776,48 @@ void handle(Action a) {
   bool servers = p.remote && !g.connected;
   int count = servers ? (int)g.servers.size() : (int)p.entries.size();
   int page = std::max(1, visible_rows() - 1);
+
+  /* The Disconnect button in the server pane's header. Only reachable from
+     the top of that pane's list, and anything that leaves the pane drops
+     it, so it can never hold focus somewhere it isn't drawn. */
+  const bool can_disconnect = p.remote && g.connected;
+  if(!can_disconnect) g.disconnect_focus = false;
+  if(g.disconnect_focus) {
+    switch(a) {
+    case ACT_DOWN:
+      g.disconnect_focus = false;
+      return;
+    case ACT_CROSS:
+      g.disconnect_focus = false;
+      disconnect();
+      return;
+    case ACT_LEFT: case ACT_L1: case ACT_R1:
+      g.disconnect_focus = false;
+      g.active = 0;
+      return;
+    case ACT_CIRCLE:
+      g.disconnect_focus = false;
+      return;
+    case ACT_OPTIONS:
+      g.disconnect_focus = false;
+      main_menu();
+      return;
+    case ACT_UP:
+      return;  // already as far up as it goes
+    default:
+      g.disconnect_focus = false;
+      break;  // anything else behaves as usual
+    }
+  }
+
   switch(a) {
-  case ACT_UP: move_cursor(p, count, -1); break;
+  case ACT_UP:
+    if(can_disconnect && p.cursor == 0) {
+      g.disconnect_focus = true;  // up off the first row lands on Disconnect
+      break;
+    }
+    move_cursor(p, count, -1);
+    break;
   case ACT_DOWN: move_cursor(p, count, 1); break;
   case ACT_L2: move_cursor(p, count, -page); break;
   case ACT_R2: move_cursor(p, count, page); break;
@@ -2509,6 +2856,7 @@ void handle(Action a) {
 void draw_overlays();
 
 void render() {
+  g_hits.clear();
   if(g.mode != MODE_CLIENT) {
     if(g.mode == MODE_HOME) draw_home();
     else if(g.mode == MODE_FILES) draw_fm();
@@ -2552,11 +2900,15 @@ void draw_overlays() {
   }
 }
 
-void set_storage_access(bool full, const std::string &reason, int status) {
-  g_access_known = true;
-  g_access_full = full;
-  g_access_detail = reason;
-  g_access_status = status;
+void set_startup_notice(bool ok, const std::string &detail, int status) {
+  g_launch_known = true;
+  g_launch_full = ok;
+  g_launch_detail = detail;
+  g_launch_status = status;
+}
+
+void stop_workers() {
+  g_jobs.stop();
 }
 
 bool quit_requested() {
@@ -2570,6 +2922,11 @@ bool busy() {
   fsjob_stats_t js;
   fsjob_get_stats(&js);
   if(g.mode == MODE_FILES && js.running) return true;
+  if(g_touch_dirty) {
+    // One more frame, so the last tap is drawn before we go quiet again.
+    g_touch_dirty = false;
+    return true;
+  }
   return g.qs.running > 0 || g_jobs.pending() > 0 || now() < g.toast_until ||
          (!g.overlays.empty() && g.overlays.back()->kind() == OV_TEXT);
 }

@@ -5,8 +5,8 @@
 #include <limits.h>
 
 #define FTPD_DEFAULT_PORT 2121
-#define FTPD_DEFAULT_USER "switch"
-#define FTPD_DEFAULT_PASS "chiral"
+#define FTPD_DEFAULT_USER "chiral"
+#define FTPD_DEFAULT_PASS "ftp"
 #define FTPD_MAX_CLIENTS 30
 
 typedef struct ftpd_config {

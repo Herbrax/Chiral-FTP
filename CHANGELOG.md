@@ -55,6 +55,9 @@ a game controller. There's no download yet: build it from source with
 
 - The About screen says which platforms chiral-ftp runs on, and thanks the
   projects each version is built with.
+- **The FTP server's default login is now `chiral` / `ftp`** on every
+  platform. A login you already set is kept; "Reset to chiral / ftp" on the
+  FTP server screen switches to the new one.
 
 ### Downloads
 

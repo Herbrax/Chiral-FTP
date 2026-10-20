@@ -23,7 +23,6 @@ fallback, PASV with the unroutable-address workaround, REST/APPE resume. */
 #include <unistd.h>
 
 #include "ftp_internal.h"
-#include "ps5_net.h"
 #include "log.h"
 
 #define set_error ftp_set_error

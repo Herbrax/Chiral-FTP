@@ -11,6 +11,9 @@
 #define KEEPALIVE_IDLE_S 30
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_t g_keepalive;
+static int g_keepalive_running;
+static volatile int g_keepalive_stop;
 static ftp_conn_t g_conn;
 static int g_connected;  /* the user wants to be connected */
 static int g_initialized;
@@ -95,8 +98,11 @@ session_run(session_fn fn, void *ctx, char *err, size_t err_size) {
 static void *
 keepalive_main(void *arg) {
   (void)arg;
-  for(;;) {
-    sleep(5);
+  while(!g_keepalive_stop) {
+    /* Five seconds, in short naps: a plain sleep(5) would keep the exit
+       waiting that long for this thread to notice it should finish. */
+    for(int i = 0; i < 50 && !g_keepalive_stop; i++) usleep(100 * 1000);
+    if(g_keepalive_stop) break;
     if(pthread_mutex_trylock(&g_lock)) continue;
     if(g_initialized && g_connected && ftp_is_open(&g_conn) &&
        time(NULL) - g_conn.last_activity >= KEEPALIVE_IDLE_S) {
@@ -109,9 +115,16 @@ keepalive_main(void *arg) {
 
 void
 session_start_keepalive(void) {
-  pthread_t thread;
-
-  if(!pthread_create(&thread, NULL, keepalive_main, NULL)) {
-    pthread_detach(thread);
+  /* Joinable, not detached: stopping it means waiting for it. */
+  if(!pthread_create(&g_keepalive, NULL, keepalive_main, NULL)) {
+    g_keepalive_running = 1;
   }
+}
+
+void
+session_stop_keepalive(void) {
+  if(!g_keepalive_running) return;
+  g_keepalive_stop = 1;
+  pthread_join(g_keepalive, NULL);
+  g_keepalive_running = 0;
 }

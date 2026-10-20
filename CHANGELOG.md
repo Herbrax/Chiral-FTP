@@ -1,5 +1,68 @@
 # Changelog
 
+## 1.0.1
+
+chiral-ftp is now cross-platform. The same app runs on the **PS5**, the
+**Nintendo Switch** (new) and on **PC and Mac**, from one codebase. Support
+for Android, PS4 and other platforms is coming soon.
+
+### New: Nintendo Switch
+
+The first release for the Switch, as homebrew (`.nro`) started from hbmenu.
+Everything the PS5 version does is there:
+
+- **FTP server**, **web app**, **file manager** (the SD card) and
+  **FTP / SFTP client** with saved sites, history, resume and up to 30
+  transfers at once.
+- Controls follow the PS5 layout by position: **A** opens, **B** goes back,
+  **Y** marks, **X** transfers, **R** switches sides, **Plus** opens the
+  menu and **Minus** shows the transfer queue. The bottom bar shows the
+  Switch's own buttons.
+- **The touch screen works**: tap a row, a card, a menu item or a setting,
+  drag a list to scroll, tap outside a menu to close it.
+- Text is typed with the system keyboard.
+- Sleep is held off and the HOME menu can't close the app while it runs,
+  so a transfer isn't cut short.
+- The start screen says whether the app got the console's full memory
+  (launched over a game, holding **R**) or the album's smaller share.
+- English, Spanish, French, Italian and Russian.
+- Settings, saved sites and history are kept in `/switch/chiral-ftp`.
+
+### New: PC and Mac
+
+The same app in a window on Windows, macOS or Linux, with the keyboard or
+a game controller. There's no download yet: build it from source with
+`make PLATFORM=sdl` (see the README).
+
+### PS5
+
+- **Creating, renaming, moving, deleting and uploading files no longer fail
+  on folders the app isn't allowed to change** (755 or 766 ones, for
+  example): chiral-ftp sets the folder to 777 and tries again. This works in
+  the file manager, the web app, the FTP server and the client.
+- **Change permissions works again.**
+- **New folder and rename work in the two-pane file manager**: the PS5
+  keyboard is loaded before the app asks for full storage access. If the
+  keyboard still can't open, the app says so instead of doing nothing.
+- **Hold Circle** to go back to the start screen from anywhere.
+- **Faster drawing**: menus and lists respond more quickly to the
+  controller.
+- The FTP server notices when its connection died while the console slept,
+  instead of claiming to still be running.
+- In the client, **Disconnect** is on the server pane while connected.
+
+### Everywhere
+
+- The About screen says which platforms chiral-ftp runs on, and thanks the
+  projects each version is built with.
+
+### Downloads
+
+- `chiral-ftp-ps5-1.0.1.zip`: the PS5 title (`PPSA96024`). Close chiral-ftp
+  before you replace it; your settings in `/data/chiral-ftp` are kept.
+- `chiral-ftp.nro`: the Switch homebrew. Copy it into `/switch` on the SD
+  card; to update, replace it.
+
 ## 1.0
 
 The first release of chiral-ftp: the ultimate file manager and FTP interface

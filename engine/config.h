@@ -2,9 +2,9 @@
 
 #define APP_NAME "chiral-ftp"
 
-/* Files chiral-ftp writes to PS5 storage (uploads, downloads, copies) are
-   open to all: the console only starts homebrew whose files are 777. */
-#define PS5_FILE_MODE 0777
+/* CHIRAL_FILE_MODE, and the other traits that differ per console, come from
+   platform/<name>/platform_config.h. */
+#include "platform_config.h"
 
 /* Transfer slots; each one logs in with its own control connection. */
 #define MAX_TRANSFER_CONNECTIONS     30
@@ -12,9 +12,9 @@
 
 #define MAX_HISTORY 30
 
-/* Where sites, history, settings, host keys and logs live. On the PS5 this is
-   /data/chiral-ftp when ShadowMountPlus gives the app /data, otherwise the
-   app's own /download0 storage. Chosen once by data_dir_init(). */
+/* Where sites, history, settings, host keys and logs live: the first of the
+   platform's candidates (system_data_dir_candidates) that can actually be
+   written to and listed. Chosen once by data_dir_init(). */
 const char *data_dir(void);
 /* Full path of a file in the data folder (static buffer per call site). */
 const char *data_path(char *buf, unsigned long size, const char *name);

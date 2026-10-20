@@ -1,5 +1,5 @@
 /* chiral-ftp web UI: a FileZilla-style dual-pane FTP client.
-   Plain ES2017 so it runs in the PS5 browser without a build step. */
+   Plain ES2017 so it runs in any console or phone browser without a build step. */
 (function () {
   "use strict";
 
@@ -11,7 +11,7 @@
     server: null,
     settings: { connections: 5, max_connections: 30, policy: 0, preserve_mtime: 1, retries: 2 },
     prefs: { show_hidden: true, save_pass: true },
-    platform: "ps5",
+    platform: "switch",
     sites: [],
     history: [],
     logSeq: 0,
@@ -54,7 +54,7 @@
     try {
       data = await res.json();
     } catch (e) {
-      throw new Error("Bad response from the PS5 (HTTP " + res.status + ")");
+      throw new Error("Bad response from the console (HTTP " + res.status + ")");
     }
     return data;
   }
@@ -260,7 +260,7 @@
       (local ? "" : '<th class="c-owner" data-sort="owner">Owner/Group</th>');
     this.el.innerHTML =
       '<div class="pane-head">' +
-        '<span class="title">' + (local ? "PS5 <small>local site</small>" : "Server <small>remote site</small>") + "</span>" +
+        '<span class="title">' + (local ? "Console <small>local site</small>" : "Server <small>remote site</small>") + "</span>" +
         (local ? '<select data-role="roots" title="Drives"></select>' : "") +
         '<form data-role="pathform"><input class="path" data-role="path" spellcheck="false" autocomplete="off"></form>' +
       "</div>" +
@@ -274,7 +274,7 @@
         '<input class="filter" data-role="filter" placeholder="Filter" spellcheck="false">' +
         '<span class="spacer"></span>' +
         (local ? '<button class="btn small xfer up" data-act="transfer" title="Upload selection to the server">Upload &#8594;</button>'
-               : '<button class="btn small xfer down" data-act="transfer" title="Download selection to the PS5">&#8592; Download</button>') +
+               : '<button class="btn small xfer down" data-act="transfer" title="Download selection to the console">&#8592; Download</button>') +
       "</div>" +
       '<div class="list-wrap" data-role="wrap"><table class="ftable"><thead><tr>' + cols +
         '</tr></thead><tbody data-role="rows"></tbody></table></div>' +
@@ -647,7 +647,7 @@
         var what = items.length === 1 ? "\"" + items[0].name + "\"" : items.length + " items";
         var ok = await ask({
           title: "Delete", input: false, danger: true, ok: "Delete",
-          text: "Permanently delete " + what + (this.isLocal() ? " from the PS5" : " from the server") +
+          text: "Permanently delete " + what + (this.isLocal() ? " from the console" : " from the server") +
             "? Folders are deleted with everything inside them."
         });
         if (!ok) return;
@@ -685,7 +685,7 @@
     var one = n === 1 ? this.selected()[0] : null;
     var off = !this.isLocal() && !state.connected;
     showMenu(x, y, [
-      { label: this.isLocal() ? "Upload to server" : "Download to PS5", disabled: !n || !state.connected, run: function () { self.transfer(); } },
+      { label: this.isLocal() ? "Upload to server" : "Download to the console", disabled: !n || !state.connected, run: function () { self.transfer(); } },
       { label: "Open", disabled: !(one && one.dir), run: function () { self.open(one); } },
       "-",
       { label: "Create folder", disabled: off, run: function () { self.action("mkdir"); } },
@@ -788,7 +788,7 @@
       remotePane.render();
       remotePane.setOverlay('<div><div class="big">Not connected</div>Use Quickconnect or the Site Manager to log in to an FTP server,<br>' +
         "for example your Mac or Linux laptop over SFTP (Remote Login, port 22), FileZilla Server on Windows,<br>" +
-        "a NAS, or another PS5 running ftpsrv (FTP, port 2121).</div>");
+        "a NAS, or another Switch running ftpd (FTP, port 5000).</div>");
     } else {
       remotePane.setOverlay("");
     }
@@ -809,7 +809,7 @@
     try {
       var params = serverParams(site);
       var data = await call("/api/connect", params);
-      /* The PS5 switches to SFTP by itself when an FTP port answers with SSH. */
+      /* chiral-ftp switches to SFTP by itself when an FTP port answers with SSH. */
       if (data.protocol && data.protocol !== params.protocol) {
         toast("That port is an SSH server, so connected with SFTP");
         site = Object.assign({}, site, { protocol: data.protocol, port: data.port });
@@ -1148,10 +1148,10 @@
     try { await call("/api/hostkeys/forget"); toast("Saved host keys forgotten"); } catch (e) { errToast(e); }
   });
   $("btn-exit").addEventListener("click", async function () {
-    var ok = await ask({ title: "Stop web server", text: "Stop the web server in chiral-ftp? Transfers keep running in the app on the PS5.", input: false, danger: true, ok: "Stop" });
+    var ok = await ask({ title: "Stop web server", text: "Stop the web server in chiral-ftp? Transfers keep running in the app on the console.", input: false, danger: true, ok: "Stop" });
     if (!ok) return;
     try { await call("/api/exit"); } catch (e) { /* the server is going away */ }
-    document.body.innerHTML = '<div class="empty" style="padding-top:20vh">The web server has stopped. Start it again from chiral-ftp on the PS5.</div>';
+    document.body.innerHTML = '<div class="empty" style="padding-top:20vh">The web server has stopped. Start it again from chiral-ftp on the console.</div>';
   });
 
   /* ---------- message log ---------- */
@@ -1336,7 +1336,7 @@
       var data = await api("/api/poll", { log: state.logSeq, tab: state.queueTab }, "GET");
       if (offline) {
         offline = false;
-        toast("Reconnected to the PS5");
+        toast("Reconnected to the console");
       }
       appendLog(data.log);
       state.logSeq = data.log_seq;
@@ -1346,7 +1346,7 @@
     } catch (e) {
       if (!offline) {
         offline = true;
-        toast("Lost contact with the PS5 payload. Retrying...", true);
+        toast("Lost contact with chiral-ftp. Retrying...", true);
       }
       delay = 3000;
     } finally {

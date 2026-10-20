@@ -2,30 +2,19 @@
 
 #include <stdarg.h>
 #include <stdio.h>
-#include <string.h>
 
-#ifdef __SCE__
-typedef struct notify_request {
-  char unused[45];
-  char message[3075];
-} notify_request_t;
+#include "system.h"
 
-int sceKernelSendNotificationRequest(int device, notify_request_t *request,
-                                     size_t size, int unused);
-#endif
-
+/* Where "outside the app" means depends on the console -- a system
+   notification on the PS5, the in-app log where there is no such thing.
+   platform/<name>/system.c decides; this just formats. */
 void
 notify_user(const char *fmt, ...) {
-#ifdef __SCE__
-  notify_request_t req;
+  char message[512];
   va_list args;
 
-  memset(&req, 0, sizeof(req));
   va_start(args, fmt);
-  vsnprintf(req.message, sizeof(req.message), fmt, args);
+  vsnprintf(message, sizeof(message), fmt, args);
   va_end(args);
-  sceKernelSendNotificationRequest(0, &req, sizeof(req), 0);
-#else
-  (void)fmt;
-#endif
+  system_notify(message);
 }

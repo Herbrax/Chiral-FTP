@@ -24,6 +24,6 @@ typedef void (*log_cb)(void *ctx, unsigned long seq, long long time, int conn,
 /* Calls cb for each message newer than since; returns the last seq. */
 unsigned long log_each(unsigned long since, log_cb cb, void *ctx);
 
-/* Appends a line to STARTUP_LOG and syncs it, so a failed launch on the PS5
+/* Appends a line to STARTUP_LOG and syncs it, so a failed launch
    leaves a trace of how far it got. */
 void startup_trace(const char *fmt, ...) __attribute__((format(printf, 1, 2)));

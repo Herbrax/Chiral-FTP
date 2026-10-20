@@ -21,7 +21,7 @@ typedef struct ftp_server {
   char pass[256];
   int pasv_mode;
   int show_hidden;  /* use LIST -a when MLSD is unavailable */
-  char keyfile[256]; /* SFTP private key on the PS5; pass is its passphrase */
+  char keyfile[256]; /* SFTP private key on the SD card; pass is its passphrase */
 } ftp_server_t;
 
 typedef struct ftp_entry {

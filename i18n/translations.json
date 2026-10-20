@@ -12,17 +12,6 @@
  },
  "strings": [
   {
-   "en": "  File manager: copy, move and delete between internal storage and USB.",
-   "es": "  Gestor de archivos: copia, mueve y elimina entre el almacenamiento interno y USB.",
-   "fr": "  Gestionnaire de fichiers : copiez, déplacez et supprimez entre stockage interne et USB.",
-   "it": "  File manager: copia, sposta ed elimina tra memoria interna e USB.",
-   "ja": "  ファイルマネージャー：本体ストレージとUSBの間でコピー、移動、削除。",
-   "ko": "  파일 관리자: 내장 저장소와 USB 사이에서 복사, 이동, 삭제.",
-   "zh": "  文件管理器：在内部存储和 USB 之间复制、移动和删除。",
-   "ru": "  Файловый менеджер: копирование, перемещение и удаление между внутренней памятью и USB.",
-   "ar": "  مدير الملفات: نسخ ونقل وحذف بين التخزين الداخلي وUSB."
-  },
-  {
    "en": "  FTP / SFTP client: up to 30 transfers at once with your laptop, PC or NAS.",
    "es": "  Cliente FTP / SFTP: hasta 30 transferencias a la vez con tu portátil, PC o NAS.",
    "fr": "  Client FTP / SFTP : jusqu'à 30 transferts simultanés avec votre portable, PC ou NAS.",
@@ -34,26 +23,37 @@
    "ar": "  عميل FTP / SFTP: حتى 30 عملية نقل في وقت واحد مع حاسوبك المحمول أو الحاسوب أو NAS."
   },
   {
-   "en": "  FTP server: other devices connect to the PS5 with any FTP app.",
-   "es": "  Servidor FTP: otros dispositivos se conectan a la PS5 con cualquier app FTP.",
-   "fr": "  Serveur FTP : d'autres appareils se connectent à la PS5 avec n'importe quelle app FTP.",
-   "it": "  Server FTP: altri dispositivi si collegano alla PS5 con qualsiasi app FTP.",
-   "ja": "  FTPサーバー：他の機器から任意のFTPアプリでPS5に接続。",
-   "ko": "  FTP 서버: 다른 기기에서 아무 FTP 앱으로 PS5에 접속.",
-   "zh": "  FTP 服务器：其他设备用任意 FTP 应用连接到 PS5。",
-   "ru": "  FTP-сервер: другие устройства подключаются к PS5 любым FTP-приложением.",
-   "ar": "  خادم FTP: تتصل الأجهزة الأخرى بجهاز PS5 بأي تطبيق FTP."
+   "en": "  FTP server: other devices connect to the console with any FTP app.",
+   "es": "  Servidor FTP: otros dispositivos se conectan a la consola con cualquier app FTP.",
+   "fr": "  Serveur FTP : d'autres appareils se connectent à la console avec n'importe quelle app FTP.",
+   "it": "  Server FTP: altri dispositivi si collegano alla console con qualsiasi app FTP.",
+   "ja": "  FTPサーバー：他の機器から任意のFTPアプリで本体に接続。",
+   "ko": "  FTP 서버: 다른 기기에서 아무 FTP 앱으로 콘솔에 접속.",
+   "zh": "  FTP 服务器：其他设备用任意 FTP 应用连接到 主机。",
+   "ru": "  FTP-сервер: другие устройства подключаются к консоли любым FTP-приложением.",
+   "ar": "  خادم FTP: تتصل الأجهزة الأخرى بجهاز الجهاز بأي تطبيق FTP."
   },
   {
-   "en": "  Web app: manage the PS5's files from a browser, upload and download.",
-   "es": "  App web: gestiona los archivos de la PS5 desde un navegador, sube y descarga.",
-   "fr": "  App web : gérez les fichiers de la PS5 depuis un navigateur, envoyez et téléchargez.",
-   "it": "  App web: gestisci i file della PS5 da un browser, carica e scarica.",
-   "ja": "  Webアプリ：ブラウザーからPS5のファイルを管理、アップロードとダウンロード。",
-   "ko": "  웹 앱: 브라우저에서 PS5 파일 관리, 업로드와 다운로드.",
-   "zh": "  网页应用：在浏览器中管理 PS5 的文件，上传和下载。",
-   "ru": "  Веб-приложение: управление файлами PS5 из браузера, загрузка и скачивание.",
-   "ar": "  تطبيق الويب: إدارة ملفات PS5 من المتصفح، الرفع والتنزيل."
+   "en": "  File manager: copy, move and delete files anywhere on the SD card.",
+   "es": "  Gestor de archivos: copia, mueve y elimina archivos en toda la tarjeta SD.",
+   "fr": "  Gestionnaire de fichiers : copiez, déplacez et supprimez des fichiers partout sur la carte SD.",
+   "it": "  File manager: copia, sposta ed elimina file ovunque sulla scheda SD.",
+   "ja": "  ファイルマネージャー：SDカード内のどこでもコピー、移動、削除。",
+   "ko": "  파일 관리자: SD 카드 어디서나 파일을 복사, 이동, 삭제.",
+   "zh": "  文件管理器：在 SD 卡的任意位置复制、移动和删除文件。",
+   "ru": "  Файловый менеджер: копирование, перемещение и удаление файлов в любом месте SD-карты.",
+   "ar": "  مدير الملفات: نسخ ونقل وحذف الملفات في أي مكان على بطاقة SD."
+  },
+  {
+   "en": "  Web app: manage the console's files from a browser, upload and download.",
+   "es": "  App web: gestiona los archivos de la consola desde un navegador, sube y descarga.",
+   "fr": "  App web : gérez les fichiers de la console depuis un navigateur, envoyez et téléchargez.",
+   "it": "  App web: gestisci i file della console da un browser, carica e scarica.",
+   "ja": "  Webアプリ：ブラウザーから本体のファイルを管理、アップロードとダウンロード。",
+   "ko": "  웹 앱: 브라우저에서 콘솔 파일 관리, 업로드와 다운로드.",
+   "zh": "  网页应用：在浏览器中管理 主机 的文件，上传和下载。",
+   "ru": "  Веб-приложение: управление файлами консоли из браузера, загрузка и скачивание.",
+   "ar": "  تطبيق الويب: إدارة ملفات الجهاز من المتصفح، الرفع والتنزيل."
   },
   {
    "en": "#{0} listing folder",
@@ -199,17 +199,6 @@
    "ar": "+  اتصال جديد"
   },
   {
-   "en": "a folder can't go inside itself",
-   "es": "una carpeta no puede ir dentro de sí misma",
-   "fr": "un dossier ne peut pas aller dans lui-même",
-   "it": "una cartella non può andare dentro sé stessa",
-   "ja": "フォルダーをそれ自身の中には入れられません",
-   "ko": "폴더를 자기 자신 안에 넣을 수 없습니다",
-   "zh": "文件夹不能放进它自己里面",
-   "ru": "папку нельзя поместить внутрь неё самой",
-   "ar": "لا يمكن وضع مجلد داخل نفسه"
-  },
-  {
    "en": "A port is a number from 1 to 65535",
    "es": "Un puerto es un número del 1 al 65535",
    "fr": "Un port est un nombre de 1 à 65535",
@@ -276,6 +265,17 @@
    "ar": "تسجيل دخول مجهول"
   },
   {
+   "en": "Applet mode: {0} (type {1}). Hold R on a game in hbmenu for the full console.",
+   "es": "Modo applet: {0} (tipo {1}). Mantén R sobre un juego en hbmenu para usar toda la consola.",
+   "fr": "Mode applet : {0} (type {1}). Maintenez R sur un jeu dans hbmenu pour toute la console.",
+   "it": "Modalità applet: {0} (tipo {1}). Tieni premuto R su un gioco in hbmenu per l'intera console.",
+   "ja": "アプレットモード：{0}（タイプ {1}）。hbmenu でゲームを R 押しながら起動すると本体のすべてを使えます。",
+   "ko": "애플릿 모드: {0} (유형 {1}). hbmenu에서 게임을 R을 누른 채 실행하면 콘솔 전체를 사용합니다.",
+   "zh": "小程序模式：{0}（类型 {1}）。在 hbmenu 中按住 R 启动游戏可使用整机资源。",
+   "ru": "Режим апплета: {0} (тип {1}). Удерживайте R на игре в hbmenu, чтобы использовать всю консоль.",
+   "ar": "وضع التطبيق المصغّر: {0} (النوع {1}). اضغط مع الاستمرار على R فوق لعبة في hbmenu لاستخدام الجهاز بالكامل."
+  },
+  {
    "en": "Automatic ({0})",
    "es": "Automático ({0})",
    "fr": "Automatique ({0})",
@@ -287,15 +287,15 @@
    "ar": "تلقائي ({0})"
   },
   {
-   "en": "Automatic follows the PS5's system language.",
-   "es": "Automático sigue el idioma del sistema de la PS5.",
-   "fr": "Automatique suit la langue du système de la PS5.",
-   "it": "Automatica segue la lingua di sistema della PS5.",
-   "ja": "「自動」はPS5のシステム言語に合わせます。",
-   "ko": "자동은 PS5의 시스템 언어를 따릅니다.",
-   "zh": "“自动”跟随 PS5 的系统语言。",
-   "ru": "«Автоматически» — язык системы PS5.",
-   "ar": "يتبع الخيار التلقائي لغة نظام PS5."
+   "en": "Automatic follows the console's system language.",
+   "es": "Automático sigue el idioma del sistema de la consola.",
+   "fr": "Automatique suit la langue du système de la console.",
+   "it": "Automatica segue la lingua di sistema della console.",
+   "ja": "「自動」は本体のシステム言語に合わせます。",
+   "ko": "자동은 콘솔의 시스템 언어를 따릅니다.",
+   "zh": "“自动”跟随 主机 的系统语言。",
+   "ru": "«Автоматически» — язык системы консоли.",
+   "ar": "يتبع الخيار التلقائي لغة نظام الجهاز."
   },
   {
    "en": "Back",
@@ -386,17 +386,6 @@
    "ar": "إلغاء النقل"
   },
   {
-   "en": "canceled",
-   "es": "cancelado",
-   "fr": "annulé",
-   "it": "annullato",
-   "ja": "キャンセルされました",
-   "ko": "취소됨",
-   "zh": "已取消",
-   "ru": "отменено",
-   "ar": "أُلغي"
-  },
-  {
    "en": "Change",
    "es": "Cambiar",
    "fr": "Modifier",
@@ -406,17 +395,6 @@
    "zh": "更改",
    "ru": "Изменить",
    "ar": "تغيير"
-  },
-  {
-   "en": "chiral-ftp is free software under the GPL-3.0; licenses are in the app's licenses folder.",
-   "es": "chiral-ftp es software libre bajo la GPL-3.0; las licencias están en la carpeta licenses de la app.",
-   "fr": "chiral-ftp est un logiciel libre sous GPL-3.0 ; les licences sont dans le dossier licenses de l'app.",
-   "it": "chiral-ftp è software libero con licenza GPL-3.0; le licenze sono nella cartella licenses dell'app.",
-   "ja": "chiral-ftpはGPL-3.0のフリーソフトウェアです。ライセンスはアプリのlicensesフォルダーにあります。",
-   "ko": "chiral-ftp는 GPL-3.0 자유 소프트웨어입니다. 라이선스는 앱의 licenses 폴더에 있습니다.",
-   "zh": "chiral-ftp 是基于 GPL-3.0 的自由软件；许可证位于应用的 licenses 文件夹中。",
-   "ru": "chiral-ftp — свободная программа под лицензией GPL-3.0; лицензии лежат в папке licenses приложения.",
-   "ar": "chiral-ftp برنامج حر بترخيص GPL-3.0؛ التراخيص موجودة في مجلد licenses الخاص بالتطبيق."
   },
   {
    "en": "Choose",
@@ -507,15 +485,15 @@
    "ar": "اتصال"
   },
   {
-   "en": "Connect from the PS5 to your laptop, PC or NAS and transfer files both ways.",
-   "es": "Conéctate desde la PS5 a tu portátil, PC o NAS y transfiere archivos en ambos sentidos.",
-   "fr": "Connectez la PS5 à votre portable, PC ou NAS et transférez des fichiers dans les deux sens.",
-   "it": "Collegati dalla PS5 al portatile, al PC o al NAS e trasferisci file in entrambe le direzioni.",
-   "ja": "PS5からノートPC、PC、NASに接続して双方向にファイルを転送。",
-   "ko": "PS5에서 노트북, PC, NAS에 연결해 양방향으로 파일을 전송합니다.",
-   "zh": "从 PS5 连接到笔记本、电脑或 NAS，双向传输文件。",
-   "ru": "Подключитесь с PS5 к ноутбуку, ПК или NAS и передавайте файлы в обе стороны.",
-   "ar": "اتصل من PS5 بحاسوبك المحمول أو الحاسوب أو NAS وانقل الملفات في الاتجاهين."
+   "en": "Connect from the console to your laptop, PC or NAS and transfer files both ways.",
+   "es": "Conéctate desde la consola a tu portátil, PC o NAS y transfiere archivos en ambos sentidos.",
+   "fr": "Connectez la console à votre portable, PC ou NAS et transférez des fichiers dans les deux sens.",
+   "it": "Collegati dalla console al portatile, al PC o al NAS e trasferisci file in entrambe le direzioni.",
+   "ja": "本体からノートPC、PC、NASに接続して双方向にファイルを転送。",
+   "ko": "콘솔에서 노트북, PC, NAS에 연결해 양방향으로 파일을 전송합니다.",
+   "zh": "从 主机 连接到笔记本、电脑或 NAS，双向传输文件。",
+   "ru": "Подключитесь с консоли к ноутбуку, ПК или NAS и передавайте файлы в обе стороны.",
+   "ar": "اتصل من الجهاز بحاسوبك المحمول أو الحاسوب أو NAS وانقل الملفات في الاتجاهين."
   },
   {
    "en": "Connect to a server",
@@ -584,15 +562,15 @@
    "ar": "جارٍ الاتصال بـ {0}..."
   },
   {
-   "en": "Copy and move files on the PS5: internal storage, USB drives and extended storage.",
-   "es": "Copia y mueve archivos en la PS5: almacenamiento interno, unidades USB y almacenamiento ampliado.",
-   "fr": "Copiez et déplacez des fichiers sur la PS5 : stockage interne, clés USB et stockage étendu.",
-   "it": "Copia e sposta file sulla PS5: memoria interna, unità USB e memoria estesa.",
-   "ja": "PS5上でファイルをコピー・移動：本体ストレージ、USBドライブ、拡張ストレージ。",
-   "ko": "PS5에서 파일 복사와 이동: 내장 저장소, USB 드라이브, 확장 저장소.",
-   "zh": "在 PS5 上复制和移动文件：内部存储、USB 驱动器和扩展存储。",
-   "ru": "Копирование и перемещение файлов на PS5: внутренняя память, USB-накопители и расширенное хранилище.",
-   "ar": "انسخ الملفات وانقلها على PS5: التخزين الداخلي ومحركات USB والتخزين الموسّع."
+   "en": "Copy and move files on the console: the SD card, the homebrew folder, anywhere.",
+   "es": "Copia y mueve archivos en la consola: la tarjeta SD, la carpeta homebrew, donde sea.",
+   "fr": "Copiez et déplacez des fichiers sur la console : la carte SD, le dossier homebrew, partout.",
+   "it": "Copia e sposta file sulla console: la scheda SD, la cartella homebrew, ovunque.",
+   "ja": "本体 内でファイルをコピー・移動：SDカード、homebrew フォルダー、どこへでも。",
+   "ko": "콘솔에서 파일 복사 및 이동: SD 카드, homebrew 폴더, 어디든지.",
+   "zh": "在 主机 上复制和移动文件：SD 卡、homebrew 文件夹，任意位置。",
+   "ru": "Копирование и перемещение файлов на консоли: SD-карта, папка homebrew, куда угодно.",
+   "ar": "انسخ وانقل الملفات على الجهاز: بطاقة SD ومجلد homebrew وأي مكان آخر."
   },
   {
    "en": "Copy to the other side",
@@ -705,15 +683,15 @@
    "ar": "تعذّرت إعادة التسمية: {0}"
   },
   {
-   "en": "Could not save to the PS5",
-   "es": "No se pudo guardar en la PS5",
-   "fr": "Impossible d'enregistrer sur la PS5",
-   "it": "Impossibile salvare sulla PS5",
-   "ja": "PS5に保存できませんでした",
-   "ko": "PS5에 저장할 수 없음",
-   "zh": "无法保存到 PS5",
-   "ru": "Не удалось сохранить на PS5",
-   "ar": "تعذّر الحفظ على PS5"
+   "en": "Could not save to the console",
+   "es": "No se pudo guardar en la consola",
+   "fr": "Impossible d'enregistrer sur la console",
+   "it": "Impossibile salvare sulla console",
+   "ja": "本体に保存できませんでした",
+   "ko": "콘솔에 저장할 수 없음",
+   "zh": "无法保存到 主机",
+   "ru": "Не удалось сохранить на консоли",
+   "ar": "تعذّر الحفظ على الجهاز"
   },
   {
    "en": "Could not start the FTP server: {0}",
@@ -760,17 +738,6 @@
    "ar": "تعذّر تشغيل تطبيق الويب: {0} (المنفذ مستخدم، اختر منفذًا آخر)"
   },
   {
-   "en": "couldn't reach elfldr on port 9021 (is it running?)",
-   "es": "no se pudo contactar con elfldr en el puerto 9021 (¿está en marcha?)",
-   "fr": "impossible de joindre elfldr sur le port 9021 (est-il lancé ?)",
-   "it": "impossibile raggiungere elfldr sulla porta 9021 (è avviato?)",
-   "ja": "ポート9021のelfldrに接続できません（起動していますか？）",
-   "ko": "포트 9021의 elfldr에 연결할 수 없음 (실행 중인가요?)",
-   "zh": "无法连接到端口 9021 上的 elfldr（它在运行吗？）",
-   "ru": "не удалось связаться с elfldr на порту 9021 (он запущен?)",
-   "ar": "تعذّر الوصول إلى elfldr على المنفذ 9021 (هل يعمل؟)"
-  },
-  {
    "en": "Created {0}",
    "es": "Se creó {0}",
    "fr": "{0} créé",
@@ -780,6 +747,17 @@
    "zh": "已创建 {0}",
    "ru": "Создано: {0}",
    "ar": "تم إنشاء {0}"
+  },
+  {
+   "en": "DN",
+   "es": "↓",
+   "fr": "↓",
+   "it": "↓",
+   "ja": "↓",
+   "ko": "↓",
+   "zh": "↓",
+   "ru": "↓",
+   "ar": "↓"
   },
   {
    "en": "Delete",
@@ -848,17 +826,6 @@
    "ar": "تم قطع الاتصال"
   },
   {
-   "en": "DN",
-   "es": "↓",
-   "fr": "↓",
-   "it": "↓",
-   "ja": "↓",
-   "ko": "↓",
-   "zh": "↓",
-   "ru": "↓",
-   "ar": "↓"
-  },
-  {
    "en": "Done",
    "es": "Hecho",
    "fr": "Terminé",
@@ -881,15 +848,15 @@
    "ar": "توقف التنزيل إلى %s: %s (%s)"
   },
   {
-   "en": "Download to PS5",
-   "es": "Descargar a la PS5",
-   "fr": "Télécharger sur la PS5",
-   "it": "Scarica sulla PS5",
-   "ja": "PS5にダウンロード",
-   "ko": "PS5로 다운로드",
-   "zh": "下载到 PS5",
-   "ru": "Скачать на PS5",
-   "ar": "تنزيل إلى PS5"
+   "en": "Download to the console",
+   "es": "Descargar a la consola",
+   "fr": "Télécharger sur la console",
+   "it": "Scarica sulla console",
+   "ja": "本体にダウンロード",
+   "ko": "콘솔로 다운로드",
+   "zh": "下载到 主机",
+   "ru": "Скачать на консоли",
+   "ar": "تنزيل إلى الجهاز"
   },
   {
    "en": "Download to {0}",
@@ -914,15 +881,15 @@
    "ar": "تنزيل {0}"
   },
   {
-   "en": "Downloading {0} items  ·  OPTIONS > Transfers to watch",
-   "es": "Descargando {0} elementos  ·  OPTIONS > Transferencias para verlo",
-   "fr": "Téléchargement de {0} éléments  ·  OPTIONS > Transferts pour suivre",
-   "it": "Download di {0} elementi  ·  OPTIONS > Trasferimenti per seguirlo",
-   "ja": "{0} 件をダウンロード中  ·  OPTIONS > 転送 で表示",
-   "ko": "{0}개 항목 다운로드 중  ·  OPTIONS > 전송에서 보기",
-   "zh": "正在下载 {0} 项  ·  在 OPTIONS > 传输 中查看",
-   "ru": "Скачивание {0} элементов  ·  OPTIONS > Передачи, чтобы смотреть",
-   "ar": "جارٍ تنزيل {0} عنصر  ·  OPTIONS > عمليات النقل للمتابعة"
+   "en": "Downloading {0} items",
+   "es": "Descargando {0} elementos",
+   "fr": "Téléchargement de {0} éléments",
+   "it": "Download di {0} elementi",
+   "ja": "{0} 件をダウンロード中",
+   "ko": "{0}개 항목 다운로드 중",
+   "zh": "正在下载 {0} 项",
+   "ru": "Скачивание {0} элементов",
+   "ar": "جارٍ تنزيل {0} عنصر"
   },
   {
    "en": "Drives",
@@ -934,28 +901,6 @@
    "zh": "驱动器",
    "ru": "Диски",
    "ar": "المحركات"
-  },
-  {
-   "en": "e.g. 192.168.1.20",
-   "es": "p. ej. 192.168.1.20",
-   "fr": "ex. 192.168.1.20",
-   "it": "es. 192.168.1.20",
-   "ja": "例：192.168.1.20",
-   "ko": "예: 192.168.1.20",
-   "zh": "例如 192.168.1.20",
-   "ru": "напр. 192.168.1.20",
-   "ar": "مثل 192.168.1.20"
-  },
-  {
-   "en": "e.g. anonymous",
-   "es": "p. ej. anonymous",
-   "fr": "ex. anonymous",
-   "it": "es. anonymous",
-   "ja": "例：anonymous",
-   "ko": "예: anonymous",
-   "zh": "例如 anonymous",
-   "ru": "напр. anonymous",
-   "ar": "مثل anonymous"
   },
   {
    "en": "Each transfer logs in with its own connection, like FileZilla. Up to 30; the queue backs off if the server allows fewer.",
@@ -989,17 +934,6 @@
    "zh": "编辑站点：{0}",
    "ru": "Изменить сайт: {0}",
    "ar": "تعديل الموقع: {0}"
-  },
-  {
-   "en": "elevation failed",
-   "es": "la elevación falló",
-   "fr": "l'élévation a échoué",
-   "it": "l'elevazione non è riuscita",
-   "ja": "権限の昇格に失敗しました",
-   "ko": "권한 상승 실패",
-   "zh": "提权失败",
-   "ru": "повышение прав не удалось",
-   "ar": "فشل رفع الصلاحيات"
   },
   {
    "en": "Empty folder",
@@ -1044,6 +978,127 @@
    "zh": "退出 chiral-ftp",
    "ru": "Выйти из chiral-ftp",
    "ar": "الخروج من chiral-ftp"
+  },
+  {
+   "en": "FTP / SFTP client",
+   "es": "Cliente FTP / SFTP",
+   "fr": "Client FTP / SFTP",
+   "it": "Client FTP / SFTP",
+   "ja": "FTP / SFTPクライアント",
+   "ko": "FTP / SFTP 클라이언트",
+   "zh": "FTP / SFTP 客户端",
+   "ru": "FTP / SFTP-клиент",
+   "ar": "عميل FTP / SFTP"
+  },
+  {
+   "en": "FTP client tab: the client from the TV, sharing its connection and queue. Anyone on your network can open the page while it runs.",
+   "es": "Pestaña Cliente FTP: el cliente de la TV, con la misma conexión y cola. Cualquiera en tu red puede abrir la página mientras funciona.",
+   "fr": "Onglet Client FTP : le client de la TV, avec la même connexion et la même file. Toute personne de votre réseau peut ouvrir la page tant qu'elle tourne.",
+   "it": "Scheda Client FTP: il client della TV, con la stessa connessione e coda. Chiunque nella tua rete può aprire la pagina mentre è attiva.",
+   "ja": "FTPクライアントタブ：テレビのクライアントと接続とキューを共有します。動作中はネットワーク上の誰でもページを開けます。",
+   "ko": "FTP 클라이언트 탭: TV의 클라이언트와 연결과 대기열을 공유합니다. 실행 중에는 네트워크의 누구나 페이지를 열 수 있습니다.",
+   "zh": "FTP 客户端标签页：与电视上的客户端共享连接和队列。运行期间，网络中的任何人都能打开此页面。",
+   "ru": "Вкладка FTP-клиента: клиент с телевизора, с тем же подключением и очередью. Пока она работает, страницу может открыть любой в вашей сети.",
+   "ar": "تبويب عميل FTP: عميل التلفاز نفسه، يشاركه الاتصال والقائمة. يمكن لأي شخص على شبكتك فتح الصفحة أثناء تشغيلها."
+  },
+  {
+   "en": "FTP or SFTP",
+   "es": "FTP o SFTP",
+   "fr": "FTP ou SFTP",
+   "it": "FTP o SFTP",
+   "ja": "FTPまたはSFTP",
+   "ko": "FTP 또는 SFTP",
+   "zh": "FTP 或 SFTP",
+   "ru": "FTP или SFTP",
+   "ar": "FTP أو SFTP"
+  },
+  {
+   "en": "FTP password",
+   "es": "Contraseña FTP",
+   "fr": "Mot de passe FTP",
+   "it": "Password FTP",
+   "ja": "FTPパスワード",
+   "ko": "FTP 비밀번호",
+   "zh": "FTP 密码",
+   "ru": "Пароль FTP",
+   "ar": "كلمة مرور FTP"
+  },
+  {
+   "en": "FTP server",
+   "es": "Servidor FTP",
+   "fr": "Serveur FTP",
+   "it": "Server FTP",
+   "ja": "FTPサーバー",
+   "ko": "FTP 서버",
+   "zh": "FTP 服务器",
+   "ru": "FTP-сервер",
+   "ar": "خادم FTP"
+  },
+  {
+   "en": "FTP server port",
+   "es": "Puerto del servidor FTP",
+   "fr": "Port du serveur FTP",
+   "it": "Porta del server FTP",
+   "ja": "FTPサーバーのポート",
+   "ko": "FTP 서버 포트",
+   "zh": "FTP 服务器端口",
+   "ru": "Порт FTP-сервера",
+   "ar": "منفذ خادم FTP"
+  },
+  {
+   "en": "FTP server running at {0}",
+   "es": "Servidor FTP en marcha en {0}",
+   "fr": "Serveur FTP actif sur {0}",
+   "it": "Server FTP attivo su {0}",
+   "ja": "FTPサーバー稼働中：{0}",
+   "ko": "FTP 서버 실행 중: {0}",
+   "zh": "FTP 服务器运行于 {0}",
+   "ru": "FTP-сервер работает: {0}",
+   "ar": "خادم FTP يعمل على {0}"
+  },
+  {
+   "en": "FTP server started on port %u",
+   "es": "Servidor FTP iniciado en el puerto %u",
+   "fr": "Serveur FTP démarré sur le port %u",
+   "it": "Server FTP avviato sulla porta %u",
+   "ja": "FTPサーバーをポート %u で開始しました",
+   "ko": "포트 %u에서 FTP 서버 시작",
+   "zh": "FTP 服务器已在端口 %u 启动",
+   "ru": "FTP-сервер запущен на порту %u",
+   "ar": "بدأ خادم FTP على المنفذ %u"
+  },
+  {
+   "en": "FTP server stopped",
+   "es": "Servidor FTP detenido",
+   "fr": "Serveur FTP arrêté",
+   "it": "Server FTP arrestato",
+   "ja": "FTPサーバーを停止しました",
+   "ko": "FTP 서버 중지됨",
+   "zh": "FTP 服务器已停止",
+   "ru": "FTP-сервер остановлен",
+   "ar": "توقف خادم FTP"
+  },
+  {
+   "en": "FTP server stopped: the connection was lost",
+   "es": "Servidor FTP detenido: se perdió la conexión",
+   "fr": "Serveur FTP arrêté : la connexion a été perdue",
+   "it": "Server FTP arrestato: connessione perduta",
+   "ja": "FTPサーバーを停止しました：接続が失われました",
+   "ko": "FTP 서버가 중지되었습니다: 연결이 끊어졌습니다",
+   "zh": "FTP 服务器已停止：连接已丢失",
+   "ru": "FTP-сервер остановлен: соединение потеряно",
+   "ar": "تم إيقاف خادم FTP: فُقد الاتصال"
+  },
+  {
+   "en": "FTP username",
+   "es": "Usuario FTP",
+   "fr": "Nom d'utilisateur FTP",
+   "it": "Nome utente FTP",
+   "ja": "FTPユーザー名",
+   "ko": "FTP 사용자 이름",
+   "zh": "FTP 用户名",
+   "ru": "Имя пользователя FTP",
+   "ar": "اسم مستخدم FTP"
   },
   {
    "en": "Failed",
@@ -1156,125 +1211,26 @@
    "ar": "وجدت خطأ؟ أبلغ عنه على GitHub. طلبات الدمج مرحّب بها."
   },
   {
-   "en": "FTP / SFTP client",
-   "es": "Cliente FTP / SFTP",
-   "fr": "Client FTP / SFTP",
-   "it": "Client FTP / SFTP",
-   "ja": "FTP / SFTPクライアント",
-   "ko": "FTP / SFTP 클라이언트",
-   "zh": "FTP / SFTP 客户端",
-   "ru": "FTP / SFTP-клиент",
-   "ar": "عميل FTP / SFTP"
+   "en": "Full memory: launched over a game",
+   "es": "Memoria completa: iniciado sobre un juego",
+   "fr": "Mémoire complète : lancé par-dessus un jeu",
+   "it": "Memoria completa: avviato sopra un gioco",
+   "ja": "メモリーをすべて使用：ゲームから起動",
+   "ko": "전체 메모리: 게임을 통해 실행됨",
+   "zh": "完整内存：通过游戏启动",
+   "ru": "Полная память: запущено поверх игры",
+   "ar": "ذاكرة كاملة: تم التشغيل فوق لعبة"
   },
   {
-   "en": "FTP client tab: the client from the TV, sharing its connection and queue. Anyone on your network can open the page while it runs.",
-   "es": "Pestaña Cliente FTP: el cliente de la TV, con la misma conexión y cola. Cualquiera en tu red puede abrir la página mientras funciona.",
-   "fr": "Onglet Client FTP : le client de la TV, avec la même connexion et la même file. Toute personne de votre réseau peut ouvrir la page tant qu'elle tourne.",
-   "it": "Scheda Client FTP: il client della TV, con la stessa connessione e coda. Chiunque nella tua rete può aprire la pagina mentre è attiva.",
-   "ja": "FTPクライアントタブ：テレビのクライアントと接続とキューを共有します。動作中はネットワーク上の誰でもページを開けます。",
-   "ko": "FTP 클라이언트 탭: TV의 클라이언트와 연결과 대기열을 공유합니다. 실행 중에는 네트워크의 누구나 페이지를 열 수 있습니다.",
-   "zh": "FTP 客户端标签页：与电视上的客户端共享连接和队列。运行期间，网络中的任何人都能打开此页面。",
-   "ru": "Вкладка FTP-клиента: клиент с телевизора, с тем же подключением и очередью. Пока она работает, страницу может открыть любой в вашей сети.",
-   "ar": "تبويب عميل FTP: عميل التلفاز نفسه، يشاركه الاتصال والقائمة. يمكن لأي شخص على شبكتك فتح الصفحة أثناء تشغيلها."
-  },
-  {
-   "en": "FTP or SFTP",
-   "es": "FTP o SFTP",
-   "fr": "FTP ou SFTP",
-   "it": "FTP o SFTP",
-   "ja": "FTPまたはSFTP",
-   "ko": "FTP 또는 SFTP",
-   "zh": "FTP 或 SFTP",
-   "ru": "FTP или SFTP",
-   "ar": "FTP أو SFTP"
-  },
-  {
-   "en": "FTP password",
-   "es": "Contraseña FTP",
-   "fr": "Mot de passe FTP",
-   "it": "Password FTP",
-   "ja": "FTPパスワード",
-   "ko": "FTP 비밀번호",
-   "zh": "FTP 密码",
-   "ru": "Пароль FTP",
-   "ar": "كلمة مرور FTP"
-  },
-  {
-   "en": "FTP server",
-   "es": "Servidor FTP",
-   "fr": "Serveur FTP",
-   "it": "Server FTP",
-   "ja": "FTPサーバー",
-   "ko": "FTP 서버",
-   "zh": "FTP 服务器",
-   "ru": "FTP-сервер",
-   "ar": "خادم FTP"
-  },
-  {
-   "en": "FTP server port",
-   "es": "Puerto del servidor FTP",
-   "fr": "Port du serveur FTP",
-   "it": "Porta del server FTP",
-   "ja": "FTPサーバーのポート",
-   "ko": "FTP 서버 포트",
-   "zh": "FTP 服务器端口",
-   "ru": "Порт FTP-сервера",
-   "ar": "منفذ خادم FTP"
-  },
-  {
-   "en": "FTP server running at {0}",
-   "es": "Servidor FTP en marcha en {0}",
-   "fr": "Serveur FTP actif sur {0}",
-   "it": "Server FTP attivo su {0}",
-   "ja": "FTPサーバー稼働中：{0}",
-   "ko": "FTP 서버 실행 중: {0}",
-   "zh": "FTP 服务器运行于 {0}",
-   "ru": "FTP-сервер работает: {0}",
-   "ar": "خادم FTP يعمل على {0}"
-  },
-  {
-   "en": "FTP server started on port %u",
-   "es": "Servidor FTP iniciado en el puerto %u",
-   "fr": "Serveur FTP démarré sur le port %u",
-   "it": "Server FTP avviato sulla porta %u",
-   "ja": "FTPサーバーをポート %u で開始しました",
-   "ko": "포트 %u에서 FTP 서버 시작",
-   "zh": "FTP 服务器已在端口 %u 启动",
-   "ru": "FTP-сервер запущен на порту %u",
-   "ar": "بدأ خادم FTP على المنفذ %u"
-  },
-  {
-   "en": "FTP server stopped",
-   "es": "Servidor FTP detenido",
-   "fr": "Serveur FTP arrêté",
-   "it": "Server FTP arrestato",
-   "ja": "FTPサーバーを停止しました",
-   "ko": "FTP 서버 중지됨",
-   "zh": "FTP 服务器已停止",
-   "ru": "FTP-сервер остановлен",
-   "ar": "توقف خادم FTP"
-  },
-  {
-   "en": "FTP username",
-   "es": "Usuario FTP",
-   "fr": "Nom d'utilisateur FTP",
-   "it": "Nome utente FTP",
-   "ja": "FTPユーザー名",
-   "ko": "FTP 사용자 이름",
-   "zh": "FTP 用户名",
-   "ru": "Имя пользователя FTP",
-   "ar": "اسم مستخدم FTP"
-  },
-  {
-   "en": "Full access to the PS5's storage",
-   "es": "Acceso completo al almacenamiento de la PS5",
-   "fr": "Accès complet au stockage de la PS5",
-   "it": "Accesso completo alla memoria della PS5",
-   "ja": "PS5のストレージに完全アクセス",
-   "ko": "PS5 저장소 전체 접근",
-   "zh": "可完全访问 PS5 的存储",
-   "ru": "Полный доступ к хранилищу PS5",
-   "ar": "وصول كامل إلى تخزين PS5"
+   "en": "Hold: start screen",
+   "es": "Mantener: pantalla de inicio",
+   "fr": "Maintenir : écran d'accueil",
+   "it": "Tieni premuto: schermata iniziale",
+   "ja": "長押し：スタート画面",
+   "ko": "길게 누르면: 시작 화면",
+   "zh": "长按：起始画面",
+   "ru": "Удерживать: главный экран",
+   "ar": "اضغط مع الاستمرار: الشاشة الرئيسية"
   },
   {
    "en": "Host",
@@ -1332,48 +1288,15 @@
    "ar": "اللغة"
   },
   {
-   "en": "lapy.elf is missing from the app folder",
-   "es": "falta lapy.elf en la carpeta de la app",
-   "fr": "lapy.elf manque dans le dossier de l'app",
-   "it": "lapy.elf manca nella cartella dell'app",
-   "ja": "アプリのフォルダーにlapy.elfがありません",
-   "ko": "앱 폴더에 lapy.elf가 없습니다",
-   "zh": "应用文件夹中缺少 lapy.elf",
-   "ru": "в папке приложения нет lapy.elf",
-   "ar": "الملف lapy.elf غير موجود في مجلد التطبيق"
-  },
-  {
-   "en": "lapy.elf was built for another title ID",
-   "es": "lapy.elf se compiló para otro ID de título",
-   "fr": "lapy.elf a été compilé pour un autre ID de titre",
-   "it": "lapy.elf è stato compilato per un altro ID titolo",
-   "ja": "lapy.elfは別のタイトルID用にビルドされています",
-   "ko": "lapy.elf가 다른 타이틀 ID용으로 빌드되었습니다",
-   "zh": "lapy.elf 是为其他标题 ID 构建的",
-   "ru": "lapy.elf собран для другого ID приложения",
-   "ar": "بُني lapy.elf لمعرّف عنوان آخر"
-  },
-  {
-   "en": "Left/Right to change. Settings are saved on the PS5 right away.",
-   "es": "Izquierda/derecha para cambiar. Los ajustes se guardan en la PS5 al momento.",
-   "fr": "Gauche/droite pour modifier. Les réglages sont enregistrés sur la PS5 immédiatement.",
-   "it": "Sinistra/destra per cambiare. Le impostazioni vengono salvate subito sulla PS5.",
-   "ja": "左右で変更。設定はすぐにPS5に保存されます。",
-   "ko": "왼쪽/오른쪽으로 변경. 설정은 PS5에 바로 저장됩니다.",
-   "zh": "按左/右更改。设置会立即保存到 PS5。",
-   "ru": "Влево/вправо — изменить. Настройки сразу сохраняются на PS5.",
-   "ar": "يسار/يمين للتغيير. تُحفظ الإعدادات على PS5 فورًا."
-  },
-  {
-   "en": "Limited to the app's sandbox: {0} (status {1})",
-   "es": "Limitado al entorno aislado de la app: {0} (estado {1})",
-   "fr": "Limité au bac à sable de l'app : {0} (état {1})",
-   "it": "Limitato alla sandbox dell'app: {0} (stato {1})",
-   "ja": "アプリのサンドボックス内のみ：{0}（状態 {1}）",
-   "ko": "앱 샌드박스로 제한됨: {0} (상태 {1})",
-   "zh": "仅限应用沙盒：{0}（状态 {1}）",
-   "ru": "Только песочница приложения: {0} (статус {1})",
-   "ar": "مقيّد ببيئة التطبيق المعزولة: {0} (الحالة {1})"
+   "en": "Left/Right to change. Settings are saved on the console right away.",
+   "es": "Izquierda/derecha para cambiar. Los ajustes se guardan en la consola al momento.",
+   "fr": "Gauche/droite pour modifier. Les réglages sont enregistrés sur la console immédiatement.",
+   "it": "Sinistra/destra per cambiare. Le impostazioni vengono salvate subito sulla console.",
+   "ja": "左右で変更。設定はすぐに本体に保存されます。",
+   "ko": "왼쪽/오른쪽으로 변경. 설정은 콘솔에 바로 저장됩니다.",
+   "zh": "按左/右更改。设置会立即保存到 主机。",
+   "ru": "Влево/вправо — изменить. Настройки сразу сохраняются на консоли.",
+   "ar": "يسار/يمين للتغيير. تُحفظ الإعدادات على الجهاز فورًا."
   },
   {
    "en": "Login: {0} / {1}",
@@ -1596,15 +1519,15 @@
    "ar": "لا توجد عمليات نقل. حدّد ملفات واضغط المثلث لإرسالها إلى الجانب الآخر."
   },
   {
-   "en": "nothing granted full access; only /data is writable",
-   "es": "nada concedió acceso completo; solo se puede escribir en /data",
-   "fr": "rien n'a accordé l'accès complet ; seul /data est accessible en écriture",
-   "it": "nessuno ha concesso l'accesso completo; solo /data è scrivibile",
-   "ja": "完全アクセスは許可されませんでした。書き込めるのは/dataだけです",
-   "ko": "전체 접근이 허용되지 않았습니다. /data에만 쓸 수 있습니다",
-   "zh": "未获得完全访问权限；只有 /data 可写",
-   "ru": "полный доступ не выдан; запись возможна только в /data",
-   "ar": "لم يُمنح وصول كامل؛ الكتابة ممكنة في /data فقط"
+   "en": "Not in this build",
+   "es": "No incluido en esta compilación",
+   "fr": "Absent de cette version",
+   "it": "Non incluso in questa build",
+   "ja": "このビルドには含まれていません",
+   "ko": "이 빌드에는 포함되어 있지 않습니다",
+   "zh": "此版本未包含",
+   "ru": "Нет в этой сборке",
+   "ar": "غير متوفر في هذه النسخة"
   },
   {
    "en": "Off",
@@ -1640,15 +1563,15 @@
    "ar": "فتح"
   },
   {
-   "en": "Open a PS5 folder on the left first",
-   "es": "Primero abre una carpeta de la PS5 a la izquierda",
-   "fr": "Ouvrez d'abord un dossier de la PS5 à gauche",
-   "it": "Prima apri una cartella della PS5 a sinistra",
-   "ja": "先に左側でPS5のフォルダーを開いてください",
-   "ko": "먼저 왼쪽에서 PS5 폴더를 여세요",
-   "zh": "请先在左侧打开一个 PS5 文件夹",
-   "ru": "Сначала откройте папку PS5 слева",
-   "ar": "افتح مجلدًا على PS5 في اليسار أولًا"
+   "en": "Open a console folder on the left first",
+   "es": "Primero abre una carpeta de la consola a la izquierda",
+   "fr": "Ouvrez d'abord un dossier de la console à gauche",
+   "it": "Prima apri una cartella della console a sinistra",
+   "ja": "先に左側で本体のフォルダーを開いてください",
+   "ko": "먼저 왼쪽에서 콘솔 폴더를 여세요",
+   "zh": "请先在左侧打开一个 主机 文件夹",
+   "ru": "Сначала откройте папку консоли слева",
+   "ar": "افتح مجلدًا على الجهاز في اليسار أولًا"
   },
   {
    "en": "Open a server folder first",
@@ -1662,15 +1585,15 @@
    "ar": "افتح مجلدًا على الخادم أولًا"
   },
   {
-   "en": "Open chiral-ftp in a browser on your PC: manage the PS5's files, upload and download.",
-   "es": "Abre chiral-ftp en un navegador de tu PC: gestiona los archivos de la PS5, sube y descarga.",
-   "fr": "Ouvrez chiral-ftp dans un navigateur sur votre PC : gérez les fichiers de la PS5, envoyez et téléchargez.",
-   "it": "Apri chiral-ftp in un browser sul PC: gestisci i file della PS5, carica e scarica.",
-   "ja": "PCのブラウザーでchiral-ftpを開き、PS5のファイルを管理、アップロード、ダウンロード。",
-   "ko": "PC 브라우저에서 chiral-ftp를 열어 PS5 파일을 관리하고 업로드와 다운로드를 합니다.",
-   "zh": "在电脑浏览器中打开 chiral-ftp：管理 PS5 的文件，上传和下载。",
-   "ru": "Откройте chiral-ftp в браузере на ПК: управляйте файлами PS5, загружайте и скачивайте.",
-   "ar": "افتح chiral-ftp في متصفح حاسوبك: أدر ملفات PS5 وارفع ونزّل."
+   "en": "Open chiral-ftp in a browser on your PC: manage the console's files, upload and download.",
+   "es": "Abre chiral-ftp en un navegador de tu PC: gestiona los archivos de la consola, sube y descarga.",
+   "fr": "Ouvrez chiral-ftp dans un navigateur sur votre PC : gérez les fichiers de la console, envoyez et téléchargez.",
+   "it": "Apri chiral-ftp in un browser sul PC: gestisci i file della console, carica e scarica.",
+   "ja": "PCのブラウザーでchiral-ftpを開き、本体のファイルを管理、アップロード、ダウンロード。",
+   "ko": "PC 브라우저에서 chiral-ftp를 열어 콘솔 파일을 관리하고 업로드와 다운로드를 합니다.",
+   "zh": "在电脑浏览器中打开 chiral-ftp：管理 主机 的文件，上传和下载。",
+   "ru": "Откройте chiral-ftp в браузере на ПК: управляйте файлами консоли, загружайте и скачивайте.",
+   "ar": "افتح chiral-ftp في متصفح حاسوبك: أدر ملفات الجهاز وارفع ونزّل."
   },
   {
    "en": "Open the folder to copy into on the other side first",
@@ -1706,17 +1629,6 @@
    "ar": "افتح هذا العنوان في متصفح على حاسوبك:"
   },
   {
-   "en": "optional, e.g. /data/chiral-ftp/id_rsa",
-   "es": "opcional, p. ej. /data/chiral-ftp/id_rsa",
-   "fr": "facultatif, ex. /data/chiral-ftp/id_rsa",
-   "it": "facoltativo, es. /data/chiral-ftp/id_rsa",
-   "ja": "任意。例：/data/chiral-ftp/id_rsa",
-   "ko": "선택 사항, 예: /data/chiral-ftp/id_rsa",
-   "zh": "可选，例如 /data/chiral-ftp/id_rsa",
-   "ru": "необязательно, напр. /data/chiral-ftp/id_rsa",
-   "ar": "اختياري، مثل /data/chiral-ftp/id_rsa"
-  },
-  {
    "en": "Options",
    "es": "Opciones",
    "fr": "Options",
@@ -1728,15 +1640,15 @@
    "ar": "خيارات"
   },
   {
-   "en": "Other devices connect to the PS5 with FileZilla, a file manager or any FTP app.",
-   "es": "Otros dispositivos se conectan a la PS5 con FileZilla, un gestor de archivos o cualquier app FTP.",
-   "fr": "D'autres appareils se connectent à la PS5 avec FileZilla, un gestionnaire de fichiers ou une app FTP.",
-   "it": "Altri dispositivi si collegano alla PS5 con FileZilla, un file manager o qualsiasi app FTP.",
-   "ja": "他の機器からFileZilla、ファイルマネージャー、任意のFTPアプリでPS5に接続できます。",
-   "ko": "다른 기기에서 FileZilla, 파일 관리자 또는 아무 FTP 앱으로 PS5에 접속합니다.",
-   "zh": "其他设备可用 FileZilla、文件管理器或任意 FTP 应用连接到 PS5。",
-   "ru": "Другие устройства подключаются к PS5 через FileZilla, файловый менеджер или любое FTP-приложение.",
-   "ar": "تتصل الأجهزة الأخرى بجهاز PS5 عبر FileZilla أو مدير ملفات أو أي تطبيق FTP."
+   "en": "Other devices connect to the console with FileZilla, a file manager or any FTP app.",
+   "es": "Otros dispositivos se conectan a la consola con FileZilla, un gestor de archivos o cualquier app FTP.",
+   "fr": "D'autres appareils se connectent à la console avec FileZilla, un gestionnaire de fichiers ou une app FTP.",
+   "it": "Altri dispositivi si collegano alla console con FileZilla, un file manager o qualsiasi app FTP.",
+   "ja": "他の機器からFileZilla、ファイルマネージャー、任意のFTPアプリで本体に接続できます。",
+   "ko": "다른 기기에서 FileZilla, 파일 관리자 또는 아무 FTP 앱으로 콘솔에 접속합니다.",
+   "zh": "其他设备可用 FileZilla、文件管理器或任意 FTP 应用连接到 主机。",
+   "ru": "Другие устройства подключаются к консоли через FileZilla, файловый менеджер или любое FTP-приложение.",
+   "ar": "تتصل الأجهزة الأخرى بجهاز الجهاز عبر FileZilla أو مدير ملفات أو أي تطبيق FTP."
   },
   {
    "en": "Password",
@@ -1794,15 +1706,15 @@
    "ar": "متوقف مؤقتًا"
   },
   {
-   "en": "Permanently delete {0} from the PS5? Folders are deleted with everything inside.",
-   "es": "¿Eliminar {0} de la PS5 para siempre? Las carpetas se eliminan con todo su contenido.",
-   "fr": "Supprimer définitivement {0} de la PS5 ? Les dossiers sont supprimés avec tout leur contenu.",
-   "it": "Eliminare definitivamente {0} dalla PS5? Le cartelle vengono eliminate con tutto il contenuto.",
-   "ja": "{0} をPS5から完全に削除しますか？フォルダーは中身ごと削除されます。",
-   "ko": "PS5에서 {0}을(를) 영구 삭제할까요? 폴더는 안의 내용과 함께 삭제됩니다.",
-   "zh": "要从 PS5 永久删除 {0} 吗？文件夹会连同其中的所有内容一起删除。",
-   "ru": "Удалить {0} с PS5 навсегда? Папки удаляются вместе со всем содержимым.",
-   "ar": "حذف {0} من PS5 نهائيًا؟ تُحذف المجلدات بكل ما فيها."
+   "en": "Permanently delete {0} from the console? Folders are deleted with everything inside.",
+   "es": "¿Eliminar {0} de la consola para siempre? Las carpetas se eliminan con todo su contenido.",
+   "fr": "Supprimer définitivement {0} de la console ? Les dossiers sont supprimés avec tout leur contenu.",
+   "it": "Eliminare definitivamente {0} dalla console? Le cartelle vengono eliminate con tutto il contenuto.",
+   "ja": "{0} を本体から完全に削除しますか？フォルダーは中身ごと削除されます。",
+   "ko": "콘솔에서 {0}을(를) 영구 삭제할까요? 폴더는 안의 내용과 함께 삭제됩니다.",
+   "zh": "要从 主机 永久删除 {0} 吗？文件夹会连同其中的所有内容一起删除。",
+   "ru": "Удалить {0} с консоли навсегда? Папки удаляются вместе со всем содержимым.",
+   "ar": "حذف {0} من الجهاز نهائيًا؟ تُحذف المجلدات بكل ما فيها."
   },
   {
    "en": "Permanently delete {0} from the server? Folders are deleted with everything inside.",
@@ -1882,17 +1794,6 @@
    "ar": "البروتوكول"
   },
   {
-   "en": "PS5 files: browse, download to your PC, upload from it (drag and drop works), copy, move, rename, delete.",
-   "es": "Archivos de la PS5: explora, descarga a tu PC, sube desde él (funciona arrastrar y soltar), copia, mueve, renombra, elimina.",
-   "fr": "Fichiers de la PS5 : parcourez, téléchargez sur votre PC, envoyez depuis celui-ci (glisser-déposer possible), copiez, déplacez, renommez, supprimez.",
-   "it": "File della PS5: sfoglia, scarica sul PC, carica da esso (funziona il trascinamento), copia, sposta, rinomina, elimina.",
-   "ja": "PS5のファイル：閲覧、PCへのダウンロード、PCからのアップロード（ドラッグ＆ドロップ可）、コピー、移動、名前変更、削除。",
-   "ko": "PS5 파일: 찾아보기, PC로 다운로드, PC에서 업로드(끌어다 놓기 가능), 복사, 이동, 이름 변경, 삭제.",
-   "zh": "PS5 文件：浏览、下载到电脑、从电脑上传（支持拖放）、复制、移动、重命名、删除。",
-   "ru": "Файлы PS5: просмотр, скачивание на ПК, загрузка с него (работает перетаскивание), копирование, перемещение, переименование, удаление.",
-   "ar": "ملفات PS5: تصفّح، نزّل إلى حاسوبك، ارفع منه (السحب والإفلات مدعوم)، انسخ، انقل، أعد التسمية، احذف."
-  },
-  {
    "en": "Queued",
    "es": "En cola",
    "fr": "En attente",
@@ -1959,17 +1860,6 @@
    "ar": "إزالة \"{0}\"؟"
   },
   {
-   "en": "Remove from list",
-   "es": "Quitar de la lista",
-   "fr": "Retirer de la liste",
-   "it": "Rimuovi dall'elenco",
-   "ja": "リストから削除",
-   "ko": "목록에서 제거",
-   "zh": "从列表中移除",
-   "ru": "Убрать из списка",
-   "ar": "إزالة من القائمة"
-  },
-  {
    "en": "Remove from Recent",
    "es": "Quitar de Recientes",
    "fr": "Retirer des récents",
@@ -1979,6 +1869,17 @@
    "zh": "从“最近”中移除",
    "ru": "Убрать из недавних",
    "ar": "إزالة من الأخيرة"
+  },
+  {
+   "en": "Remove from list",
+   "es": "Quitar de la lista",
+   "fr": "Retirer de la liste",
+   "it": "Rimuovi dall'elenco",
+   "ja": "リストから削除",
+   "ko": "목록에서 제거",
+   "zh": "从列表中移除",
+   "ru": "Убрать из списка",
+   "ar": "إزالة من القائمة"
   },
   {
    "en": "Rename",
@@ -2124,15 +2025,15 @@
    "ar": "قيد التشغيل"
   },
   {
-   "en": "Save site",
-   "es": "Guardar sitio",
-   "fr": "Enregistrer le site",
-   "it": "Salva sito",
-   "ja": "サイトを保存",
-   "ko": "사이트 저장",
-   "zh": "保存站点",
-   "ru": "Сохранить сайт",
-   "ar": "حفظ الموقع"
+   "en": "Runs from hbmenu on Atmosphere; tested on firmware 18.1.0.",
+   "es": "Se ejecuta desde hbmenu en Atmosphere; probado en el firmware 18.1.0.",
+   "fr": "S'exécute depuis hbmenu sur Atmosphere ; testé sur le firmware 18.1.0.",
+   "it": "Si avvia da hbmenu su Atmosphere; testato sul firmware 18.1.0.",
+   "ja": "Atmosphere の hbmenu から起動します。ファームウェア 18.1.0 で動作確認。",
+   "ko": "Atmosphere의 hbmenu에서 실행됩니다. 펌웨어 18.1.0에서 테스트했습니다.",
+   "zh": "从 Atmosphere 的 hbmenu 启动；已在固件 18.1.0 上测试。",
+   "ru": "Запускается из hbmenu на Atmosphere; проверено на прошивке 18.1.0.",
+   "ar": "يعمل من hbmenu على Atmosphere؛ تم اختباره على البرنامج الثابت 18.1.0."
   },
   {
    "en": "SAVED",
@@ -2144,6 +2045,28 @@
    "zh": "已保存",
    "ru": "СОХРАНЁН",
    "ar": "محفوظ"
+  },
+  {
+   "en": "SFTP  (SSH, e.g. Mac/Linux Remote Login)",
+   "es": "SFTP  (SSH, p. ej. Sesión remota de Mac/Linux)",
+   "fr": "SFTP  (SSH, ex. Session à distance Mac/Linux)",
+   "it": "SFTP  (SSH, es. Login remoto di Mac/Linux)",
+   "ja": "SFTP  （SSH、例：Mac/Linuxのリモートログイン）",
+   "ko": "SFTP  (SSH, 예: Mac/Linux 원격 로그인)",
+   "zh": "SFTP  （SSH，例如 Mac/Linux 的远程登录）",
+   "ru": "SFTP  (SSH, напр. «Удалённый вход» Mac/Linux)",
+   "ar": "SFTP  (SSH، مثل تسجيل الدخول عن بُعد في Mac/Linux)"
+  },
+  {
+   "en": "Save site",
+   "es": "Guardar sitio",
+   "fr": "Enregistrer le site",
+   "it": "Salva sito",
+   "ja": "サイトを保存",
+   "ko": "사이트 저장",
+   "zh": "保存站点",
+   "ru": "Сохранить сайт",
+   "ar": "حفظ الموقع"
   },
   {
    "en": "Saved host keys forgotten",
@@ -2267,17 +2190,6 @@
    "ar": "الإعدادات وحول"
   },
   {
-   "en": "SFTP  (SSH, e.g. Mac/Linux Remote Login)",
-   "es": "SFTP  (SSH, p. ej. Sesión remota de Mac/Linux)",
-   "fr": "SFTP  (SSH, ex. Session à distance Mac/Linux)",
-   "it": "SFTP  (SSH, es. Login remoto di Mac/Linux)",
-   "ja": "SFTP  （SSH、例：Mac/Linuxのリモートログイン）",
-   "ko": "SFTP  (SSH, 예: Mac/Linux 원격 로그인)",
-   "zh": "SFTP  （SSH，例如 Mac/Linux 的远程登录）",
-   "ru": "SFTP  (SSH, напр. «Удалённый вход» Mac/Linux)",
-   "ar": "SFTP  (SSH، مثل تسجيل الدخول عن بُعد في Mac/Linux)"
-  },
-  {
    "en": "Show hidden files (FTP LIST -a)",
    "es": "Mostrar archivos ocultos (FTP LIST -a)",
    "fr": "Afficher les fichiers cachés (FTP LIST -a)",
@@ -2333,15 +2245,15 @@
    "ar": "تم التخطي: {0}"
   },
   {
-   "en": "Start in PS5 folder",
-   "es": "Empezar en la carpeta de la PS5",
-   "fr": "Démarrer dans le dossier PS5",
-   "it": "Inizia nella cartella della PS5",
-   "ja": "開始時のPS5フォルダー",
-   "ko": "시작할 PS5 폴더",
-   "zh": "起始 PS5 文件夹",
-   "ru": "Начальная папка PS5",
-   "ar": "البدء في مجلد PS5"
+   "en": "Start in a console folder",
+   "es": "Empezar en la carpeta de la consola",
+   "fr": "Démarrer dans le dossier console",
+   "it": "Inizia nella cartella della console",
+   "ja": "開始時の本体フォルダー",
+   "ko": "시작할 콘솔 폴더",
+   "zh": "起始 主机 文件夹",
+   "ru": "Начальная папка консоли",
+   "ar": "البدء في مجلد الجهاز"
   },
   {
    "en": "Start in server folder",
@@ -2476,6 +2388,17 @@
    "ar": "ناجحة"
   },
   {
+   "en": "Console files: browse, download to your PC, upload from it (drag and drop works), copy, move, rename, delete.",
+   "es": "Archivos de la consola: explora, descarga a tu PC, sube desde él (funciona arrastrar y soltar), copia, mueve, renombra, elimina.",
+   "fr": "Fichiers de la console : parcourez, téléchargez sur votre PC, envoyez depuis celui-ci (glisser-déposer possible), copiez, déplacez, renommez, supprimez.",
+   "it": "File della console: sfoglia, scarica sul PC, carica da esso (funziona il trascinamento), copia, sposta, rinomina, elimina.",
+   "ja": "本体のファイル：閲覧、PCへのダウンロード、PCからのアップロード（ドラッグ＆ドロップ可）、コピー、移動、名前変更、削除。",
+   "ko": "콘솔 파일: 찾아보기, PC로 다운로드, PC에서 업로드(끌어다 놓기 가능), 복사, 이동, 이름 변경, 삭제.",
+   "zh": "主机 文件：浏览、下载到电脑、从电脑上传（支持拖放）、复制、移动、重命名、删除。",
+   "ru": "Файлы консоли: просмотр, скачивание на ПК, загрузка с него (работает перетаскивание), копирование, перемещение, переименование, удаление.",
+   "ar": "ملفات الجهاز: تصفّح، نزّل إلى حاسوبك، ارفع منه (السحب والإفلات مدعوم)، انسخ، انقل، أعد التسمية، احذف."
+  },
+  {
    "en": "Switch side",
    "es": "Cambiar de lado",
    "fr": "Changer de côté",
@@ -2498,50 +2421,6 @@
    "ar": "علامات التبويب"
   },
   {
-   "en": "Tested on PS5 firmware 13.60 with ShadowMountPlus.",
-   "es": "Probado en el firmware 13.60 de PS5 con ShadowMountPlus.",
-   "fr": "Testé sur le firmware PS5 13.60 avec ShadowMountPlus.",
-   "it": "Testato sul firmware PS5 13.60 con ShadowMountPlus.",
-   "ja": "PS5ファームウェア13.60とShadowMountPlusで動作確認済み。",
-   "ko": "PS5 펌웨어 13.60과 ShadowMountPlus에서 테스트했습니다.",
-   "zh": "已在 PS5 固件 13.60 与 ShadowMountPlus 上测试。",
-   "ru": "Проверено на прошивке PS5 13.60 с ShadowMountPlus.",
-   "ar": "جُرّب على البرنامج الثابت 13.60 لجهاز PS5 مع ShadowMountPlus."
-  },
-  {
-   "en": "the helper ran but access didn't change",
-   "es": "el asistente se ejecutó pero el acceso no cambió",
-   "fr": "l'assistant s'est exécuté mais l'accès n'a pas changé",
-   "it": "l'helper è stato eseguito ma l'accesso non è cambiato",
-   "ja": "ヘルパーは実行されましたがアクセスは変わりませんでした",
-   "ko": "도우미가 실행됐지만 접근 권한이 바뀌지 않았습니다",
-   "zh": "辅助程序已运行，但访问权限没有变化",
-   "ru": "помощник запустился, но доступ не изменился",
-   "ar": "عمل المساعد لكن الوصول لم يتغير"
-  },
-  {
-   "en": "the jailbreak didn't answer in time",
-   "es": "el jailbreak no respondió a tiempo",
-   "fr": "le jailbreak n'a pas répondu à temps",
-   "it": "il jailbreak non ha risposto in tempo",
-   "ja": "ジェイルブレイクが時間内に応答しませんでした",
-   "ko": "탈옥이 제때 응답하지 않았습니다",
-   "zh": "越狱程序未及时响应",
-   "ru": "джейлбрейк не ответил вовремя",
-   "ar": "لم يستجب كسر الحماية في الوقت المحدد"
-  },
-  {
-   "en": "the jailbreak's Lapy is a different version",
-   "es": "el Lapy del jailbreak es de otra versión",
-   "fr": "le Lapy du jailbreak est d'une autre version",
-   "it": "il Lapy del jailbreak è di un'altra versione",
-   "ja": "ジェイルブレイクのLapyのバージョンが異なります",
-   "ko": "탈옥의 Lapy 버전이 다릅니다",
-   "zh": "越狱程序中的 Lapy 版本不同",
-   "ru": "Lapy в джейлбрейке другой версии",
-   "ar": "إصدار Lapy في كسر الحماية مختلف"
-  },
-  {
    "en": "The password can't be empty; turn on anonymous login instead",
    "es": "La contraseña no puede estar vacía; activa el acceso anónimo",
    "fr": "Le mot de passe ne peut pas être vide ; activez plutôt la connexion anonyme",
@@ -2553,26 +2432,15 @@
    "ar": "لا يمكن ترك كلمة المرور فارغة؛ فعّل تسجيل الدخول المجهول بدلًا من ذلك"
   },
   {
-   "en": "The PS5 keyboard couldn't open",
-   "es": "No se pudo abrir el teclado de la PS5",
-   "fr": "Impossible d'ouvrir le clavier de la PS5",
-   "it": "Impossibile aprire la tastiera della PS5",
-   "ja": "PS5のキーボードを開けませんでした",
-   "ko": "PS5 키보드를 열 수 없습니다",
-   "zh": "无法打开 PS5 键盘",
-   "ru": "Не удалось открыть клавиатуру PS5",
-   "ar": "تعذّر فتح لوحة مفاتيح PS5"
-  },
-  {
-   "en": "The ultimate file manager and FTP interface for PS5:",
-   "es": "El gestor de archivos y la interfaz FTP definitivos para PS5:",
-   "fr": "Le gestionnaire de fichiers et l'interface FTP ultimes pour PS5 :",
-   "it": "Il file manager e l'interfaccia FTP definitivi per PS5:",
-   "ja": "PS5のための究極のファイルマネージャー兼FTPインターフェース：",
-   "ko": "PS5를 위한 궁극의 파일 관리자이자 FTP 인터페이스:",
-   "zh": "PS5 终极文件管理器与 FTP 界面：",
-   "ru": "Лучший файловый менеджер и FTP-интерфейс для PS5:",
-   "ar": "مدير الملفات وواجهة FTP الأمثل لجهاز PS5:"
+   "en": "The ultimate file manager and FTP interface for this console:",
+   "es": "El gestor de archivos y la interfaz FTP definitivos para consola:",
+   "fr": "Le gestionnaire de fichiers et l'interface FTP ultimes pour console :",
+   "it": "Il file manager e l'interfaccia FTP definitivi per console:",
+   "ja": "本体のための究極のファイルマネージャー兼FTPインターフェース：",
+   "ko": "콘솔를 위한 궁극의 파일 관리자이자 FTP 인터페이스:",
+   "zh": "主机 终极文件管理器与 FTP 界面：",
+   "ru": "Лучший файловый менеджер и FTP-интерфейс для консоли:",
+   "ar": "مدير الملفات وواجهة FTP الأمثل لجهاز الجهاز:"
   },
   {
    "en": "The username can't be empty",
@@ -2597,17 +2465,6 @@
    "ar": "لإغلاق chiral-ftp، استخدم زر PS"
   },
   {
-   "en": "to {0}",
-   "es": "a {0}",
-   "fr": "vers {0}",
-   "it": "verso {0}",
-   "ja": "{0} へ",
-   "ko": "{0}(으)로",
-   "zh": "到 {0}",
-   "ru": "в {0}",
-   "ar": "إلى {0}"
-  },
-  {
    "en": "Transfers",
    "es": "Transferencias",
    "fr": "Transferts",
@@ -2630,15 +2487,15 @@
    "ar": "عمليات النقل: {0}"
   },
   {
-   "en": "Turn the PS5 into an FTP server. Connect to it from your PC, phone or another console.",
-   "es": "Convierte la PS5 en un servidor FTP. Conéctate desde tu PC, teléfono u otra consola.",
-   "fr": "Transformez la PS5 en serveur FTP. Connectez-vous depuis votre PC, téléphone ou une autre console.",
-   "it": "Trasforma la PS5 in un server FTP. Collegati dal PC, dal telefono o da un'altra console.",
-   "ja": "PS5をFTPサーバーにします。PC、スマートフォン、他のゲーム機から接続できます。",
-   "ko": "PS5를 FTP 서버로 만듭니다. PC, 휴대폰 또는 다른 콘솔에서 접속하세요.",
-   "zh": "将 PS5 变成 FTP 服务器。可从电脑、手机或其他主机连接。",
-   "ru": "Превратите PS5 в FTP-сервер. Подключайтесь с ПК, телефона или другой консоли.",
-   "ar": "حوّل PS5 إلى خادم FTP. اتصل به من حاسوبك أو هاتفك أو جهاز آخر."
+   "en": "Turn the console into an FTP server. Connect to it from your PC, phone or another console.",
+   "es": "Convierte la consola en un servidor FTP. Conéctate desde tu PC, teléfono u otra consola.",
+   "fr": "Transformez la console en serveur FTP. Connectez-vous depuis votre PC, téléphone ou une autre console.",
+   "it": "Trasforma la console in un server FTP. Collegati dal PC, dal telefono o da un'altra console.",
+   "ja": "本体をFTPサーバーにします。PC、スマートフォン、他のゲーム機から接続できます。",
+   "ko": "콘솔를 FTP 서버로 만듭니다. PC, 휴대폰 또는 다른 콘솔에서 접속하세요.",
+   "zh": "将 主机 变成 FTP 服务器。可从电脑、手机或其他主机连接。",
+   "ru": "Превратите консоли в FTP-сервер. Подключайтесь с ПК, телефона или другой консоли.",
+   "ar": "حوّل الجهاز إلى خادم FTP. اتصل به من حاسوبك أو هاتفك أو جهاز آخر."
   },
   {
    "en": "Type on the keyboard, Enter to confirm, Esc to cancel",
@@ -2652,17 +2509,6 @@
    "ar": "اكتب على لوحة المفاتيح، Enter للتأكيد، Esc للإلغاء"
   },
   {
-   "en": "Unmark",
-   "es": "Desmarcar",
-   "fr": "Démarquer",
-   "it": "Deseleziona",
-   "ja": "マークを解除",
-   "ko": "표시 해제",
-   "zh": "取消标记",
-   "ru": "Снять отметку",
-   "ar": "إلغاء التحديد"
-  },
-  {
    "en": "UP",
    "es": "↑",
    "fr": "↑",
@@ -2672,6 +2518,17 @@
    "zh": "↑",
    "ru": "↑",
    "ar": "↑"
+  },
+  {
+   "en": "Unmark",
+   "es": "Desmarcar",
+   "fr": "Démarquer",
+   "it": "Deseleziona",
+   "ja": "マークを解除",
+   "ko": "표시 해제",
+   "zh": "取消标记",
+   "ru": "Снять отметку",
+   "ar": "إلغاء التحديد"
   },
   {
    "en": "Upload from %s stopped: %s (%s)",
@@ -2718,15 +2575,15 @@
    "ar": "رفع {0}"
   },
   {
-   "en": "Uploading {0} items  ·  OPTIONS > Transfers to watch",
-   "es": "Subiendo {0} elementos  ·  OPTIONS > Transferencias para verlo",
-   "fr": "Envoi de {0} éléments  ·  OPTIONS > Transferts pour suivre",
-   "it": "Caricamento di {0} elementi  ·  OPTIONS > Trasferimenti per seguirlo",
-   "ja": "{0} 件をアップロード中  ·  OPTIONS > 転送 で表示",
-   "ko": "{0}개 항목 업로드 중  ·  OPTIONS > 전송에서 보기",
-   "zh": "正在上传 {0} 项  ·  在 OPTIONS > 传输 中查看",
-   "ru": "Загрузка {0} элементов  ·  OPTIONS > Передачи, чтобы смотреть",
-   "ar": "جارٍ رفع {0} عنصر  ·  OPTIONS > عمليات النقل للمتابعة"
+   "en": "Uploading {0} items",
+   "es": "Subiendo {0} elementos",
+   "fr": "Envoi de {0} éléments",
+   "it": "Caricamento di {0} elementi",
+   "ja": "{0} 件をアップロード中",
+   "ko": "{0}개 항목 업로드 중",
+   "zh": "正在上传 {0} 项",
+   "ru": "Загрузка {0} элементов",
+   "ar": "جارٍ رفع {0} عنصر"
   },
   {
    "en": "Use an octal mode like 755",
@@ -2771,17 +2628,6 @@
    "zh": "用户名已保存；新的登录会使用它",
    "ru": "Имя пользователя сохранено; новые входы используют его",
    "ar": "تم حفظ اسم المستخدم؛ تستخدمه عمليات الدخول الجديدة"
-  },
-  {
-   "en": "version {0}",
-   "es": "versión {0}",
-   "fr": "version {0}",
-   "it": "versione {0}",
-   "ja": "バージョン {0}",
-   "ko": "버전 {0}",
-   "zh": "版本 {0}",
-   "ru": "версия {0}",
-   "ar": "الإصدار {0}"
   },
   {
    "en": "Waiting",
@@ -2850,17 +2696,6 @@
    "ar": "عندما يكون الملف موجودًا"
   },
   {
-   "en": "your login name",
-   "es": "tu nombre de usuario",
-   "fr": "votre nom d'utilisateur",
-   "it": "il tuo nome utente",
-   "ja": "ログイン名",
-   "ko": "로그인 이름",
-   "zh": "你的登录名",
-   "ru": "ваше имя для входа",
-   "ar": "اسم الدخول الخاص بك"
-  },
-  {
    "en": "Your saved sites and recent connections appear here.",
    "es": "Aquí aparecen tus sitios guardados y conexiones recientes.",
    "fr": "Vos sites enregistrés et connexions récentes apparaissent ici.",
@@ -2870,6 +2705,127 @@
    "zh": "已保存的站点和最近的连接会显示在这里。",
    "ru": "Здесь появляются сохранённые сайты и недавние подключения.",
    "ar": "تظهر مواقعك المحفوظة واتصالاتك الأخيرة هنا."
+  },
+  {
+   "en": "a folder can't go inside itself",
+   "es": "una carpeta no puede ir dentro de sí misma",
+   "fr": "un dossier ne peut pas aller dans lui-même",
+   "it": "una cartella non può andare dentro sé stessa",
+   "ja": "フォルダーをそれ自身の中には入れられません",
+   "ko": "폴더를 자기 자신 안에 넣을 수 없습니다",
+   "zh": "文件夹不能放进它自己里面",
+   "ru": "папку нельзя поместить внутрь неё самой",
+   "ar": "لا يمكن وضع مجلد داخل نفسه"
+  },
+  {
+   "en": "canceled",
+   "es": "cancelado",
+   "fr": "annulé",
+   "it": "annullato",
+   "ja": "キャンセルされました",
+   "ko": "취소됨",
+   "zh": "已取消",
+   "ru": "отменено",
+   "ar": "أُلغي"
+  },
+  {
+   "en": "chiral-ftp is free software under the GPL-3.0; licenses are in the app's licenses folder.",
+   "es": "chiral-ftp es software libre bajo la GPL-3.0; las licencias están en la carpeta licenses de la app.",
+   "fr": "chiral-ftp est un logiciel libre sous GPL-3.0 ; les licences sont dans le dossier licenses de l'app.",
+   "it": "chiral-ftp è software libero con licenza GPL-3.0; le licenze sono nella cartella licenses dell'app.",
+   "ja": "chiral-ftpはGPL-3.0のフリーソフトウェアです。ライセンスはアプリのlicensesフォルダーにあります。",
+   "ko": "chiral-ftp는 GPL-3.0 자유 소프트웨어입니다. 라이선스는 앱의 licenses 폴더에 있습니다.",
+   "zh": "chiral-ftp 是基于 GPL-3.0 的自由软件；许可证位于应用的 licenses 文件夹中。",
+   "ru": "chiral-ftp — свободная программа под лицензией GPL-3.0; лицензии лежат в папке licenses приложения.",
+   "ar": "chiral-ftp برنامج حر بترخيص GPL-3.0؛ التراخيص موجودة في مجلد licenses الخاص بالتطبيق."
+  },
+  {
+   "en": "e.g. 192.168.1.20",
+   "es": "p. ej. 192.168.1.20",
+   "fr": "ex. 192.168.1.20",
+   "it": "es. 192.168.1.20",
+   "ja": "例：192.168.1.20",
+   "ko": "예: 192.168.1.20",
+   "zh": "例如 192.168.1.20",
+   "ru": "напр. 192.168.1.20",
+   "ar": "مثل 192.168.1.20"
+  },
+  {
+   "en": "e.g. anonymous",
+   "es": "p. ej. anonymous",
+   "fr": "ex. anonymous",
+   "it": "es. anonymous",
+   "ja": "例：anonymous",
+   "ko": "예: anonymous",
+   "zh": "例如 anonymous",
+   "ru": "напр. anonymous",
+   "ar": "مثل anonymous"
+  },
+  {
+   "en": "launched over a game, with the console's memory",
+   "es": "iniciado sobre un juego, con la memoria de la consola",
+   "fr": "lancé par-dessus un jeu, avec la mémoire de la console",
+   "it": "avviato sopra un gioco, con la memoria della console",
+   "ja": "ゲームから起動し、本体のメモリーを使用",
+   "ko": "게임을 통해 실행되어 콘솔 메모리를 사용",
+   "zh": "通过游戏启动，使用整机内存",
+   "ru": "запущено поверх игры, с памятью консоли",
+   "ar": "تم التشغيل فوق لعبة، باستخدام ذاكرة الجهاز"
+  },
+  {
+   "en": "optional, e.g. /data/chiral-ftp/id_rsa",
+   "es": "opcional, p. ej. /data/chiral-ftp/id_rsa",
+   "fr": "facultatif, ex. /data/chiral-ftp/id_rsa",
+   "it": "facoltativo, es. /data/chiral-ftp/id_rsa",
+   "ja": "任意。例：/data/chiral-ftp/id_rsa",
+   "ko": "선택 사항, 예: /data/chiral-ftp/id_rsa",
+   "zh": "可选，例如 /data/chiral-ftp/id_rsa",
+   "ru": "необязательно, напр. /data/chiral-ftp/id_rsa",
+   "ar": "اختياري، مثل /data/chiral-ftp/id_rsa"
+  },
+  {
+   "en": "started from the album, so memory is limited",
+   "es": "iniciado desde el álbum, por lo que la memoria es limitada",
+   "fr": "lancé depuis l'album, la mémoire est donc limitée",
+   "it": "avviato dall'album, quindi la memoria è limitata",
+   "ja": "アルバムから起動したため、メモリーが制限されます",
+   "ko": "앨범에서 실행되어 메모리가 제한됩니다",
+   "zh": "从相册启动，因此内存受限",
+   "ru": "запущено из альбома, поэтому памяти меньше",
+   "ar": "تم التشغيل من الألبوم، لذا الذاكرة محدودة"
+  },
+  {
+   "en": "to {0}",
+   "es": "a {0}",
+   "fr": "vers {0}",
+   "it": "verso {0}",
+   "ja": "{0} へ",
+   "ko": "{0}(으)로",
+   "zh": "到 {0}",
+   "ru": "в {0}",
+   "ar": "إلى {0}"
+  },
+  {
+   "en": "version {0}",
+   "es": "versión {0}",
+   "fr": "version {0}",
+   "it": "versione {0}",
+   "ja": "バージョン {0}",
+   "ko": "버전 {0}",
+   "zh": "版本 {0}",
+   "ru": "версия {0}",
+   "ar": "الإصدار {0}"
+  },
+  {
+   "en": "your login name",
+   "es": "tu nombre de usuario",
+   "fr": "votre nom d'utilisateur",
+   "it": "il tuo nome utente",
+   "ja": "ログイン名",
+   "ko": "로그인 이름",
+   "zh": "你的登录名",
+   "ru": "ваше имя для входа",
+   "ar": "اسم الدخول الخاص بك"
   },
   {
    "en": "{0}  (default)",
@@ -2980,6 +2936,226 @@
    "zh": "已保存 {0}  ·  最近 {1}",
    "ru": "сохранено {0}  ·  недавних {1}",
    "ar": "محفوظة {0}  ·  حديثة {1}"
+  },
+  {
+   "en": "  File manager: copy, move and delete between internal storage and USB.",
+   "es": "  Gestor de archivos: copia, mueve y elimina entre el almacenamiento interno y USB.",
+   "fr": "  Gestionnaire de fichiers : copiez, déplacez et supprimez entre stockage interne et USB.",
+   "it": "  File manager: copia, sposta ed elimina tra memoria interna e USB.",
+   "ja": "  ファイルマネージャー：本体ストレージとUSBの間でコピー、移動、削除。",
+   "ko": "  파일 관리자: 내장 저장소와 USB 사이에서 복사, 이동, 삭제.",
+   "zh": "  文件管理器：在内部存储和 USB 之间复制、移动和删除。",
+   "ru": "  Файловый менеджер: копирование, перемещение и удаление между внутренней памятью и USB.",
+   "ar": "  مدير الملفات: نسخ ونقل وحذف بين التخزين الداخلي وUSB."
+  },
+  {
+   "en": "Copy and move files on the console: internal storage, USB drives and extended storage.",
+   "es": "Copia y mueve archivos en la consola: almacenamiento interno, unidades USB y almacenamiento ampliado.",
+   "fr": "Copiez et déplacez des fichiers sur la console : stockage interne, clés USB et stockage étendu.",
+   "it": "Copia e sposta file sulla console: memoria interna, unità USB e memoria estesa.",
+   "ja": "本体上でファイルをコピー・移動：本体ストレージ、USBドライブ、拡張ストレージ。",
+   "ko": "콘솔에서 파일 복사와 이동: 내장 저장소, USB 드라이브, 확장 저장소.",
+   "zh": "在 主机 上复制和移动文件：内部存储、USB 驱动器和扩展存储。",
+   "ru": "Копирование и перемещение файлов на консоли: внутренняя память, USB-накопители и расширенное хранилище.",
+   "ar": "انسخ الملفات وانقلها على الجهاز: التخزين الداخلي ومحركات USB والتخزين الموسّع."
+  },
+  {
+   "en": "couldn't reach elfldr on port 9021 (is it running?)",
+   "es": "no se pudo contactar con elfldr en el puerto 9021 (¿está en marcha?)",
+   "fr": "impossible de joindre elfldr sur le port 9021 (est-il lancé ?)",
+   "it": "impossibile raggiungere elfldr sulla porta 9021 (è avviato?)",
+   "ja": "ポート9021のelfldrに接続できません（起動していますか？）",
+   "ko": "포트 9021의 elfldr에 연결할 수 없음 (실행 중인가요?)",
+   "zh": "无法连接到端口 9021 上的 elfldr（它在运行吗？）",
+   "ru": "не удалось связаться с elfldr на порту 9021 (он запущен?)",
+   "ar": "تعذّر الوصول إلى elfldr على المنفذ 9021 (هل يعمل؟)"
+  },
+  {
+   "en": "elevation failed",
+   "es": "la elevación falló",
+   "fr": "l'élévation a échoué",
+   "it": "l'elevazione non è riuscita",
+   "ja": "権限の昇格に失敗しました",
+   "ko": "권한 상승 실패",
+   "zh": "提权失败",
+   "ru": "повышение прав не удалось",
+   "ar": "فشل رفع الصلاحيات"
+  },
+  {
+   "en": "Full access to the console's storage",
+   "es": "Acceso completo al almacenamiento de la consola",
+   "fr": "Accès complet au stockage de la console",
+   "it": "Accesso completo alla memoria della console",
+   "ja": "本体のストレージに完全アクセス",
+   "ko": "콘솔 저장소 전체 접근",
+   "zh": "可完全访问 主机 的存储",
+   "ru": "Полный доступ к хранилищу консоли",
+   "ar": "وصول كامل إلى تخزين الجهاز"
+  },
+  {
+   "en": "lapy.elf is missing from the app folder",
+   "es": "falta lapy.elf en la carpeta de la app",
+   "fr": "lapy.elf manque dans le dossier de l'app",
+   "it": "lapy.elf manca nella cartella dell'app",
+   "ja": "アプリのフォルダーにlapy.elfがありません",
+   "ko": "앱 폴더에 lapy.elf가 없습니다",
+   "zh": "应用文件夹中缺少 lapy.elf",
+   "ru": "в папке приложения нет lapy.elf",
+   "ar": "الملف lapy.elf غير موجود في مجلد التطبيق"
+  },
+  {
+   "en": "lapy.elf was built for another title ID",
+   "es": "lapy.elf se compiló para otro ID de título",
+   "fr": "lapy.elf a été compilé pour un autre ID de titre",
+   "it": "lapy.elf è stato compilato per un altro ID titolo",
+   "ja": "lapy.elfは別のタイトルID用にビルドされています",
+   "ko": "lapy.elf가 다른 타이틀 ID용으로 빌드되었습니다",
+   "zh": "lapy.elf 是为其他标题 ID 构建的",
+   "ru": "lapy.elf собран для другого ID приложения",
+   "ar": "بُني lapy.elf لمعرّف عنوان آخر"
+  },
+  {
+   "en": "Limited to the app's sandbox: {0} (status {1})",
+   "es": "Limitado al entorno aislado de la app: {0} (estado {1})",
+   "fr": "Limité au bac à sable de l'app : {0} (état {1})",
+   "it": "Limitato alla sandbox dell'app: {0} (stato {1})",
+   "ja": "アプリのサンドボックス内のみ：{0}（状態 {1}）",
+   "ko": "앱 샌드박스로 제한됨: {0} (상태 {1})",
+   "zh": "仅限应用沙盒：{0}（状态 {1}）",
+   "ru": "Только песочница приложения: {0} (статус {1})",
+   "ar": "مقيّد ببيئة التطبيق المعزولة: {0} (الحالة {1})"
+  },
+  {
+   "en": "nothing granted full access; only /data is writable",
+   "es": "nada concedió acceso completo; solo se puede escribir en /data",
+   "fr": "rien n'a accordé l'accès complet ; seul /data est accessible en écriture",
+   "it": "nessuno ha concesso l'accesso completo; solo /data è scrivibile",
+   "ja": "完全アクセスは許可されませんでした。書き込めるのは/dataだけです",
+   "ko": "전체 접근이 허용되지 않았습니다. /data에만 쓸 수 있습니다",
+   "zh": "未获得完全访问权限；只有 /data 可写",
+   "ru": "полный доступ не выдан; запись возможна только в /data",
+   "ar": "لم يُمنح وصول كامل؛ الكتابة ممكنة في /data فقط"
+  },
+  {
+   "en": "Tested on console firmware 13.60 with ShadowMountPlus.",
+   "es": "Probado en el firmware 13.60 de consola con ShadowMountPlus.",
+   "fr": "Testé sur le firmware console 13.60 avec ShadowMountPlus.",
+   "it": "Testato sul firmware console 13.60 con ShadowMountPlus.",
+   "ja": "本体ファームウェア13.60とShadowMountPlusで動作確認済み。",
+   "ko": "콘솔 펌웨어 13.60과 ShadowMountPlus에서 테스트했습니다.",
+   "zh": "已在 主机 固件 13.60 与 ShadowMountPlus 上测试。",
+   "ru": "Проверено на прошивке консоли 13.60 с ShadowMountPlus.",
+   "ar": "جُرّب على البرنامج الثابت 13.60 لجهاز الجهاز مع ShadowMountPlus."
+  },
+  {
+   "en": "the helper ran but access didn't change",
+   "es": "el asistente se ejecutó pero el acceso no cambió",
+   "fr": "l'assistant s'est exécuté mais l'accès n'a pas changé",
+   "it": "l'helper è stato eseguito ma l'accesso non è cambiato",
+   "ja": "ヘルパーは実行されましたがアクセスは変わりませんでした",
+   "ko": "도우미가 실행됐지만 접근 권한이 바뀌지 않았습니다",
+   "zh": "辅助程序已运行，但访问权限没有变化",
+   "ru": "помощник запустился, но доступ не изменился",
+   "ar": "عمل المساعد لكن الوصول لم يتغير"
+  },
+  {
+   "en": "the jailbreak didn't answer in time",
+   "es": "el jailbreak no respondió a tiempo",
+   "fr": "le jailbreak n'a pas répondu à temps",
+   "it": "il jailbreak non ha risposto in tempo",
+   "ja": "ジェイルブレイクが時間内に応答しませんでした",
+   "ko": "탈옥이 제때 응답하지 않았습니다",
+   "zh": "越狱程序未及时响应",
+   "ru": "джейлбрейк не ответил вовремя",
+   "ar": "لم يستجب كسر الحماية في الوقت المحدد"
+  },
+  {
+   "en": "the jailbreak's Lapy is a different version",
+   "es": "el Lapy del jailbreak es de otra versión",
+   "fr": "le Lapy du jailbreak est d'une autre version",
+   "it": "il Lapy del jailbreak è di un'altra versione",
+   "ja": "ジェイルブレイクのLapyのバージョンが異なります",
+   "ko": "탈옥의 Lapy 버전이 다릅니다",
+   "zh": "越狱程序中的 Lapy 版本不同",
+   "ru": "Lapy в джейлбрейке другой версии",
+   "ar": "إصدار Lapy في كسر الحماية مختلف"
+  },
+  {
+   "en": "The console keyboard couldn't open",
+   "es": "No se pudo abrir el teclado de la consola",
+   "fr": "Impossible d'ouvrir le clavier de la console",
+   "it": "Impossibile aprire la tastiera della console",
+   "ja": "本体のキーボードを開けませんでした",
+   "ko": "콘솔 키보드를 열 수 없습니다",
+   "zh": "无法打开 主机 键盘",
+   "ru": "Не удалось открыть клавиатуру консоли",
+   "ar": "تعذّر فتح لوحة مفاتيح الجهاز"
+  },
+  {
+   "en": "The system keyboard couldn't open",
+   "es": "No se pudo abrir el teclado del sistema",
+   "fr": "Le clavier du système n'a pas pu s'ouvrir",
+   "it": "Non è stato possibile aprire la tastiera di sistema",
+   "ja": "システムキーボードを開けませんでした",
+   "ko": "시스템 키보드를 열 수 없습니다",
+   "zh": "无法打开系统键盘",
+   "ru": "Не удалось открыть системную клавиатуру",
+   "ar": "لم يتمكن من فتح لوحة مفاتيح النظام"
+  },
+  {
+   "en": "access was already granted",
+   "es": "el acceso ya estaba concedido",
+   "fr": "l'accès était déjà accordé",
+   "it": "l'accesso era già stato concesso",
+   "ja": "アクセスはすでに許可されていました",
+   "ko": "접근 권한이 이미 허용되어 있었습니다",
+   "zh": "访问权限已获授予",
+   "ru": "доступ уже был предоставлен",
+   "ar": "كان الوصول ممنوحًا بالفعل"
+  },
+  {
+   "en": "granted by the jailbreak's resident service",
+   "es": "concedido por el servicio residente del jailbreak",
+   "fr": "accordé par le service résident du jailbreak",
+   "it": "concesso dal servizio residente del jailbreak",
+   "ja": "ジェイルブレイクの常駐サービスにより許可されました",
+   "ko": "탈옥의 상주 서비스가 허용했습니다",
+   "zh": "由越狱的常驻服务授予",
+   "ru": "предоставлен резидентной службой взлома",
+   "ar": "مُنح بواسطة الخدمة المقيمة للجيلبريك"
+  },
+  {
+   "en": "granted by the Lapy helper (elfldr, port 9021)",
+   "es": "concedido por el ayudante Lapy (elfldr, puerto 9021)",
+   "fr": "accordé par l'assistant Lapy (elfldr, port 9021)",
+   "it": "concesso dall'helper Lapy (elfldr, porta 9021)",
+   "ja": "Lapy ヘルパーにより許可されました（elfldr、ポート 9021）",
+   "ko": "Lapy 도우미가 허용했습니다 (elfldr, 포트 9021)",
+   "zh": "由 Lapy 辅助程序授予（elfldr，端口 9021）",
+   "ru": "предоставлен помощником Lapy (elfldr, порт 9021)",
+   "ar": "مُنح بواسطة مساعد Lapy (elfldr، المنفذ 9021)"
+  },
+  {
+   "en": "  File manager: copy, move and delete files on this computer.",
+   "es": "  Gestor de archivos: copia, mueve y elimina archivos en este ordenador.",
+   "fr": "  Gestionnaire de fichiers : copiez, déplacez et supprimez des fichiers sur cet ordinateur.",
+   "it": "  File manager: copia, sposta ed elimina file su questo computer.",
+   "ja": "  ファイルマネージャー：このコンピューター上でコピー、移動、削除。",
+   "ko": "  파일 관리자: 이 컴퓨터에서 파일을 복사, 이동, 삭제.",
+   "zh": "  文件管理器：在这台电脑上复制、移动和删除文件。",
+   "ru": "  Файловый менеджер: копирование, перемещение и удаление файлов на этом компьютере.",
+   "ar": "  مدير الملفات: نسخ ونقل وحذف الملفات على هذا الكمبيوتر."
+  },
+  {
+   "en": "chiral-ftp runs on PS5, Nintendo Switch, PC and Mac. Android, PS4 and more are coming soon.",
+   "es": "chiral-ftp funciona en PS5, Nintendo Switch, PC y Mac. Pronto llegarán Android, PS4 y más.",
+   "fr": "chiral-ftp fonctionne sur PS5, Nintendo Switch, PC et Mac. Android, PS4 et d'autres arrivent bientôt.",
+   "it": "chiral-ftp funziona su PS5, Nintendo Switch, PC e Mac. Presto anche Android, PS4 e altro.",
+   "ja": "chiral-ftp は PS5、Nintendo Switch、PC、Mac で動作します。Android、PS4 なども近日対応予定です。",
+   "ko": "chiral-ftp는 PS5, Nintendo Switch, PC, Mac에서 실행됩니다. Android, PS4 등도 곧 지원됩니다.",
+   "zh": "chiral-ftp 可在 PS5、Nintendo Switch、PC 和 Mac 上运行。Android、PS4 等平台即将推出。",
+   "ru": "chiral-ftp работает на PS5, Nintendo Switch, ПК и Mac. Скоро появятся Android, PS4 и другие платформы.",
+   "ar": "يعمل chiral-ftp على PS5 وNintendo Switch والكمبيوتر وMac. قريبًا على Android وPS4 ومنصات أخرى."
   }
  ]
 }

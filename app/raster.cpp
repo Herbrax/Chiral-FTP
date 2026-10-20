@@ -80,7 +80,7 @@ bool try_quad(const ImDrawVert *v, const ImDrawIdx *idx, const Target &t, const 
     std::uint32_t s = modulate(col, texel(tex, a.uv.x, a.uv.y));
     if((s >> 24) == 0) return true;
     for(int y = iy0; y < iy1; y++) {
-      std::uint32_t *row = t.pixels + (size_t)y * t.width;
+      std::uint32_t *row = t.pixels + (size_t)y * t.stride;
       if((s >> 24) == 255) {
         std::fill(row + ix0, row + ix1, s);
       } else {
@@ -90,7 +90,7 @@ bool try_quad(const ImDrawVert *v, const ImDrawIdx *idx, const Target &t, const 
     return true;
   }
   for(int y = iy0; y < iy1; y++) {
-    std::uint32_t *row = t.pixels + (size_t)y * t.width;
+    std::uint32_t *row = t.pixels + (size_t)y * t.stride;
     float vv = a.uv.y + (y + 0.5f - y0) * dv;
     float uu = a.uv.x + (ix0 + 0.5f - x0) * du;
     for(int x = ix0; x < ix1; x++, uu += du) {
@@ -128,14 +128,71 @@ void triangle(const ImDrawVert &v0, const ImDrawVert &v1, const ImDrawVert &v2, 
     c1[k] = (float)(v1.col >> (8 * k) & 0xFF);
     c2[k] = (float)(v2.col >> (8 * k) & 0xFF);
   }
+
+  /* One colour, one texel, fully opaque: the span can just be filled.
+     Most of what the UI draws is this -- panels, rows, the solid part of
+     every rounded rectangle. */
+  const std::uint32_t solid = modulate(v0.col, flat);
+  const bool fillable = same_col && same_uv && (solid >> 24) == 255;
+  if(same_col && same_uv && (solid >> 24) == 0) return;
+
+  /* Along a scanline each barycentric is linear in x:
+         w(px) = base + slope * px
+     so the span where all three are non-negative follows from three
+     divisions, rather than from testing every pixel in the bounding box.
+     That is what makes this affordable: ImGui draws a rounded rectangle as
+     a fan of long thin triangles, and every one of their bounding boxes
+     covers most of the rectangle, so the old box walk did work
+     proportional to triangles x area instead of to the area itself. */
+  const float sl0 = (v1.pos.y - v2.pos.y) * inv;
+  const float sl1 = (v2.pos.y - v0.pos.y) * inv;
+  const float sl2 = -(sl0 + sl1);
+
   for(int y = iy0; y < iy1; y++) {
-    float py = y + 0.5f;
-    std::uint32_t *row = t.pixels + (size_t)y * t.width;
-    for(int x = ix0; x < ix1; x++) {
-      float px = x + 0.5f;
-      float w0 = edge(v1.pos.x, v1.pos.y, v2.pos.x, v2.pos.y, px, py) * inv;
-      float w1 = edge(v2.pos.x, v2.pos.y, v0.pos.x, v0.pos.y, px, py) * inv;
-      float w2 = 1.0f - w0 - w1;
+    const float py = y + 0.5f;
+    std::uint32_t *row = t.pixels + (size_t)y * t.stride;
+
+    const float b0 = ((v2.pos.x - v1.pos.x) * (py - v1.pos.y) + (v2.pos.y - v1.pos.y) * v1.pos.x) * inv;
+    const float b1 = ((v0.pos.x - v2.pos.x) * (py - v2.pos.y) + (v0.pos.y - v2.pos.y) * v2.pos.x) * inv;
+    const float b2 = 1.0f - b0 - b1;
+
+    float lo = (float)ix0 + 0.5f, hi = (float)(ix1 - 1) + 0.5f;
+    bool empty = false;
+    const float bases[3] = {b0, b1, b2};
+    const float slopes[3] = {sl0, sl1, sl2};
+    for(int e = 0; e < 3 && !empty; e++) {
+      const float sl = slopes[e];
+      if(sl > 1e-9f) {
+        const float at = -bases[e] / sl;
+        if(at > lo) lo = at;
+      } else if(sl < -1e-9f) {
+        const float at = -bases[e] / sl;
+        if(at < hi) hi = at;
+      } else if(bases[e] < 0.0f) {
+        empty = true;  // this row misses the triangle entirely
+      }
+    }
+    if(empty || lo > hi) continue;
+
+    int xs = (int)std::ceil(lo - 0.5f);
+    int xe = (int)std::floor(hi - 0.5f) + 1;
+    if(xs < ix0) xs = ix0;
+    if(xe > ix1) xe = ix1;
+    if(xs >= xe) continue;
+
+    if(fillable) {
+      std::fill(row + xs, row + xe, solid);
+      continue;
+    }
+
+    /* Stepped rather than recomputed: two adds a pixel instead of two
+       edge functions. */
+    float w0 = b0 + sl0 * ((float)xs + 0.5f);
+    float w1 = b1 + sl1 * ((float)xs + 0.5f);
+    for(int x = xs; x < xe; x++, w0 += sl0, w1 += sl1) {
+      const float w2 = 1.0f - w0 - w1;
+      /* The span is derived in floating point, so its last pixel either
+         side can be a hair outside; keep the test for those. */
       if(w0 < 0 || w1 < 0 || w2 < 0) continue;
       std::uint32_t col;
       if(same_col) {
@@ -179,7 +236,14 @@ void update_textures(ImDrawData *data) {
 }
 
 void render(ImDrawData *data, const Target &t, std::uint32_t clear) {
-  std::fill(t.pixels, t.pixels + (size_t)t.width * t.height, clear);
+  if(t.stride == t.width) {
+    std::fill(t.pixels, t.pixels + (size_t)t.width * t.height, clear);
+  } else {
+    for(int y = 0; y < t.height; y++) {
+      std::uint32_t *row = t.pixels + (size_t)y * t.stride;
+      std::fill(row, row + t.width, clear);
+    }
+  }
   if(!data) return;
   for(const ImDrawList *list : data->CmdLists) {
     const ImDrawVert *verts = list->VtxBuffer.Data;

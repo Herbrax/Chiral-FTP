@@ -1,6 +1,6 @@
-/* chiral-ftp web UI: the PS5 file manager. Browse the PS5's storage, download
+/* chiral-ftp web UI: the console file manager. Browse the console's storage, download
    files to this device, upload from it (button or drag and drop), and copy,
-   move, rename or delete on the PS5. */
+   move, rename or delete on the console. */
 (function () {
   "use strict";
 
@@ -257,7 +257,7 @@
 
   async function remove(paths) {
     var what = paths.length === 1 ? "\"" + paths[0].split("/").pop() + "\"" : paths.length + " items";
-    if (!confirm("Permanently delete " + what + " from the PS5? Folders are deleted with everything inside.")) return;
+    if (!confirm("Permanently delete " + what + " from the console? Folders are deleted with everything inside.")) return;
     try {
       await call("/api/local/delete", { paths: paths.join("\n") });
       toast("Deleted " + what);
@@ -383,7 +383,7 @@
   var uploadQueue = [], uploading = false;
 
   function queueUploads(files) {
-    if (!state.path) return toast("Open a folder on the PS5 first", true);
+    if (!state.path) return toast("Open a folder on the console first", true);
     Array.prototype.forEach.call(files, function (f) {
       var row = el("div", "fm-up");
       var bar = el("div", "bar");
@@ -497,9 +497,17 @@
     queueUploads(ev.dataTransfer.files);
   });
 
-  // Start in the folder from the address (files.html#/data/x), else the last one.
+  // Start in the folder from the address (files.html#/switch/x), else the last
+  // one. A remembered path has to still look like a path: an older build
+  // stored what the server resolved, which on a Switch came back with a
+  // device prefix ("sdmc:/..."), and feeding that back gives "Invalid path"
+  // on every load until someone clears the browser's storage.
   var last = location.hash.length > 1 ? decodeURI(location.hash.slice(1)) : null;
   try { if (!last) last = localStorage.getItem("chiral-files-path"); } catch (e) { /* private mode */ }
+  if (last && last.charAt(0) !== "/") {
+    last = null;
+    try { localStorage.removeItem("chiral-files-path"); } catch (e) { /* private mode */ }
+  }
   if (last) open(last).then(function () { if (!state.path) showDrives(); });
   else showDrives();
   pollJobs();

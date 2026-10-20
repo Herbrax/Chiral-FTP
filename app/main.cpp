@@ -1,9 +1,12 @@
-// chiral-ftp: a FileZilla-style FTP/SFTP client for the PS5, built as a native
-// ShadowMountPlus title. The same code runs on a computer for development.
+// chiral-ftp: a FileZilla-style FTP/SFTP client for the Nintendo Switch,
+// built as homebrew (.nro) on libnx. The same code runs on a computer for
+// development, which is where most of the UI is tested.
 //
 // Automated UI tests on a computer:
 //   chiral-ftp-host --headless --script "DOWN CROSS wait=500 shot=a.bmp ..."
-// Tokens are action names (UP, CROSS, R1, OPTIONS...), wait=<ms>, shot=<file>,
+// Tokens are action names (UP, CROSS, R1, OPTIONS... named after the PS5
+// buttons the UI was built around; see app/backend_switch.cpp for how they
+// map onto A/B/X/Y), wait=<ms>, shot=<file>,
 // type=<text> (host text entry; _ for spaces) and quit.
 
 #include <cstdint>
@@ -12,11 +15,6 @@
 #include <cstring>
 #include <string>
 #include <vector>
-#include <fcntl.h>
-#include <signal.h>
-#ifdef __PROSPERO__
-#include <ucontext.h>
-#endif
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -25,16 +23,16 @@
 #include "json.h"
 #include "platform.h"
 #include "ui.h"
-#ifdef __PROSPERO__
-#include "elevation/elevation.hpp"
-#endif
 
 extern "C" {
 #include "config.h"
+#include "ftpd.h"
 #include "log.h"
 #include "session.h"
+#include "fsjobs.h"
 #include "settings.h"
 #include "strbuf.h"
+#include "websrv.h"
 }
 
 namespace {
@@ -77,41 +75,6 @@ bool step(Script &s) {
   return true;
 }
 
-#ifdef __PROSPERO__
-/* A crash leaves its place in the startup log: the instruction, the address
-   it touched, and code addresses found on the stack (the build has no frame
-   pointers to walk). Relative to this handler, they map back to the source
-   with llvm-symbolizer on .build/ps5-app/llvm-pie.elf. */
-void crash_handler(int sig, siginfo_t *info, void *context) {
-  ucontext_t *uc = static_cast<ucontext_t *>(context);
-  std::uintptr_t main_at = reinterpret_cast<std::uintptr_t>(&crash_handler);
-  std::uintptr_t rip = (std::uintptr_t)uc->uc_mcontext.mc_rip;
-  startup_trace("Crash: signal %d at handler%+lld, touching %p", sig, (long long)(rip - main_at), info->si_addr);
-  const std::uintptr_t *sp = reinterpret_cast<const std::uintptr_t *>(uc->uc_mcontext.mc_rsp);
-  char line[600];
-  int len = 0, found = 0;
-  for(int i = 0; i < 512 && found < 24; i++) {
-    std::uintptr_t v = sp[i];
-    if(v > main_at - (64u << 20) && v < main_at + (64u << 20)) {
-      len += snprintf(line + len, sizeof(line) - (size_t)len, " %+lld", (long long)(v - main_at));
-      found++;
-    }
-  }
-  startup_trace("Crash stack (relative to the handler):%s", line);
-  signal(sig, SIG_DFL);
-  raise(sig);
-}
-
-void install_crash_handler() {
-  struct sigaction sa;
-  memset(&sa, 0, sizeof(sa));
-  sa.sa_sigaction = crash_handler;
-  sa.sa_flags = SA_SIGINFO;
-  for(int sig : {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT}) sigaction(sig, &sa, nullptr);
-}
-
-#endif
-
 }  // namespace
 
 int main(int argc, char **argv) {
@@ -135,65 +98,23 @@ int main(int argc, char **argv) {
     }
   }
 
-#ifdef __PROSPERO__
-  /* A title only sees a sandboxed view of the console's storage (/data
-     looks empty). Like ProsperoEden, ask the jailbreak's resident service
-     for full access, or send the packaged upstream Lapy helper to elfldr on
-     port 9021. Single-threaded startup, before anything opens a file. */
-  /* The keyboard's module first: after the access request the app may no
-     longer load it, and every text field (new folder, rename, passwords)
-     would silently do nothing (ProsperoEden loads it first too). */
-  backend::prepare_keyboard();
-  const elevation::Status access = elevation::request(elevation::Capability::filesystem);
-  /* Elevation leaves the effective group (1) apart from the real one (0);
-     match them, as ProsperoEden does. Root may set its group. */
-  if(geteuid() == 0 && getegid() != getgid()) (void)setegid(getgid());
-  /* What the request left behind, for the start screen's access banner:
-     root (uid 0) and the system fonts folder mean the sandbox is gone. */
-  char access_probe[160];
-  {
-    int fonts = open("/preinst/common/font", O_RDONLY | O_DIRECTORY);
-    int fonts_err = fonts < 0 ? errno : 0;
-    if(fonts >= 0) close(fonts);
-    snprintf(access_probe, sizeof(access_probe), "uid %d/%d, fonts %s, path %s", (int)getuid(), (int)geteuid(),
-             fonts_err ? strerror(fonts_err) : "visible", elevation::path());
-  }
-#endif
+  /* Before anything opens a file: on the PS5 this is where the title asks
+     the jailbreak for the real filesystem, and until it has, /data looks
+     empty. A no-op elsewhere. */
+  backend::early_init();
+
   data_dir_init();
   ensure_data_dir();
-#ifdef __PROSPERO__
-  install_crash_handler();
-#endif
   {
     char path[600];
     unlink(data_path(path, sizeof(path), STARTUP_NAME));
   }
   startup_trace("%s %s starting, data in %s", APP_NAME, VERSION_TAG, data_dir());
 
-#ifdef __PROSPERO__
-  std::string access_detail;  // English; the banner translates it
-  int access_code = static_cast<int>(access);
-  bool full_access = access == elevation::Status::ok && strcmp(elevation::path(), "data-only");
-  if(full_access) {
-    access_detail = !strcmp(elevation::path(), "existing") ? "already granted"
-                    : !strcmp(elevation::path(), "resident") ? "granted by the jailbreak's resident service"
-                                                             : "granted by the Lapy helper (elfldr, port 9021)";
-    startup_trace("Full storage access: %s", access_detail.c_str());
-  } else {
-    switch(access) {
-    case elevation::Status::ok: access_detail = N_("nothing granted full access; only /data is writable"); break;
-    case elevation::Status::unavailable: access_detail = N_("lapy.elf is missing from the app folder"); break;
-    case elevation::Status::transport_error: access_detail = N_("couldn't reach elfldr on port 9021 (is it running?)"); break;
-    case elevation::Status::timeout: access_detail = N_("the jailbreak didn't answer in time"); break;
-    case elevation::Status::target_mismatch: access_detail = N_("lapy.elf was built for another title ID"); break;
-    case elevation::Status::unsupported_version: access_detail = N_("the jailbreak's Lapy is a different version"); break;
-    case elevation::Status::apply_failed: access_detail = N_("the helper ran but access didn't change"); break;
-    default: access_detail = N_("elevation failed"); break;
-    }
-    log_msg(0, LOG_ERROR, "Limited storage access: %s (status %d)", access_detail.c_str(), access_code);
-  }
-  startup_trace("Storage access: %s (%s)", access_detail.c_str(), access_probe);
-#endif
+  /* What the platform managed to bring up before main ran. It has no log
+     to write to that early, so it reports here. */
+  backend::report_startup_services(&startup_trace);
+
   settings_load();
   {
     /* The language, before the fonts load (they put its script first) and
@@ -211,13 +132,26 @@ int main(int argc, char **argv) {
 
   if(!platform::init(headless)) {
     startup_trace("Could not start the display");
-    for(;;) backend::pump(1000);  // a native PS5 title must not return from main
+    /* Even a failed start may have taken a framebuffer before it gave up,
+       and exiting while holding one is exactly what we are trying not to
+       do. shutdown() is safe to call either way. */
+    platform::shutdown();
+    return 1;  // homebrew may return; libnx takes us back to hbmenu
   }
   startup_trace("Display ready");
   ui::init();
-#ifdef __PROSPERO__
-  ui::set_storage_access(full_access, access_detail, access_code);
-#endif
+  /* Whatever the platform wants said about how we got here -- full storage
+     access on the PS5, an application slot rather than a library applet on
+     the Switch, nothing at all on a computer. */
+  {
+    bool ok = false;
+    const char *detail = "";
+    int status = 0;
+    if(backend::startup_notice(&ok, &detail, &status)) {
+      startup_trace("Launch: %s (%s, status %d)", ok ? "ok" : "limited", detail, status);
+      ui::set_startup_notice(ok, detail, status);
+    }
+  }
 
   bool running = true;
   std::uint64_t last_draw = 0;
@@ -246,7 +180,45 @@ int main(int argc, char **argv) {
 
     }
   }
+  /* Shut the servers down before returning, and wait for them to actually
+     be down.
+     
+     Returning from main hands control back to libnx, which runs
+     userAppExit and closes the socket driver, pl:u and the rest. Anything
+     still running at that point -- the FTP listener and its client
+     threads, the web server's thread and libmicrohttpd's own, a transfer
+     worker mid-write -- is left holding sockets and handles that have just
+     been taken away, and the process falls over on the way out instead of
+     returning to hbmenu. ftpd_stop() and websrv_stop() only ask; their
+     threads notice within a few hundred milliseconds. */
+  startup_trace("Stopping the servers");
+  ftpd_stop();
+  websrv_stop();
+  for(int waited = 0; waited < 4000 && (ftpd_running() || websrv_running()); waited += 50) {
+    backend::pump(50);
+  }
+  if(ftpd_running() || websrv_running()) {
+    /* Not worth hanging on a thread that will not come back: say so, and
+       let the exit happen anyway. */
+    startup_trace("A server did not stop in time (ftp %d, web %d)",
+                  ftpd_running(), websrv_running());
+  }
   session_disconnect();
+
+  /* Then the threads that outlive everything else.
+
+     Returning from main runs the static destructors, and those take apart
+     the UI state, the job queues and the translation tables. Any thread of
+     ours still alive at that point is reading objects as they are being
+     destroyed, which is why leaving the full app crashed while the UI-only
+     build (no engine, no threads) exited cleanly. The queue's transfer
+     workers already retire themselves when idle; these three do not. */
+  startup_trace("Stopping the background threads");
+  ui::stop_workers();
+  fsjob_stop();
+  session_stop_keepalive();
+
   platform::shutdown();
+  startup_trace("Exiting");
   return 0;
 }

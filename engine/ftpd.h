@@ -5,7 +5,7 @@
 #include <limits.h>
 
 #define FTPD_DEFAULT_PORT 2121
-#define FTPD_DEFAULT_USER "ps5"
+#define FTPD_DEFAULT_USER "switch"
 #define FTPD_DEFAULT_PASS "chiral"
 #define FTPD_MAX_CLIENTS 30
 
@@ -14,13 +14,13 @@ typedef struct ftpd_config {
   int anonymous;  // also accept "anonymous"/"ftp" with any password
   char user[64];
   char pass[128];
-  char root[PATH_MAX];  // what clients see as "/" ("/" on the PS5)
+  char root[PATH_MAX];  // what clients see as "/" (the SD card root on the Switch)
 } ftpd_config_t;
 
 typedef struct ftpd_stats {
   int clients;    // logged-in control connections
   int transfers;  // data transfers in progress
-  long long bytes_up, bytes_down;  // to / from the PS5 since the start
+  long long bytes_up, bytes_down;  // to / from the Switch since the start
   double speed;   // bytes/s over the last seconds, both directions
 } ftpd_stats_t;
 
@@ -36,5 +36,5 @@ void ftpd_get_stats(ftpd_stats_t *out);
    were copied (at most max), each line NUL-terminated in 160 bytes. */
 int ftpd_recent(char lines[][160], int max);
 
-/* The address other devices use to reach the PS5 (or this computer). */
+/* The address other devices use to reach the Switch (or this computer). */
 void net_local_ip(char *buf, unsigned long size);

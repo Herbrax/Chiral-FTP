@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>chiral-ftp · FTP client</title>
-<meta name="description" content="chiral-ftp: the ultimate file manager and FTP interface for PS5">
+<meta name="description" content="chiral-ftp: the ultimate file manager and FTP interface for Switch">
 <link rel="icon" href="/mark.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/app.css">
 </head>
@@ -12,7 +12,7 @@
 <div id="app">
   <header class="toolbar" id="toolbar">
     <a class="brand" href="/" title="chiral-ftp"><img class="dark-mark" src="/mark.svg" alt=""><img class="light-mark" src="/mark-light.svg" alt=""><span class="wordmark">chiral<span class="ftp">-ftp</span></span></a>
-    <a class="btn" href="/" style="text-decoration:none" title="Browse the PS5's files, upload from and download to this device">&#128193; PS5 files</a>
+    <a class="btn" href="/" style="text-decoration:none" title="Browse the console's files, upload from and download to this device">&#128193; Console files</a>
     <button class="btn" id="btn-sites" title="Site Manager">&#9776; Site Manager</button>
     <div class="dropdown" id="recent-wrap">
       <button class="btn" id="btn-recent" title="Recent connections">Recent &#9662;</button>
@@ -43,7 +43,7 @@
   </section>
 
   <nav class="mobile-tabs" id="mobile-tabs">
-    <button class="active" data-pane="local">PS5</button>
+    <button class="active" data-pane="local">Console</button>
     <button data-pane="remote">Server</button>
     <button data-pane="queue">Queue <span id="mt-queue"></span></button>
   </nav>
@@ -68,7 +68,7 @@
     </div>
     <div class="queue-body">
       <table class="qtable">
-        <thead><tr><th class="c-dir"></th><th>PS5 file</th><th>Server file</th><th class="c-size">Size</th><th class="c-prog">Progress</th><th class="c-status">Status</th><th class="c-act"></th></tr></thead>
+        <thead><tr><th class="c-dir"></th><th>Console file</th><th>Server file</th><th class="c-size">Size</th><th class="c-prog">Progress</th><th class="c-status">Status</th><th class="c-act"></th></tr></thead>
         <tbody id="queue-rows"></tbody>
       </table>
       <div class="empty" id="queue-empty">Nothing here yet. Select files and press Upload or Download, or drag them to the other side.</div>
@@ -114,7 +114,7 @@
         <label>Username <input name="user" spellcheck="false"></label>
         <label>Password <input name="pass" type="password"></label>
       </div>
-      <label class="sftp-only">Private key file on the PS5 (optional)
+      <label class="sftp-only">Private key file on the console (optional)
         <input name="keyfile" placeholder="/data/chiral-ftp/id_rsa" spellcheck="false">
         <small>Put the matching .pub file next to it. With a key, the password field is the key's passphrase.</small>
       </label>
@@ -126,7 +126,7 @@
         </select>
       </label>
       <div class="grid2">
-        <label>Default PS5 folder <input name="local_dir" placeholder="/data" spellcheck="false"></label>
+        <label>Default Switch folder <input name="local_dir" placeholder="/switch" spellcheck="false"></label>
         <label>Default server folder <input name="remote_dir" placeholder="/" spellcheck="false"></label>
       </div>
       <label>Comments <textarea name="comment" rows="2"></textarea></label>
@@ -164,7 +164,7 @@
       <button class="btn small" type="button" id="btn-forget-keys" style="align-self:flex-start">Forget saved host keys</button>
     </label>
     <div class="row end">
-      <button class="btn danger" type="button" id="btn-exit" title="Stop the web server in chiral-ftp on the PS5">Stop web server</button>
+      <button class="btn danger" type="button" id="btn-exit" title="Stop the web server in chiral-ftp on the console">Stop web server</button>
       <span class="spacer"></span>
       <button class="btn primary" type="submit">Save</button>
     </div>

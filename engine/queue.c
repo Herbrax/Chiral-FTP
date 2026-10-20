@@ -320,8 +320,8 @@ download_file(ftp_conn_t *c, qitem_t *it, const settings_t *st) {
 
   memset(&p, 0, sizeof(p));
   p.it = it;
-  p.fd = localfs_open_write(it->local, O_WRONLY | O_CREAT | (offset ? 0 : O_TRUNC), PS5_FILE_MODE);
-  if(p.fd >= 0) fchmod(p.fd, PS5_FILE_MODE);  // also when replacing a file
+  p.fd = localfs_open_write(it->local, O_WRONLY | O_CREAT | (offset ? 0 : O_TRUNC), CHIRAL_FILE_MODE);
+  if(p.fd >= 0) fchmod(p.fd, CHIRAL_FILE_MODE);  // also when replacing a file
   if(p.fd < 0) {
     snprintf(it->error, sizeof(it->error), "Could not open local file: %s", strerror(errno));
     return -2;
@@ -409,7 +409,7 @@ upload_file(ftp_conn_t *c, qitem_t *it, const settings_t *st) {
   if(st->preserve_mtime) ftp_set_mtime(c, it->remote, it->mtime);
   /* Every transferred file ends up 0777, on the server too when it lets us
      (Windows servers usually don't; then we stop asking). */
-  if(!c->no_chmod && ftp_chmod(c, it->remote, PS5_FILE_MODE) && ftp_is_open(c)) c->no_chmod = 1;
+  if(!c->no_chmod && ftp_chmod(c, it->remote, CHIRAL_FILE_MODE) && ftp_is_open(c)) c->no_chmod = 1;
   log_msg(c->log_id, LOG_STATUS, "File transfer successful, transferred %lld bytes",
           it->done - offset);
   return 0;

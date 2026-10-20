@@ -12,6 +12,7 @@
 
 #include "config.h"
 #include "form.h"
+#include "system.h"
 
 #define STORE_MAX (2 * 1024 * 1024)
 
@@ -38,8 +39,7 @@ data_path(char *buf, unsigned long size, const char *name) {
   return buf;
 }
 
-/* A folder we can create a file in and list (ShadowMountPlus versions that
-   mount /data without listing rights don't count). */
+/* A folder we can create a file in and list. */
 static int
 usable_dir(const char *dir) {
   char probe[300];
@@ -58,12 +58,10 @@ usable_dir(const char *dir) {
 
 int
 data_dir_init(void) {
-#ifdef __PROSPERO__
-  static const char *candidates[] = {"/data/chiral-ftp", "/download0/chiral-ftp"};
-#else
-  static const char *candidates[] = {"./data"};
-#endif
-  for(size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++) {
+  const char *candidates[4];
+  int n = system_data_dir_candidates(candidates, (int)(sizeof(candidates) / sizeof(candidates[0])));
+
+  for(int i = 0; i < n; i++) {
     if(usable_dir(candidates[i])) {
       snprintf(g_data_dir, sizeof(g_data_dir), "%s", candidates[i]);
       return 0;
@@ -114,9 +112,22 @@ write_file(const char *path, const char *data, size_t size) {
     }
     done += (size_t)n;
   }
-  if(close(fd) || rename(tmp, path)) {
+  if(close(fd)) {
     unlink(tmp);
     return -1;
+  }
+  if(rename(tmp, path)) {
+    /* FAT and exFAT have no atomic replace, and libnx's rename refuses a
+       destination that already exists -- so every save after the first one
+       failed, and the Switch reported "could not save" while the setting
+       had plainly changed. Retry with the old file out of the way. The
+       rename is tried first so platforms that do replace atomically keep
+       doing so. */
+    unlink(path);
+    if(rename(tmp, path)) {
+      unlink(tmp);
+      return -1;
+    }
   }
   return 0;
 }

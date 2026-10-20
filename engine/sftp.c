@@ -27,19 +27,9 @@
 static pthread_once_t g_init_once = PTHREAD_ONCE_INIT;
 static pthread_mutex_t g_hosts_lock = PTHREAD_MUTEX_INITIALIZER;
 
-#ifdef __SCE__
-/* mbedTLS is built with MBEDTLS_ENTROPY_HARDWARE_ALT: take randomness from
-   arc4random_buf (CPU RDRAND, app/ps5_runtime.c). */
-int mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t *olen);
-
-int
-mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t *olen) {
-  (void)data;
-  arc4random_buf(output, len);
-  *olen = len;
-  return 0;
-}
-#endif
+/* Entropy: devkitPro's switch-mbedtls is patched to implement
+   mbedtls_hardware_poll on top of csrngGetRandomBytes, so unlike the PS5
+   build there is nothing to supply here. */
 
 static void
 global_init(void) {

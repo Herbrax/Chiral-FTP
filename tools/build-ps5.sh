@@ -35,12 +35,15 @@ deps="$root/.deps/ps5"
 cc() { PS5_PAYLOAD_SDK="$sdk" PS5_CLANG="$clang18" sh "$bp/tooling/prospero-clang18" "$@"; }
 
 common=(-O2 -Wall -ffunction-sections -fdata-sections -DVERSION_TAG="\"$version\"")
-cflags=(-std=gnu11 "${common[@]}" -Werror -I"$root/engine" -I"$root/web" -I"$deps/include")
+# The include folders come from platform/ps5/platform.mk (CHIRAL_INCLUDES),
+# like the source lists below; the test variants run without make.
+includes=()
+for d in ${CHIRAL_INCLUDES:-app engine web vendor/imgui gen platform/ps5}; do includes+=(-I"$root/$d"); done
+cflags=(-std=gnu11 "${common[@]}" -Werror "${includes[@]}" -I"$deps/include")
 # No ImGui shell/file helpers: the default "open in shell" spawns a process
 # (execvp/waitpid), which an app can't import.
-cxxflags=(-std=c++20 "${common[@]}" -fno-exceptions -fno-rtti -I"$root/app" -I"$root/engine" -I"$root/web"
-          -I"$deps/include"
-          -I"$root/vendor/imgui" -DIMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS -DIMGUI_DISABLE_FILE_FUNCTIONS
+cxxflags=(-std=c++20 "${common[@]}" -fno-exceptions -fno-rtti "${includes[@]}" -I"$deps/include"
+          -DIMGUI_DISABLE_FILE_FUNCTIONS
           -DIMGUI_USER_CONFIG='"imgui_config.h"')
 
 mkdir -p "$obj"
@@ -67,25 +70,22 @@ imgui_srcs=(vendor/imgui/imgui.cpp vendor/imgui/imgui_draw.cpp vendor/imgui/imgu
             vendor/imgui/imgui_widgets.cpp)
 case "$variant" in
   app)
-    c_srcs=(engine/ftp.c engine/listparse.c engine/session.c engine/queue.c engine/localfs.c
-            engine/settings.c engine/log.c engine/strbuf.c engine/form.c engine/notify.c
-            engine/sftp.c engine/remote_ops.c engine/ps5_net.c engine/ftpd.c engine/fsjobs.c app/ps5_runtime.c
-            web/websrv.c web/api.c web/asset.c gen/font_regular.c gen/font_bold.c gen/font_mono.c gen/index.html.c
-            gen/app.css.c gen/app.js.c gen/icon0.png.c gen/files.html.c gen/files.css.c
-            gen/files.js.c gen/mark.svg.c gen/mark-light.svg.c gen/plexmono.ttf.c gen/i18n.c)
-    cxx_srcs=(app/main.cpp app/ui.cpp app/json.cpp app/platform_common.cpp app/raster.cpp
-              app/backend_ps5.cpp app/elevation/elevation.cpp app/i18n.cpp "${imgui_srcs[@]}")
+    # From the Makefile (platform/ps5/platform.mk exports these), so the
+    # source lists live in exactly one place.
+    [[ -n "${CHIRAL_ENGINE:-}" ]] || { echo "run this through make PLATFORM=ps5" >&2; exit 2; }
+    c_srcs=(${CHIRAL_ENGINE} ${CHIRAL_WEB} ${CHIRAL_PLATFORM_C} ${CHIRAL_GENERATED})
+    cxx_srcs=(${CHIRAL_APP} ${CHIRAL_PLATFORM_CPP} ${CHIRAL_IMGUI})
     extra_libs=("$deps/lib/libssh2.a" "$deps/lib/libmbedcrypto.a" "$deps/lib/libmicrohttpd.a")
     ;;
   test1)
-    c_srcs=(app/ps5_runtime.c)
+    c_srcs=(platform/ps5/runtime.c)
     cxx_srcs=(tests/ps5_hello_main.cpp tests/ps5_hello_renderer.cpp tests/ps5_hello_shim.cpp)
     cxxflags+=(-I"$root/tests")
     extra_libs=()
     ;;
   test2)
-    c_srcs=(app/ps5_runtime.c gen/font_regular.c gen/font_bold.c gen/font_mono.c)
-    cxx_srcs=(tests/ps5_platform_test.cpp app/platform_common.cpp app/raster.cpp app/backend_ps5.cpp
+    c_srcs=(platform/ps5/runtime.c gen/font_regular.c gen/font_bold.c gen/font_mono.c)
+    cxx_srcs=(tests/ps5_platform_test.cpp app/platform_common.cpp app/raster.cpp platform/ps5/backend.cpp
               "${imgui_srcs[@]}")
     extra_libs=()
     ;;
@@ -132,7 +132,7 @@ lib="$sdk/target/lib"
 # SYSTEM_ILLEGAL_FUNCTION_CALL. Refuse to package such a build.
 if raw=$(grep -oE "libc\.a\(syscalls\.o\):\(\.text\.[A-Za-z0-9_]+\)" "$obj/link.map" | sed 's/.*\.text\.//;s/)//' | sort -u) && [[ -n "$raw" ]]; then
   echo "error: raw system calls linked from libc.a: $raw" >&2
-  echo "       use the libkernel function, or implement it in app/ps5_runtime.c" >&2
+  echo "       use the libkernel function, or implement it in platform/ps5/runtime.c" >&2
   exit 1
 fi
 
@@ -144,7 +144,7 @@ mkdir -p "$out/sce_sys" "$out/sce_module"
 "$tool" self --sign --in "$obj/eboot.elf" --out "$out/eboot.bin" --magic 0x1D3D154F
 (cd "$bp/runtime" && sha256sum --check --strict libc.prx.sha256 >/dev/null)
 cp "$bp/runtime/libc.prx" "$out/sce_module/libc.prx"
-python3 - "$root/sce_sys/param.json" "$out/sce_sys/param.json" "$title" "$app_name" <<'PY'
+python3 - "$root/platform/ps5/sce_sys/param.json" "$out/sce_sys/param.json" "$title" "$app_name" <<'PY'
 import json, sys
 p = json.load(open(sys.argv[1]))
 title, name = sys.argv[3], sys.argv[4]
@@ -154,10 +154,10 @@ p["contentId"] = "UP9000-%s_00-%s" % (title, (name.upper().replace(" ", "").repl
 p["localizedParameters"] = {"defaultLanguage": "en-US", "en-US": {"titleName": name}}
 json.dump(p, open(sys.argv[2], "w"), indent=2)
 PY
-cp "$root/sce_sys/icon0.png" "$out/sce_sys/"
+cp "$root/platform/ps5/sce_sys/icon0.png" "$out/sce_sys/"
 # The picture behind the title on the home screen, and its launch screen
 # (tools/render-background.sh makes them).
-[[ "$variant" != app ]] || cp "$root/sce_sys/pic0.dds" "$root/sce_sys/pic1.dds" "$out/sce_sys/"
+[[ "$variant" != app ]] || cp "$root/platform/ps5/sce_sys/pic0.dds" "$root/platform/ps5/sce_sys/pic1.dds" "$out/sce_sys/"
 [[ "$variant" != test1 ]] || cp -R "$root/tests/assets" "$out/assets"
 mkdir -p "$out/licenses"
 cp "$root/LICENSE" "$out/licenses/chiral-ftp-GPL-3.0.txt"

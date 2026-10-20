@@ -35,6 +35,8 @@ static pthread_cond_t g_cond = PTHREAD_COND_INITIALIZER;
 static job_t g_jobs[MAX_JOBS];
 static int g_head, g_count;
 static int g_started;
+static pthread_t g_worker;
+static volatile int g_quit;
 static volatile int g_cancel;
 static fsjob_stats_t g_stats;
 static long long g_rate_bytes;
@@ -91,14 +93,14 @@ copy_file(const char *src, const char *dst, const struct stat *st) {
     free(buf);
     return -1;
   }
-  if((out = localfs_open_write(dst, O_WRONLY | O_CREAT | O_EXCL, PS5_FILE_MODE)) < 0) {
+  if((out = localfs_open_write(dst, O_WRONLY | O_CREAT | O_EXCL, CHIRAL_FILE_MODE)) < 0) {
     err = errno;
     close(in);
     free(buf);
     errno = err;
     return -1;
   }
-  fchmod(out, PS5_FILE_MODE);
+  fchmod(out, CHIRAL_FILE_MODE);
   set_current(src);
   for(;;) {
     ssize_t n = read(in, buf, COPY_BUFSIZE);
@@ -183,7 +185,7 @@ run(const job_t *j) {
     return -1;
   }
   if(j->move) {
-    if(!localfs_rename(j->src, dst)) {  // same drive: instant
+    if(!rename(j->src, dst)) {  // same drive: instant
       pthread_mutex_lock(&g_lock);
       g_stats.done = g_stats.total;
       pthread_mutex_unlock(&g_lock);
@@ -208,7 +210,11 @@ worker(void *arg) {
     long long total;
 
     pthread_mutex_lock(&g_lock);
-    while(!g_count) pthread_cond_wait(&g_cond, &g_lock);
+    while(!g_count && !g_quit) pthread_cond_wait(&g_cond, &g_lock);
+    if(g_quit) {
+      pthread_mutex_unlock(&g_lock);
+      return NULL;
+    }
     j = g_jobs[g_head];
     g_head = (g_head + 1) % MAX_JOBS;
     g_count--;
@@ -247,12 +253,12 @@ int
 fsjob_add(int move, const char *src, const char *dst_dir) {
   pthread_mutex_lock(&g_lock);
   if(!g_started) {
-    pthread_t t;
-    if(pthread_create(&t, NULL, worker, NULL)) {
+    /* Joinable: fsjob_stop() waits for it on the way out. */
+    if(pthread_create(&g_worker, NULL, worker, NULL)) {
       pthread_mutex_unlock(&g_lock);
       return -1;
     }
-    pthread_detach(t);
+    g_quit = 0;
     g_started = 1;
     gettimeofday(&g_rate_start, NULL);
   }
@@ -277,6 +283,27 @@ fsjob_cancel_all(void) {
   g_count = 0;
   g_stats.queued = 0;
   g_cancel = 1;
+  pthread_mutex_unlock(&g_lock);
+}
+
+void
+fsjob_stop(void) {
+  pthread_t worker;
+
+  pthread_mutex_lock(&g_lock);
+  if(!g_started) {
+    pthread_mutex_unlock(&g_lock);
+    return;
+  }
+  g_cancel = 1;   /* stop whatever is mid-copy */
+  g_quit = 1;
+  g_count = 0;    /* drop anything still queued */
+  worker = g_worker;
+  pthread_cond_broadcast(&g_cond);
+  pthread_mutex_unlock(&g_lock);
+  pthread_join(worker, NULL);
+  pthread_mutex_lock(&g_lock);
+  g_started = 0;
   pthread_mutex_unlock(&g_lock);
 }
 

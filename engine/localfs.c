@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -315,6 +316,11 @@ read_names(const char *path, names_t *out) {
   return 0;
 }
 
+/* Folders: CHIRAL_FILE_MODE plus x wherever it has r (localfs_dir_mode),
+   so they can be opened -- 0777 on a console, 0755 on a computer, whose
+   files are 0644. */
+#define DIR_MODE (((CHIRAL_FILE_MODE) | (((CHIRAL_FILE_MODE) & 0444) >> 2)) & 07777)
+
 /* Deletes a folder's contents, then the folder. Links are removed, never
    followed. Keeps going past failures; returns -1 with the first error. */
 static int
@@ -325,7 +331,7 @@ delete_tree(const char *path, int depth) {
     errno = ELOOP;
     return -1;
   }
-  chmod(path, CHIRAL_FILE_MODE);  // its entries can only go if it's writable
+  chmod(path, DIR_MODE);  // its entries can only go if it's writable
   /* A few passes: anything a pass couldn't see is picked up by the next. */
   for(int pass = 0; pass < 4; pass++) {
     names_t n;
@@ -360,6 +366,81 @@ delete_tree(const char *path, int depth) {
     return -1;
   }
   return 0;
+}
+
+unsigned int
+localfs_dir_mode(unsigned int mode) {
+  return mode | ((mode & 0444) >> 2);
+}
+
+static int
+chmod_tree(const char *path, unsigned int mode, int depth) {
+  const unsigned int dmode = localfs_dir_mode(mode);
+  /* Opened up before going in, closed down after coming out: either way
+     the folder can still be listed while its contents are changed. */
+  const int first = (dmode & 0500) == 0500;
+  int first_err = 0;
+  names_t n;
+
+  if(depth > 64) {
+    errno = ELOOP;
+    return -1;
+  }
+  if(first && chmod(path, dmode)) first_err = errno;
+  if(read_names(path, &n)) {
+    if(!first_err) first_err = errno;
+  } else {
+    for(int i = 0; i < n.count; i++) {
+      char child[PATH_MAX];
+      int is_dir = n.type[i] == DT_DIR, is_link = n.type[i] == DT_LNK;
+      struct stat st;
+
+      path_join(child, sizeof(child), path, n.name[i]);
+      if(n.type[i] == DT_UNKNOWN && !lstat(child, &st)) {
+        is_dir = S_ISDIR(st.st_mode);
+        is_link = S_ISLNK(st.st_mode);
+      }
+      if(is_link) continue;  // chmod would change what it points to
+      if((is_dir ? chmod_tree(child, mode, depth + 1) : chmod(child, mode)) && !first_err) first_err = errno;
+    }
+    names_free(&n);
+  }
+  if(!first && chmod(path, dmode) && !first_err) first_err = errno;
+  if(first_err) {
+    errno = first_err;
+    return -1;
+  }
+  return 0;
+}
+
+int
+localfs_chmod_tree(const char *path, unsigned int mode) {
+  struct stat st;
+
+  if(lstat(path, &st)) return -1;
+  if(!S_ISDIR(st.st_mode)) return chmod(path, mode);
+  return chmod_tree(path, mode, 0);
+}
+
+int
+localfs_private(const char *path) {
+#if CHIRAL_DEVICE_COMPUTER
+  char dir[PATH_MAX], resolved[PATH_MAX], parent[PATH_MAX];
+  size_t n;
+
+  if(!realpath(data_dir(), dir)) return 0;
+  if(!realpath(path, resolved)) {
+    path_parent(parent, sizeof(parent), path);
+    if(!realpath(parent, resolved)) return 0;  // nowhere: the call itself will fail
+  }
+  /* Without regard to case: a Mac's disk usually ignores it, so
+     ".../CHIRAL-FTP" would otherwise be another way in. */
+  n = strlen(dir);
+  return !strncasecmp(resolved, dir, n) && (resolved[n] == 0 || resolved[n] == '/');
+#else
+  (void)path;
+  return 0;
+#endif
 }
 
 int
@@ -397,14 +478,14 @@ localfs_open_up_parent(const char *path) {
   char dir[PATH_MAX];
 
   path_parent(dir, sizeof(dir), path);
-  return chmod(dir, CHIRAL_FILE_MODE);
+  return chmod(dir, DIR_MODE);
 }
 
 int
 localfs_mkdir(const char *path) {
-  if(mkdir(path, CHIRAL_FILE_MODE) && (!denied() || localfs_open_up_parent(path) || mkdir(path, CHIRAL_FILE_MODE)))
+  if(mkdir(path, DIR_MODE) && (!denied() || localfs_open_up_parent(path) || mkdir(path, DIR_MODE)))
     return -1;
-  chmod(path, CHIRAL_FILE_MODE);
+  chmod(path, DIR_MODE);
   return 0;
 }
 
@@ -414,7 +495,10 @@ localfs_rename(const char *from, const char *to) {
   if(!denied()) return -1;
   localfs_open_up_parent(from);
   localfs_open_up_parent(to);
-  chmod(from, CHIRAL_FILE_MODE);  // a folder being moved needs its own write access too
+  {
+    struct stat st;  // a folder being moved needs its own write access too
+    chmod(from, !stat(from, &st) && S_ISDIR(st.st_mode) ? DIR_MODE : CHIRAL_FILE_MODE);
+  }
   return rename(from, to);
 }
 

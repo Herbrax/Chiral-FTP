@@ -1,0 +1,39 @@
+# The Linux AppImage, built on GitHub's Ubuntu 22.04 runners (an older glibc
+# than most desktops run, so the AppImage starts on most distributions).
+# Run it by hand (Actions > Linux AppImage > Run workflow) or by pushing a
+# version tag; the AppImage is attached to the run, and to the release when
+# the run comes from a tag.
+name: Linux AppImage
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config cmake curl python3 file \
+            libsdl2-dev libmicrohttpd-dev libssh-dev libfreetype-dev libfuse2
+      - name: Version
+        run: echo "VERSION=$(sed -n 's/^VERSION := //p' Makefile)" >> "$GITHUB_ENV"
+      - name: libssh2 and Mbed TLS for the SFTP client
+        run: ./tools/build-sftp-deps.sh
+      - name: Build
+        run: make PLATFORM=sdl VERSION="$VERSION" -j"$(nproc)"
+      - name: AppImage
+        run: VERSION="$VERSION" ./tools/make-appimage.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chiral-ftp-${{ env.VERSION }}-linux
+          path: dist/chiral-ftp-*.AppImage
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" dist/chiral-ftp-*.AppImage --clobber

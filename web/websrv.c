@@ -40,6 +40,7 @@ static volatile int g_stop;
 static int g_running;
 static int g_listen_fd = -1;
 static unsigned short g_port;
+static int g_local_only;  /* websrv_set_local_only() */
 static time_t g_health_checked;
 
 typedef struct request_context {
@@ -346,6 +347,13 @@ serve(void *arg) {
   return NULL;
 }
 
+void
+websrv_set_local_only(int on) {
+  pthread_mutex_lock(&g_lock);
+  g_local_only = on;
+  pthread_mutex_unlock(&g_lock);
+}
+
 int
 websrv_start(unsigned short port) {
   struct sockaddr_in addr;
@@ -373,7 +381,7 @@ websrv_start(unsigned short port) {
   setsockopt(srvfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
   memset(&addr, 0, sizeof(addr));
   addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  addr.sin_addr.s_addr = htonl(g_local_only ? INADDR_LOOPBACK : INADDR_ANY);
   addr.sin_port = htons(port);
   if(bind(srvfd, (struct sockaddr *)&addr, sizeof(addr)) || listen(srvfd, 16)) {
     err = errno;

@@ -6,6 +6,18 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var state = { path: "", entries: [], selected: new Set(), jobsFinished: -1, polling: false };
+  var onComputer = false;  // set from /api/state
+  function dev(onConsole, onThisComputer) { return onComputer ? onThisComputer : onConsole; }
+
+  /* On a computer (platform "host") the page names this machine "this
+     computer", not "the console": the console wording is the default in the
+     page, and each such element carries its computer version. */
+  function applyDevice() {
+    if (!onComputer) return;
+    document.querySelectorAll("[data-computer]").forEach(function (el) { el.textContent = el.getAttribute("data-computer"); });
+    document.querySelectorAll("[data-computer-title]").forEach(function (el) { el.title = el.getAttribute("data-computer-title"); });
+  }
+
 
   /* ---------- helpers ---------- */
 
@@ -244,20 +256,22 @@
     } catch (err) { toast(err.message, true); }
   }
 
-  async function chmodItem(e) {
+  // deep: a folder and everything inside it.
+  async function chmodItem(e, deep) {
     var cur = e.perm && e.perm.length === 4 ? e.perm.slice(1) : "644";
-    var mode = prompt("Permissions for \"" + e.name + "\" (octal, e.g. 755)", cur);
+    var mode = prompt((deep ? "Permissions for \"" + e.name + "\" and everything inside (octal, e.g. 755; folders keep x wherever there is r)"
+                            : "Permissions for \"" + e.name + "\" (octal, e.g. 755)"), cur);
     if (!mode) return;
     if (!/^[0-7]{3,4}$/.test(mode)) return toast("Use an octal mode like 755", true);
     try {
-      await call("/api/local/chmod", { path: join(state.path, e.name), mode: mode });
+      await call("/api/local/chmod", { path: join(state.path, e.name), mode: mode, recursive: deep ? 1 : 0 });
       refresh();
     } catch (err) { toast(err.message, true); }
   }
 
   async function remove(paths) {
     var what = paths.length === 1 ? "\"" + paths[0].split("/").pop() + "\"" : paths.length + " items";
-    if (!confirm("Permanently delete " + what + " from the console? Folders are deleted with everything inside.")) return;
+    if (!confirm("Permanently delete " + what + dev(" from the console", " from this computer") + "? Folders are deleted with everything inside.")) return;
     try {
       await call("/api/local/delete", { paths: paths.join("\n") });
       toast("Deleted " + what);
@@ -279,7 +293,8 @@
     items.push(["Rename", function () { renameItem(e); }]);
     items.push(["Copy to…", function () { pick([path], false); }]);
     items.push(["Move to…", function () { pick([path], true); }]);
-    items.push(["Permissions", function () { chmodItem(e); }]);
+    items.push(["Change permissions", function () { chmodItem(e, false); }]);
+    if (e.dir && !e.link) items.push(["Change permissions recursively", function () { chmodItem(e, true); }]);
     items.push(["Delete", function () { remove([path]); }, true]);
     items.forEach(function (it) {
       var b = el("button", it[2] ? "danger" : null, it[0]);
@@ -383,7 +398,7 @@
   var uploadQueue = [], uploading = false;
 
   function queueUploads(files) {
-    if (!state.path) return toast("Open a folder on the console first", true);
+    if (!state.path) return toast(dev("Open a folder on the console first", "Open a folder first"), true);
     Array.prototype.forEach.call(files, function (f) {
       var row = el("div", "fm-up");
       var bar = el("div", "bar");
@@ -511,4 +526,8 @@
   if (last) open(last).then(function () { if (!state.path) showDrives(); });
   else showDrives();
   pollJobs();
+  call("/api/state", {}, "GET").then(function (st) {
+    onComputer = st.platform === "host";
+    applyDevice();
+  }).catch(function () { /* the console wording stays */ });
 })();

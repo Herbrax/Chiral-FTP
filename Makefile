@@ -15,7 +15,7 @@
 # screen, the pad and the keyboard. No file outside platform/ asks which
 # platform it is on.
 
-VERSION := 1.0.1
+VERSION := 1.1
 PLATFORM ?= sdl
 
 # The project root, kept across the recursive second pass some platforms
@@ -36,7 +36,7 @@ endif
 ENGINE := engine/ftp.c engine/listparse.c engine/session.c engine/queue.c \
           engine/localfs.c engine/settings.c engine/log.c engine/strbuf.c \
           engine/form.c engine/notify.c engine/sftp.c engine/remote_ops.c \
-          engine/ftpd.c engine/fsjobs.c
+          engine/ftpd.c engine/fsjobs.c engine/discovery.c
 # WEB_SRCS, not WEB: WEB is the on/off flag a build passes in
 # (make WEB=0), and one name for both silently selected the stub.
 WEB_SRCS := web/websrv.c web/api.c web/asset.c
@@ -54,7 +54,8 @@ WEB_GEN    := $(patsubst web/assets/%,gen/%.c,$(WEB_ASSETS)) \
 FONTS      := gen/font_regular.c gen/font_bold.c gen/font_mono.c
 # Every tr()/trf()/N_() string in these must have an entry in
 # i18n/translations.json, in every language, or the build stops.
-I18N_SOURCES := $(APP) $(wildcard platform/*/*.cpp) engine/ftpd.c engine/fsjobs.c
+I18N_SOURCES := $(APP) $(wildcard platform/*/*.cpp) $(wildcard platform/*/*.mm) \
+                engine/ftpd.c engine/sftpd.c engine/fsjobs.c app/ui_desktop.inc
 GEN_I18N   := gen/i18n_table.c
 
 include $(CHIRAL_ROOT)/platform/$(PLATFORM)/platform.mk

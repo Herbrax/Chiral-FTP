@@ -21,9 +21,34 @@ bool init(bool headless);
 void shutdown();
 // Waits up to timeout_ms for input and reports it through platform::detail.
 void pump(int timeout_ms);
-// Shows a finished frame (RGBA, IM_COL32 order, linear rows).
-// On the Switch the compositor scales it to whatever the display is.
+// Shows a finished frame (RGBA, IM_COL32 order, linear rows), at the pixel
+// size window_size() last gave, or CHIRAL_RENDER_W x CHIRAL_RENDER_H on a
+// console. On the Switch the compositor scales it to whatever the display is.
 void present(const std::uint32_t *pixels);
+/* A window on a computer: its size in points, and the pixels that covers
+   (more than the points on a Retina display). The UI then lays itself out
+   in the window as it is -- a bigger window shows more, not a bigger
+   picture -- and draws every frame at exactly those pixels
+   (platform_common.cpp). Just the facts: the layout's scale and zoom are
+   decided in shared code. False on a console, whose UI is a fixed 1920x1080
+   drawn at CHIRAL_RENDER_W x CHIRAL_RENDER_H. */
+bool window_size(int *pt_w, int *pt_h, int *px_w, int *px_h);
+/* The pointing hand while the mouse is over something clickable, the arrow
+   otherwise. Nothing to do where there is no mouse. */
+void pointer_hand(bool on);
+/* Opens url in the system's web browser -- the web app, on a computer.
+   False where there is no browser to hand it to (a console). */
+bool open_url(const char *url);
+/* True while the app is what the person is looking at: in focus on a
+   console, a focused and visible window on a computer. Quick connect only
+   runs then. Where the platform can't tell, true. */
+bool in_foreground();
+/* Puts text on the system clipboard; false where there is none. */
+bool copy_text(const char *text);
+/* The system's own "choose a folder" panel, starting in start. True with
+   the folder in out; false when cancelled or when the platform has no such
+   panel (then the UI asks for a path instead). */
+bool choose_folder(const char *start, std::string &out);
 
 // The backend's own frame storage, for the renderer to draw straight into,
 // saving a full-frame copy on the way to the screen. Returns null when the
@@ -43,10 +68,12 @@ bool touch(int *x, int *y, bool *down);
    access, on the Switch whether hbmenu gave it a full application slot or a
    library applet. Returns false when there is nothing to report (a computer).
 
-   detail is English and marked with N_() at the point it is written, so the
-   UI translates it; ok=false draws the line as a warning rather than a
-   confirmation; status is a raw platform code for the log. */
-bool startup_notice(bool *ok, const char **detail, int *status);
+   line is the banner itself, in the platform's own words: English, marked
+   with N_(), with {0} standing for detail and {1} for status. detail is the
+   reason (also N_(), translated on its own) and status a raw platform code,
+   both for the log too. ok=false draws the line as a warning rather than a
+   confirmation. */
+bool startup_notice(bool *ok, const char **line, const char **detail, int *status);
 
 /* Services the platform brought up before main() ran, reported now that
    there is somewhere to write them. It had no log that early, so whatever
@@ -92,6 +119,14 @@ void key_backspace();
 void key_enter();
 void key_escape();
 void quit();
+/* The mouse, in window points (platform_common turns them into the UI's
+   units). Only a computer has one; the consoles never call these. */
+void pointer_move(float x, float y);
+void pointer_button(bool right, bool down, bool modifier);
+void pointer_wheel(float notches);  // positive scrolls up
+void pointer_leave();
+// A menu-bar command (ACT_CMD_*): queued even while a text entry is open.
+void command(Action a);
 
 }  // namespace detail
 }  // namespace platform

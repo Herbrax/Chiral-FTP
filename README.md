@@ -9,16 +9,20 @@
 
 **The ultimate file manager and FTP interface, on every machine you own.**
 chiral-ftp is cross-platform: it runs on the **PS5**, the **Nintendo Switch**,
-and on **PC and Mac**. It's used with a controller on the TV (or a keyboard
-on a computer) and works in the spirit of FileZilla.
+the **Mac** and **Linux**. It's used with a controller on the TV (or a
+keyboard and mouse on a computer) and works in the spirit of FileZilla. And
+every copy finds the others on your network: **Quick connect** opens one
+from another in two presses.
 
 | | |
 |---|---|
 | **PS5** | a native title on the dashboard, via ShadowMountPlus |
 | **Nintendo Switch** | homebrew (`.nro`) from hbmenu |
-| **PC and Mac** | a window on Windows, macOS or Linux |
+| **Mac** | `chiral-ftp.app` (macOS 27 or later, Apple silicon) |
+| **Linux** | an `.AppImage` |
+| **Windows** | coming soon |
 
-Support for **Android, PS4 and other platforms is coming soon.**
+**Windows** is next; Android, PS4 and other platforms after it.
 
 When it opens, you choose what to do:
 
@@ -30,10 +34,13 @@ When it opens, you choose what to do:
   works), copy, move, rename and delete. An FTP client tab is also there.
 - **File manager**: two panes for copying and moving files: internal
   storage, Homebrew, USB drives and extended storage on the PS5; the SD card
-  on the Switch.
+  and USB drives on the Switch. Free space is shown for each drive.
 - **FTP / SFTP client**: connect to a laptop, PC or NAS and transfer both
   ways. Saved sites and recent connections, resume, and up to 30
   simultaneous transfers (5 by default).
+- **Quick connect**: see the other copies of chiral-ftp on your network and
+  browse one of them, with a code to confirm on its screen. See
+  [Quick connect](#quick-connect).
 
 The servers keep running while you use another mode. Closing chiral-ftp
 stops them.
@@ -49,7 +56,7 @@ What's new in each version is in [CHANGELOG.md](CHANGELOG.md).
 
 Settings → Language; "Automatic" follows the system language.
 
-| | PS5 | Switch | PC and Mac |
+| | PS5 | Switch | Mac and Linux |
 |---|:---:|:---:|:---:|
 | English, Spanish, French, Italian, Russian | ✓ | ✓ | ✓ |
 | Japanese, Korean, Chinese, Arabic | ✓ | | ✓ |
@@ -67,14 +74,14 @@ Settings → Language; "Automatic" follows the system language.
 
 **Install**
 
-1. Download `chiral-ftp-ps5-1.0.1.zip` from the releases and unpack it. It
+1. Download `chiral-ftp-ps5-1.1.zip` from the releases and unpack it. It
    contains the folder `PPSA96024`.
 2. Copy that folder to `/data/homebrew/PPSA96024` on the PS5.
 3. Make sure the folder and **every file in it are 777**. The PS5 refuses to
    start a title otherwise ("can't start the game or app"). The zip stores
    all modes as 777, but some FTP clients don't keep them.
 4. Start chiral-ftp from the dashboard. The start screen should say "Full
-   access to the PS5's storage".
+   access to the console's storage", and how it was granted.
 
 **Updating:** close chiral-ftp completely before you replace its files. Most
 FTP clients overwrite `eboot.bin` in place, and the console silently refuses
@@ -103,14 +110,87 @@ That is enough for chiral-ftp, but for the console's full memory hold **R**
 while launching a game and pick chiral-ftp from the menu that opens. The
 start screen says which one you got.
 
+**USB drives** show up in the drive list as soon as they're plugged in
+(FAT32, exFAT, NTFS and ext2/3/4), as `/usb0`, `/usb1`…, in the file
+manager, over the FTP server and in the web app.
+
 Settings, saved sites, history and host keys are kept in
 `/switch/chiral-ftp`, so updates keep them.
 
-## PC and Mac
+## Mac and Linux
 
-There's no download for computers yet: build it with
-`make PLATFORM=sdl` (see [Building](#building)), then run `./chiral-ftp`. It
-keeps its settings in `data/`, next to the program.
+**Mac**
+
+1. Download `chiral-ftp.app` from the releases.
+2. Drag it to Applications. It carries its own libraries.
+3. The app isn't notarized by Apple, so the first time macOS says it can't
+   check it: open **System Settings > Privacy & Security** and choose
+   **Open Anyway** (or run `xattr -dr com.apple.quarantine
+   /Applications/chiral-ftp.app` once).
+
+It needs **macOS 27 or later on Apple silicon**, and keeps its settings in
+`~/Library/Application Support/chiral-ftp`.
+
+**Linux**
+
+1. Download `chiral-ftp-1.1-x86_64.AppImage` from the releases.
+2. Make it executable (`chmod +x chiral-ftp-1.1-x86_64.AppImage`) and run it.
+
+It keeps its settings in `~/.local/share/chiral-ftp`.
+
+**Windows** is coming soon.
+
+On a Mac, the window has a sidebar instead of a start screen: the server,
+the web app, Quick connect, the message log and Settings, each a page with
+ordinary switches, fields and buttons. On Linux the window keeps the console
+layout. Either way, on a computer chiral-ftp is a server first:
+
+- **FTP / SFTP server**: shares your home folder over SFTP, or FTP if you
+  switch the protocol. **Choose…** shares another folder; **Whole
+  computer** shares everything, after a confirmation. chiral-ftp's own
+  settings (saved passwords, the server's login and its key) are never
+  shared. SFTP is on port 2222; an app connecting the first time asks you to
+  trust the key shown on the screen.
+- **Web app**: the file manager and the FTP / SFTP client, opened in your
+  browser. By default only this computer can reach it; switch "Reachable
+  from" to your home network to use it from a phone or another device.
+- **Network**: on a computer with several networks (Wi-Fi, Ethernet, a VPN),
+  Settings > Network chooses the address shown. Automatic prefers your home
+  network.
+
+To build it yourself instead, see [Building](#building): `make
+PLATFORM=sdl` (it needs libssh, `brew install libssh`, for the SFTP server),
+then `make PLATFORM=sdl app` for the Mac app.
+
+## Quick connect
+
+Every copy of chiral-ftp on your network shows up in every other one, PS5,
+Switch, Mac or Linux alike, whatever it's doing. Nothing has to be running
+and nothing has to be set up.
+
+1. **Open Quick connect.** On a console: press **Up** on the start screen.
+   On a computer: **Quick connect** in the sidebar (**⌘K** on a Mac). The
+   devices nearby are listed, with their names and addresses.
+
+   ![The devices nearby](docs/screenshots/quick-connect-devices.png)
+
+2. **Pick one and press Connect.** Your screen shows a 4-digit code while it
+   waits.
+
+   ![Asking: the code to compare](docs/screenshots/quick-connect-asking.png)
+
+3. **On the other device, check the code and press Allow.** It starts its
+   server and hands your device a login of its own. You're connected and
+   browsing its files: in the client on a console, in the web app on a
+   computer.
+
+   ![The other side: allow or deny, with the same code](docs/screenshots/quick-connect-allow.png)
+
+The login it hands out works **only from the device that asked**, and only
+while that server runs. **Deny**, or let the request run out (30 seconds),
+and nothing is shared. A console is visible while chiral-ftp is open on its
+start screen; a computer, whenever the app is open. Quick connect uses UDP
+port 47121 on your local network.
 
 ## Using it
 
@@ -125,7 +205,11 @@ keeps its settings in `data/`, next to the program.
 | Switch sides | R1 | R | Tab |
 | Transfer queue | Touchpad | Minus | G |
 
-A game controller works on a computer too, with the same layout.
+A game controller works on a computer too, with the same layout. So does
+the mouse: what it is over is highlighted, a click opens it, a right click
+opens the menu, the wheel scrolls, and clicking outside a panel closes it.
+On a Mac, the menu bar has the server (⌘1), the web app (⌘2), Quick connect
+(⌘K), Settings (⌘,), Transfers (⌘T) and the message log (⌘L).
 
 - Every screen's menu starts with **Start screen**, which always brings you
   back; holding **Back** does the same. On the start screen, the menu opens
@@ -141,10 +225,11 @@ stop it when you're done. Both can change anything on the console's storage.
 
 ## Known gaps
 
-- **Switch: USB drives.** Only the SD card is reachable for now.
+- **Windows**: no download yet; it's coming.
 - **Switch: save data and system storage** (NAND) aren't reachable.
-- **PS5: free space** on drives isn't shown yet.
-- There's no SFTP server yet: the FTP server is plain FTP.
+- **The SFTP server is on computers only**; the consoles' server is FTP.
+- **Mac**: macOS 27 or later on Apple silicon only, and not notarized
+  (see [Mac and Linux](#mac-and-linux)).
 
 ## Building
 
@@ -259,6 +344,11 @@ chiral-ftp stands on the work of others. Thank you:
   and the network buffer settings that make transfers fast.
 - **[NX-Shell](https://github.com/joel16/NX-Shell)** by Joel16, the model for
   how the app uses the system keyboard and the SD card.
+- **[libusbhsfs](https://github.com/DarkMatterCore/libusbhsfs)** by
+  DarkMatterCore, built into the Switch app, with
+  **[NTFS-3G](https://github.com/tuxera/ntfs-3g)** and
+  **[lwext4](https://github.com/gkostka/lwext4)**: they read USB drives
+  (FAT, exFAT, NTFS, ext2/3/4).
 
 **Everywhere**
 
@@ -273,7 +363,8 @@ Also: [ftpsrv](https://github.com/ps5-payload-dev/ftpsrv) by John Törnblom,
 whose command set our FTP server follows (our code is written separately);
 [FileZilla](https://filezilla-project.org), whose behaviour the client
 follows; and the libraries built into the app: libssh2, Mbed TLS, GNU
-libmicrohttpd, Dear ImGui, SDL2 (on computers), Noto Sans and IBM Plex Mono.
+libmicrohttpd, Dear ImGui, Noto Sans and IBM Plex Mono, and on computers
+SDL2, libssh (the SFTP server) and FreeType (text).
 
 ## License
 

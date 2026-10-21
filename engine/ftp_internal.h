@@ -13,23 +13,27 @@ void ftp_sock_timeouts(int fd, int seconds);
 /* Resolves c->server.host and connects c->fd; sets c->peer. */
 int ftp_connect_socket(ftp_conn_t *c, unsigned short default_port);
 
-int sftp_open(ftp_conn_t *c);
-void sftp_close(ftp_conn_t *c);
+/* The SFTP client (sftp.c). "sftpc_", not "sftp_": libssh, which the
+   computer build links for its SFTP server (sftpd.c), exports sftp_open,
+   sftp_close and others under the plain names. */
+int sftpc_open(ftp_conn_t *c);
+void sftpc_close(ftp_conn_t *c);
 /* Frees the SSH session without a polite disconnect (after errors). */
-void sftp_drop(ftp_conn_t *c);
-int sftp_pwd(ftp_conn_t *c, char *out, size_t size);
-int sftp_cwd(ftp_conn_t *c, const char *path);
-int sftp_list(ftp_conn_t *c, const char *path, ftp_listing_t *out,
+void sftpc_drop(ftp_conn_t *c);
+int sftpc_pwd(ftp_conn_t *c, char *out, size_t size);
+int sftpc_cwd(ftp_conn_t *c, const char *path);
+int sftpc_list(ftp_conn_t *c, const char *path, ftp_listing_t *out,
               char *resolved, size_t resolved_size);
-int sftp_mkdir(ftp_conn_t *c, const char *path);
-int sftp_rmdir(ftp_conn_t *c, const char *path);
-int sftp_delete(ftp_conn_t *c, const char *path);
-int sftp_rename(ftp_conn_t *c, const char *from, const char *to);
-int sftp_chmod(ftp_conn_t *c, const char *path, unsigned int mode);
-int sftp_size(ftp_conn_t *c, const char *path, long long *size);
-int sftp_set_mtime(ftp_conn_t *c, const char *path, long long mtime);
-int sftp_retrieve(ftp_conn_t *c, const char *path, long long offset,
+int sftpc_mkdir(ftp_conn_t *c, const char *path);
+int sftpc_rmdir(ftp_conn_t *c, const char *path);
+int sftpc_delete(ftp_conn_t *c, const char *path);
+int sftpc_rename(ftp_conn_t *c, const char *from, const char *to);
+int sftpc_chmod(ftp_conn_t *c, const char *path, unsigned int mode);
+int sftpc_ping(ftp_conn_t *c, int timeout_ms);  // ftp_ping
+int sftpc_size(ftp_conn_t *c, const char *path, long long *size);
+int sftpc_set_mtime(ftp_conn_t *c, const char *path, long long mtime);
+int sftpc_retrieve(ftp_conn_t *c, const char *path, long long offset,
                   ftp_sink_cb sink, void *ctx);
-int sftp_store(ftp_conn_t *c, const char *path, long long offset,
+int sftpc_store(ftp_conn_t *c, const char *path, long long offset,
                ftp_source_cb source, void *ctx);
-int sftp_noop(ftp_conn_t *c);
+int sftpc_noop(ftp_conn_t *c);

@@ -1,5 +1,99 @@
 # Changelog
 
+## 1.1
+
+chiral-ftp now has downloads for **Mac** and **Linux**, next to the **PS5**
+and the **Nintendo Switch**. A **Windows** version is coming. And every copy
+of chiral-ftp on your network can now find and open the others in two
+presses: **Quick connect**.
+
+### New: Quick connect
+
+![Quick connect on a Mac: the devices nearby](docs/screenshots/quick-connect-devices.png)
+
+- **Every copy of chiral-ftp on your network shows up**, whatever it is
+  doing: no server has to be running, and nothing has to be set up.
+- **Ask one to share.** It shows your request with a 4-digit code; check
+  it's the same code on both screens and press **Allow**. The other device
+  starts its server, and you are connected and browsing it.
+- **The login it hands out works only from the device that asked**, and only
+  while that server runs. Deny, or let the request time out, and nothing is
+  shared.
+- On a console, Quick connect is on the start screen (press **Up**) and runs
+  while chiral-ftp is open there. On a computer it's in the sidebar (or
+  **⌘K** on a Mac) and runs whenever the app is open.
+- The list stays current even on Wi-Fi that drops broadcasts.
+
+### New: Mac and Linux
+
+- **Mac**: `chiral-ftp.app`. Double-click it, or drag it to Applications; it
+  carries its own libraries. **Linux**: one `.AppImage` file.
+- **Made for a computer** (Mac): a sidebar with the server, the web app,
+  Quick connect, the message log and Settings, each a page with ordinary
+  switches, fields and buttons, and the menu bar has everything, with
+  shortcuts. On Linux the window keeps the console layout.
+- **The mouse works everywhere**: hover, click, right-click, scroll, and
+  click outside a panel to close it.
+- **Sharp text**: the layout follows the window instead of scaling a fixed
+  screen, and text is rendered with hinting.
+- **SFTP server** (encrypted, the default) or FTP, on the same screen.
+- **Shares your home folder** by default. **Whole computer** shares
+  everything, after a confirmation. chiral-ftp's own settings (saved
+  passwords, the server's login and its private key) are never shared,
+  whatever folder is.
+- **The web app opens in your browser.** By default only this computer can
+  reach it; switch "Reachable from" to your home network to use it from a
+  phone or another device.
+- **Network**: when a computer is on several networks (Wi-Fi, Ethernet, a
+  VPN), Settings > Network chooses the address to show. Automatic prefers
+  your home network.
+- On a computer, the file manager and the FTP / SFTP client are in the web
+  app, in your browser.
+
+### New on the Switch: USB drives
+
+- **USB drives show up in the drive list** as soon as they're plugged in:
+  FAT32, exFAT, NTFS and ext2/3/4. Browse, copy and move between them and
+  the SD card in the file manager, and reach them over the FTP server
+  (`/usb0`) and the web app.
+- **Free space is shown again** for the SD card and for USB drives.
+
+### New on the PS5
+
+- **Free space is shown** for the internal storage, an M.2 drive and USB
+  drives.
+- The start screen says how the app got full storage access (the
+  jailbreak's resident service, or the Lapy helper), or why it didn't.
+
+### Everywhere
+
+- **Change permissions recursively**: a folder and everything inside it,
+  as its own entry next to Change permissions (client, file manager and web
+  app). Folders keep x wherever they get r, so they stay openable.
+- **Uploads to a PS5 homebrew folder end up 777** (files and folders, any
+  path with `/data/homebrew` in it, whichever FTP server the PS5 runs), so
+  homebrew copied from another device starts.
+- **Rename, permissions and Delete for folders** in the client's menu on
+  consoles (OPTIONS on the PS5, Plus on the Switch), for the item under the
+  cursor or everything marked.
+- **A server that stops answering is let go after 30 seconds**: the client
+  says the connection was lost and closes, instead of still saying
+  "Connected to…".
+
+### Fixes
+
+- **Switch: closing chiral-ftp during a transfer no longer crashes it**:
+  transfers are stopped and waited for before the app exits.
+- **Switch: tapping a card no longer opens Quick connect** when the
+  controller's focus was on the Quick connect button.
+- **Client: pressing Open again while a folder is loading** no longer sends
+  the same request again behind the first.
+- **Client: the loading spinner no longer covers Disconnect.**
+- **Long drive names** no longer run into the path next to them.
+- **Computers: folders made by the server, the web app or the file manager
+  can be opened** (they were created without the x bit).
+- **PS5: the start screen showed the Switch's wording** for full access.
+
 ## 1.0.1
 
 chiral-ftp is now cross-platform. The same app runs on the **PS5**, the

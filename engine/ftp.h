@@ -74,6 +74,7 @@ typedef struct ftp_conn {
 
   const volatile int *cancel;
   time_t last_activity;
+  int quiet;  /* commands and replies stay out of the message log (ftp_ping) */
 
   /* SFTP state (libssh2 session and channel) */
   void *ssh;
@@ -103,6 +104,10 @@ int ftp_rmdir(ftp_conn_t *c, const char *path);
 int ftp_delete(ftp_conn_t *c, const char *path);
 int ftp_rename(ftp_conn_t *c, const char *from, const char *to);
 int ftp_chmod(ftp_conn_t *c, const char *path, unsigned int mode);
+/* True for a path inside a PS5 homebrew folder (/data/homebrew anywhere in
+   it), where uploads and new folders are made 0777 -- see
+   CHIRAL_HOMEBREW_777 in config.h. Always false when that is 0. */
+int ftp_homebrew_path(const char *path);
 /* Returns 0 and sets *size, 1 if the file does not exist, -1 on error. */
 int ftp_size(ftp_conn_t *c, const char *path, long long *size);
 int ftp_set_mtime(ftp_conn_t *c, const char *path, long long mtime);
@@ -112,6 +117,10 @@ int ftp_retrieve(ftp_conn_t *c, const char *path, long long offset,
 int ftp_store(ftp_conn_t *c, const char *path, long long offset,
               ftp_source_cb source, void *ctx);
 int ftp_noop(ftp_conn_t *c);
+/* Is the server still there? A round trip that must come back within
+   seconds -- any reply will do -- kept out of the message log. On -1 the
+   connection is closed (ftp_is_open turns 0). */
+int ftp_ping(ftp_conn_t *c, int seconds);
 
 /* Forgets every remembered SFTP host key. */
 int ftp_forget_host_keys(void);

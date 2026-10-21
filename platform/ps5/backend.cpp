@@ -448,11 +448,14 @@ void early_init() {
   }
 }
 
-bool startup_notice(bool *ok, const char **detail, int *status) {
+bool startup_notice(bool *ok, const char **line, const char **detail, int *status) {
   /* Whether the app can see the console's real storage is the single most
      useful thing to tell the user: without it /data looks empty and
-     nothing works, and the fix is on their side, not ours. */
+     nothing works, and the fix is on their side, not ours. And how it got
+     it: the jailbreak's resident service, the Lapy helper, or already. */
   *ok = g_access_full;
+  *line = g_access_full ? N_("Full access to the console's storage: {0}")
+                        : N_("Limited to the app's sandbox: {0} (status {1})");
   *detail = g_access_detail;
   *status = static_cast<int>(g_access);
   return true;
@@ -543,6 +546,43 @@ int about_thanks(const char *const **lines) {
 }
 
 bool can_quit() {
+  return false;
+}
+
+bool window_size(int *pt_w, int *pt_h, int *px_w, int *px_h) {
+  /* No window: the fixed 1920x1080 layout, drawn at CHIRAL_RENDER_W x
+     CHIRAL_RENDER_H. */
+  (void)pt_w;
+  (void)pt_h;
+  (void)px_w;
+  (void)px_h;
+  return false;
+}
+
+void pointer_hand(bool on) {
+  (void)on;  // no mouse
+}
+
+bool open_url(const char *url) {
+  (void)url;  // no browser
+  return false;
+}
+
+/* Not known: telling would take sceSystemServiceGetStatus, a call this
+   title has never made (AGENT-NOTES §3.3: a symbol that links is not one a
+   title may call). Until it is tried on the console, always in front. */
+bool in_foreground() {
+  return true;
+}
+
+bool copy_text(const char *text) {
+  (void)text;  // no clipboard
+  return false;
+}
+
+bool choose_folder(const char *start, std::string &out) {
+  (void)start;
+  (void)out;
   return false;
 }
 

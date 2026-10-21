@@ -6,6 +6,15 @@
    platform/<name>/platform_config.h. */
 #include "platform_config.h"
 
+/* Uploads into a PS5 homebrew folder -- any remote path with /data/homebrew
+   in it, whichever server is on the other end (chiral-ftp, ftpsrv, ...) --
+   end up 0777, folders as well as files: the console won't start a title
+   whose folder or files aren't. Every build, whatever it runs on; set to 0
+   here to build without it. */
+#ifndef CHIRAL_HOMEBREW_777
+#define CHIRAL_HOMEBREW_777 1
+#endif
+
 /* Transfer slots; each one logs in with its own control connection. */
 #define MAX_TRANSFER_CONNECTIONS     30
 #define DEFAULT_TRANSFER_CONNECTIONS 5

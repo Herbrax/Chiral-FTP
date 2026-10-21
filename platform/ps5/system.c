@@ -10,6 +10,7 @@
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <unistd.h>
 
 /* A notification, through the kernel's own request path. */
@@ -77,13 +78,32 @@ system_storage_roots(system_root_t *out, int max) {
 
 long long
 system_free_space(const char *path, long long *total) {
-  /* Unknown, on purpose, for now. statvfs comes from libSceLibcInternal,
-     and with it the app stopped at "listing drives" on the console; statfs
-     is only in libkernel_sys (payloads), not in the libkernel a title links
-     against; libc.a's statfs is a raw system call a title may not make. */
-  (void)path;
+  /* fstatvfs on the folder, opened -- never statvfs(path). Both come from
+     libSceLibcInternal, but statvfs kills a title on any path at all (it
+     was what stopped the app at "listing drives"), while fstatvfs answered
+     every folder in under 0.1 ms, measured on the console (docs/AGENT-NOTES.md 3.3).
+     (statfs is only in libkernel_sys, for payloads, and libc.a's is a raw
+     system call a title may not make.)
+
+     An empty slot -- /mnt/usb3 with nothing in it, /mnt/ext0 without an
+     M.2 drive -- is a placeholder of a few megabytes: unknown, not a
+     nearly-full drive. */
+  struct statvfs v;
+  long long unit, size;
+  int fd = open(path, O_RDONLY | O_DIRECTORY);
+
   if(total) *total = -1;
-  return -1;
+  if(fd < 0) return -1;
+  if(fstatvfs(fd, &v)) {
+    close(fd);
+    return -1;
+  }
+  close(fd);
+  unit = v.f_frsize ? (long long)v.f_frsize : (long long)v.f_bsize;
+  size = (long long)v.f_blocks * unit;
+  if(size <= 16LL * 1024 * 1024) return -1;
+  if(total) *total = size;
+  return (long long)v.f_bavail * unit;
 }
 
 void
@@ -105,6 +125,24 @@ system_local_ip(char *buf, size_t size) {
     inet_ntop(AF_INET, &addr.sin_addr, buf, (socklen_t)size);
   }
   close(fd);
+}
+
+void
+system_device_name(char *buf, size_t size) {
+  snprintf(buf, size, "PS5");
+}
+
+const char *
+system_device_kind(void) {
+  return "ps5";
+}
+
+int
+system_networks(system_net_t *out, int max) {
+  /* One network, the one system_local_ip() reports: nothing to choose. */
+  (void)out;
+  (void)max;
+  return 0;
 }
 
 void
@@ -188,4 +226,9 @@ system_script_fonts(system_font_t *out, int max, const char *current_lang) {
 const char *
 system_ftpd_default_root(void) {
   return "/";  /* the whole console, which is the point of it */
+}
+
+const char *
+system_ftpd_full_root(void) {
+  return "/";
 }

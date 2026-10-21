@@ -40,3 +40,13 @@
    Minus -- rather than the PlayStation ones the actions are named after
    (platform_common.cpp). */
 #define CHIRAL_BUTTONS_PLAYSTATION 0
+#define CHIRAL_BUTTONS_KEYBOARD 0
+
+/* The text calls this machine "the console" (ui.cpp). */
+#define CHIRAL_DEVICE_COMPUTER 0
+
+/* FTP only: no SSH server library here (engine/sftpd.c isn't built). */
+#define CHIRAL_HAS_SFTPD 0
+
+/* The console layout, for a TV and a pad (app/ui.cpp). */
+#define CHIRAL_UI_DESKTOP 0

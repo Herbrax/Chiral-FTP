@@ -29,3 +29,8 @@ unsigned short
 websrv_port(void) {
   return 0;
 }
+
+void
+websrv_set_local_only(int on) {
+  (void)on;
+}

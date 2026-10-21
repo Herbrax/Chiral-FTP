@@ -33,6 +33,22 @@ enum Action {
   ACT_TOUCHPAD,  // queue            (Minus)
   ACT_CIRCLE_LONG,  // back held down: out to the start screen from anywhere
   ACT_QUIT,      // window closed (computer only)
+  /* The menu bar's commands (macOS only): go straight somewhere, from
+     whatever is open. */
+  ACT_CMD_HOME,
+  ACT_CMD_FTPD,
+  ACT_CMD_WEB,
+  ACT_CMD_FILES,
+  ACT_CMD_CLIENT,
+  ACT_CMD_CONNECT,
+  ACT_CMD_SETTINGS,
+  ACT_CMD_ABOUT,
+  ACT_CMD_QUEUE,
+  ACT_CMD_LOG,
+  ACT_CMD_QUICK,  // Quick connect: the other chiral-ftp devices nearby
+  ACT_CMD_ZOOM_IN,
+  ACT_CMD_ZOOM_OUT,
+  ACT_CMD_ZOOM_RESET,
 };
 
 enum TextKind { TEXT_DEFAULT, TEXT_URL, TEXT_NUMBER, TEXT_PASSWORD };
@@ -64,8 +80,51 @@ bool has_touch();
 // The touch state; clears pressed/released/drag_y so each is seen once.
 Touch take_touch();
 
+/* The mouse, on a computer, in the UI's layout units. Unlike a finger it
+   is somewhere all the time, so it also says what it is over: the UI moves
+   its highlight there, the way it would for the d-pad. has_pointer() is
+   false until a mouse has been used at all, which is always on a console. */
+struct Pointer {
+  float x, y;
+  bool inside;         // over the window
+  bool moved;          // travelled since the last look
+  bool clicked;        // left button came up since the last look
+  bool right_clicked;
+  bool modifier;       // Cmd (Ctrl elsewhere) was down for the click
+  float wheel;         // notches since the last look, positive scrolls up
+};
+bool has_pointer();
+// The pointer state; clears moved/clicked/wheel so each is seen once.
+Pointer take_pointer();
+// The pointing hand over something clickable (a no-op without a mouse).
+void pointer_hand(bool on);
+// The system browser (backend.h); false on a console.
+bool open_url(const char *url);
+// In front and being drawn (backend.h): what quick connect runs during.
+bool in_foreground();
+// The clipboard and the system's folder chooser (backend.h).
+bool copy_text(const char *text);
+bool choose_folder(const char *start, std::string &out);
+/* One screen pixel in layout units, this frame: what a hairline is drawn
+   with so it stays exactly one pixel at any window size. 1 on a console. */
+float pixel();
+/* Which menu-bar commands make sense right now (all of them, until the UI
+   says otherwise): the menu bar hides the rest. Only a Mac has one. */
+void set_command_shown(Action a, bool shown);
+bool command_shown(Action a);
+
 void begin_frame();
 void end_frame();
+
+/* The space the UI is laid out in, set by begin_frame(). 1920x1080 on a
+   console; on a computer the window, in layout units of half a point at
+   zoom 1, so the layout's 28-unit body text is 14 pt and a bigger window
+   simply has more room. */
+float view_width();
+float view_height();
+// The window's zoom (computer only): 1 is the default, View > Zoom In/Out.
+float zoom();
+void set_zoom(float z);
 // Writes the next rendered frame to a BMP (used by the automated UI tests).
 bool save_screenshot(const char *path);
 void push_action(Action a);  // scripted input for tests

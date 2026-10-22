@@ -209,13 +209,25 @@ sftpd_fingerprint(char *buf, size_t size) {
    Ed25519 -- without a second key, quick connect between two copies
    couldn't agree on one. Each client takes the first of its own list the
    server has, so neither changes what the other sees. */
+/* A new key. libssh 0.12 replaced ssh_pki_generate (kept, deprecated) with
+   ssh_pki_generate_key; Ubuntu 22.04, which the Linux AppImage is built on,
+   has 0.9 and only the old one. ECDSA's parameter there is its size. */
+static int
+generate_key(enum ssh_keytypes_e type, ssh_key *out) {
+#if LIBSSH_VERSION_INT >= SSH_VERSION_INT(0, 12, 0)
+  return ssh_pki_generate_key(type, NULL, out);
+#else
+  return ssh_pki_generate(type, type == SSH_KEYTYPE_ECDSA_P256 ? 256 : 0, out);
+#endif
+}
+
 static int
 load_host_key(const char *name, enum ssh_keytypes_e type, ssh_key *out) {
   char path[600];
 
   data_path(path, sizeof(path), name);
   if(ssh_pki_import_privkey_file(path, NULL, NULL, NULL, out) == SSH_OK) return 0;
-  if(ssh_pki_generate_key(type, 0, out) != SSH_OK) return -1;
+  if(generate_key(type, out) != SSH_OK) return -1;
   /* A key that can't be saved still works; apps just see a new one next time. */
   if(ssh_pki_export_privkey_file(*out, NULL, NULL, NULL, path) == SSH_OK) chmod(path, 0600);
   return 0;

@@ -19,10 +19,10 @@ from another in two presses.
 | **PS5** | a native title on the dashboard, via ShadowMountPlus |
 | **Nintendo Switch** | homebrew (`.nro`) from hbmenu |
 | **Mac** | `chiral-ftp.app` (macOS 27 or later, Apple silicon) |
-| **Linux** | an `.AppImage` |
-| **Windows** | coming soon |
+| **Linux** | an `.AppImage` (x86_64 or ARM64) |
+| **Windows** | one `.exe` (Windows 10 or 11, x64; runs on Windows on ARM too) |
 
-**Windows** is next; Android, PS4 and other platforms after it.
+Android, PS4 and other platforms are next.
 
 When it opens, you choose what to do:
 
@@ -117,7 +117,7 @@ manager, over the FTP server and in the web app.
 Settings, saved sites, history and host keys are kept in
 `/switch/chiral-ftp`, so updates keep them.
 
-## Mac and Linux
+## Windows, Mac and Linux
 
 **Mac**
 
@@ -133,17 +133,34 @@ It needs **macOS 27 or later on Apple silicon**, and keeps its settings in
 
 **Linux**
 
-1. Download `chiral-ftp-1.1-x86_64.AppImage` from the releases.
-2. Make it executable (`chmod +x chiral-ftp-1.1-x86_64.AppImage`) and run it.
+1. Download `chiral-ftp-1.1-x86_64.AppImage` from the releases, or
+   `chiral-ftp-1.1-aarch64.AppImage` for an ARM computer (a Raspberry Pi 4
+   or 5 on 64-bit, for example).
+2. Make it executable (`chmod +x chiral-ftp-*.AppImage`, or Properties >
+   Allow executing as a program) and run it.
+
+It runs on Ubuntu 22.04, Debian 12, Fedora 36 or newer, and others like
+them.
 
 It keeps its settings in `~/.local/share/chiral-ftp`.
 
-**Windows** is coming soon.
+**Windows**
 
-On a Mac, the window has a sidebar instead of a start screen: the server,
-the web app, Quick connect, the message log and Settings, each a page with
-ordinary switches, fields and buttons. On Linux the window keeps the console
-layout. Either way, on a computer chiral-ftp is a server first:
+1. Download `chiral-ftp-1.1-windows-x64.exe` from the releases. It also runs
+   on Windows on ARM PCs, through Windows' own x64 emulation.
+2. Run it; nothing needs installing. The program isn't signed, so the first
+   time Windows SmartScreen says it doesn't recognise it: choose **More info
+   > Run anyway**. When Windows Firewall asks, allow private networks, so a
+   console or phone can reach the server.
+
+It keeps its settings in `%APPDATA%\chiral-ftp`. To keep everything on a USB
+stick instead, settings included, make a folder named `data` next to the
+`.exe`: chiral-ftp then keeps its settings there.
+
+On a computer, the window has a sidebar instead of a start screen: the
+server, the web app, Quick connect, the message log and Settings, each a
+page with ordinary switches, fields and buttons. On a computer, chiral-ftp
+is a server first:
 
 - **FTP / SFTP server**: shares your home folder over SFTP, or FTP if you
   switch the protocol. **Choose…** shares another folder; **Whole
@@ -225,11 +242,10 @@ stop it when you're done. Both can change anything on the console's storage.
 
 ## Known gaps
 
-- **Windows**: no download yet; it's coming.
 - **Switch: save data and system storage** (NAND) aren't reachable.
 - **The SFTP server is on computers only**; the consoles' server is FTP.
 - **Mac**: macOS 27 or later on Apple silicon only, and not notarized
-  (see [Mac and Linux](#mac-and-linux)).
+  (see [Windows, Mac and Linux](#windows-mac-and-linux)).
 
 ## Building
 

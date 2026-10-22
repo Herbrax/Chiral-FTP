@@ -44,11 +44,12 @@ case "$platform" in
     ditto "$root/dist/chiral-ftp.app" "$out/chiral-ftp.app"
     ;;
   linux)
-    appimage=$(ls "$root/dist/chiral-ftp-$version-"*.AppImage 2>/dev/null | head -1)
-    [[ -n "$appimage" ]] || {
+    # One per architecture (x86_64, aarch64), side by side in the release.
+    appimages=$(ls "$root/dist/chiral-ftp-$version-"*.AppImage 2>/dev/null || true)
+    [[ -n "$appimages" ]] || {
       echo "missing dist/chiral-ftp-$version-*.AppImage; run tools/make-appimage.sh on Linux" >&2; exit 1; }
     rm -f "$out"/chiral-ftp-*.AppImage
-    cp "$appimage" "$out/"
+    for a in $appimages; do cp "$a" "$out/"; done
     ;;
   windows)
     # The program itself: one .exe per architecture, x64 and arm64 side by
@@ -125,29 +126,40 @@ if "chiral-ftp.app/Contents/MacOS/chiral-ftp" in present:
 Updating: replace the app. Your settings stay in
 `~/Library/Application Support/chiral-ftp`.
 """
-appimages = [f for f in present if f.endswith(".AppImage")]
+appimages = sorted(f for f in present if f.endswith(".AppImage"))
 if appimages:
+    # x86_64 for most PCs, aarch64 for ARM ones: say which is which when both are there.
+    def kind(f):
+        return "most PCs" if "x86_64" in f else "ARM computers, such as a Raspberry Pi 4 or 5 on 64-bit" if "aarch64" in f else ""
+    pick = (" or ".join(f"`{f}` ({kind(f)})" for f in appimages) if len(appimages) > 1 else f"`{appimages[0]}`")
     notes += f"""
-**Linux**
+**Linux** (Ubuntu 22.04, Debian 12, Fedora 36 or newer, and others like them)
 
-1. Download `{appimages[0]}` below.
-2. Make it executable (`chmod +x {appimages[0]}`) and run it.
+1. Download {pick} below.
+2. Make it executable (`chmod +x chiral-ftp-*.AppImage`, or Properties >
+   Allow executing as a program) and run it.
 
 Updating: replace the file. Your settings stay in `~/.local/share/chiral-ftp`.
 """
 exes = [f for f in present if f.endswith(".exe")]
 if exes:
     names = " or ".join(f"`{f}`" for f in exes)
+    # With both, say which is which; with x64 alone, that it covers ARM PCs too.
+    which = ("(arm64 for a Windows on ARM PC, x64 for any other)" if len(exes) > 1
+             else "(it runs on Windows on ARM PCs too, through Windows' own x64 emulation)" if "x64" in exes[0]
+             else "")
     notes += f"""
 **Windows** (Windows 10 or 11)
 
-1. Download {names} below (arm64 for a Windows on ARM PC, x64 for any other).
+1. Download {names} below {which}.
 2. Run it; nothing needs installing. The program isn't signed, so the first
    time Windows SmartScreen says it doesn't recognise it: choose
    **More info > Run anyway**. When Windows Firewall asks, allow private
    networks, so that a console or phone can reach the server.
 
 Updating: replace the `.exe`. Your settings stay in `%APPDATA%\\chiral-ftp`.
+To keep everything on a USB stick instead, settings included, make a folder
+named `data` next to the `.exe`: chiral-ftp then keeps its settings there.
 """
 else:
     notes += """

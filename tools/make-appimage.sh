@@ -20,7 +20,15 @@ if [[ ! -x "$linuxdeploy" ]]; then
   curl -fsSL -o "$linuxdeploy" \
     "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-$arch.AppImage"
   chmod +x "$linuxdeploy"
+  # An AppImage marks itself with "AI\x02" in its ELF header's padding, and
+  # emulated runs (qemu, Rosetta: an x86_64 build on an Apple silicon Mac)
+  # refuse such a header with "Exec format error". Blank the mark in this copy
+  # of the tool; on real hardware it makes no difference.
+  printf '\0\0\0' | dd of="$linuxdeploy" bs=1 seek=8 count=3 conv=notrunc 2>/dev/null
 fi
+# Its own pieces (the AppImage output plugin) are AppImages too: unpacked
+# rather than run as they are, for the same reason and where FUSE is missing.
+export APPIMAGE_EXTRACT_AND_RUN=1
 
 appdir="$root/.build/AppDir"
 rm -rf "$appdir"

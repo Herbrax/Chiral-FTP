@@ -136,8 +136,18 @@ system_data_dir_candidates(const char **out, int max) {
     const char *data_home = getenv("XDG_DATA_HOME"), *home = getenv("HOME");
 
     if(getenv("APPIMAGE")) {
-      if(data_home && *data_home) snprintf(xdg, sizeof(xdg), "%s/chiral-ftp", data_home);
-      else if(home && *home) snprintf(xdg, sizeof(xdg), "%s/.local/share/chiral-ftp", home);
+      /* The settings code makes the last folder only; a new account may not
+         have ~/.local/share yet. */
+      if(data_home && *data_home) {
+        mkdir(data_home, 0700);
+        snprintf(xdg, sizeof(xdg), "%s/chiral-ftp", data_home);
+      } else if(home && *home) {
+        snprintf(xdg, sizeof(xdg), "%s/.local", home);
+        mkdir(xdg, 0700);
+        snprintf(xdg, sizeof(xdg), "%s/.local/share", home);
+        mkdir(xdg, 0700);
+        snprintf(xdg, sizeof(xdg), "%s/.local/share/chiral-ftp", home);
+      }
       if(xdg[0]) {
         out[0] = xdg;
         return 1;

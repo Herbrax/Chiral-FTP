@@ -88,7 +88,7 @@ The short version:
 | File manager and client on the start screen | `mode_shown()` in `ui.cpp`, Settings "File manager and client in this window" | always | always | hidden by default: they live in the web app, which opens in the browser |
 | Web app reach | `websrv_set_local_only()`, the web screen's "Reachable from" | network | network (libmicrohttpd binds itself) | this computer only (127.0.0.1) by default; home network on request |
 | Web pages' wording | `data-computer` attributes, `dev()` in `app.js`/`files.js`, from `/api/state`'s `platform` | "the console" | "the console" | "this computer" |
-| Desktop interface | `CHIRAL_UI_DESKTOP`, `app/ui_desktop.inc` (included by `ui.cpp`) | the TV layout | the TV layout | macOS and Windows: a sidebar of pages (server, web app, message log, settings) with switches, segmented choices, inline text fields; the file manager and client, when enabled, are the TV screens drawn beside the sidebar. Linux keeps the TV layout fitted to a window |
+| Desktop interface | `CHIRAL_UI_DESKTOP`, `app/ui_desktop.inc` (included by `ui.cpp`) | the TV layout | the TV layout | every computer (macOS, Windows, Linux): a sidebar of pages (server, web app, Quick connect, message log, settings) with switches, segmented choices, inline text fields. The file manager and client live in the web app only. The three interfaces: console (PS5, Switch), computer (this one), Android (to come) |
 | Menu bar | `platform/sdl/macos.mm` (also the folder chooser) | none | none | macOS only: About, Settings, Go (the modes), View, Window, Help; commands arrive as `ACT_CMD_*` |
 | Who owns the HTTP listener | `CHIRAL_WEB_MHD_OWNS_LISTENER` | us (`MHD_add_connection`) | **libmicrohttpd**, see §4.3 | us |
 | Big allocations | `CHIRAL_BIG_ALLOC_VIA_MMAP` | via `mmap`, see §3.4 | plain malloc (no `mmap` on Horizon) | plain malloc |
@@ -801,8 +801,19 @@ the banner, which exists because it is the one thing the user can change.
 - **Linux** builds only on Linux: `tools/make-appimage.sh` (linuxdeploy), run
   by `.github/workflows/linux-appimage.yml` on Ubuntu 22.04 for a `v*` tag or
   by hand; then `tools/make-release.sh linux` adds it to `release/`. An
-  AppImage keeps its settings in `$XDG_DATA_HOME/chiral-ftp`. Linux links
-  libstdc++, macOS libc++ (`CXX_LIB` in platform/sdl/platform.mk).
+  AppImage keeps its settings in `$XDG_DATA_HOME/chiral-ftp`
+  (`~/.local/share/chiral-ftp`; its parents are made, a new account may lack
+  them). Linux links libstdc++ and libm, macOS libc++ (`CXX_LIB` in
+  platform/sdl/platform.mk).
+- **Linux, what the first build taught (1.1):** build on Ubuntu 22.04, one
+  AppImage per architecture (x86_64, aarch64). Its libssh is 0.9, without
+  `ssh_pki_generate_key` (0.12): `generate_key()` in engine/sftpd.c picks
+  the call by version. An x86_64 build run under emulation (Rosetta, qemu)
+  can't start an AppImage as it is ("Exec format error" on the "AI\x02"
+  mark in its ELF header), so `make-appimage.sh` blanks that mark in its
+  copy of linuxdeploy. The AppImage leaves out, on purpose, what every
+  desktop has (X11/Wayland, FreeType, ALSA): a bare server can't start it,
+  a desktop can. Tested: both start headless, render, and exit cleanly.
 - **The Mac app requires macOS 27 on Apple silicon**: its Homebrew libraries
   were built for the build Mac. Building them with a lower
   `MACOSX_DEPLOYMENT_TARGET` would widen that. It is ad-hoc signed, not

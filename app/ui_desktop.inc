@@ -1,4 +1,4 @@
-/* The desktop interface (CHIRAL_UI_DESKTOP: macOS and Windows), part of
+/* The computer interface (CHIRAL_UI_DESKTOP: macOS, Windows and Linux), part of
    ui.cpp's private half -- included there, after everything it uses.
 
    A computer is not a TV across the room. Instead of a start screen of

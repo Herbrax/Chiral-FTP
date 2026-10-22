@@ -34,11 +34,8 @@
    which only this build links). */
 #define CHIRAL_HAS_SFTPD 1
 
-/* The desktop interface -- a sidebar of pages with switches, fields and
-   buttons, mouse first (app/ui_desktop.inc) -- on macOS and Windows. Linux
-   keeps the console layout fitted to a window. */
-#if defined(__APPLE__) || defined(_WIN32)
+/* The computer interface -- a sidebar of pages with switches, fields and
+   buttons, mouse first (app/ui_desktop.inc) -- on every computer: macOS,
+   Windows and Linux alike. (The console layout is the consoles'; Android
+   will have a third, its own.) */
 #define CHIRAL_UI_DESKTOP 1
-#else
-#define CHIRAL_UI_DESKTOP 0
-#endif

@@ -2,10 +2,10 @@
 
 ## 1.1
 
-chiral-ftp now has downloads for **Mac** and **Linux**, next to the **PS5**
-and the **Nintendo Switch**. A **Windows** version is coming. And every copy
-of chiral-ftp on your network can now find and open the others in two
-presses: **Quick connect**.
+chiral-ftp now has downloads for **Windows**, **Mac** and **Linux**, next to
+the **PS5** and the **Nintendo Switch**. And every copy of chiral-ftp on
+your network can now find and open the others in two presses: **Quick
+connect**.
 
 ### New: Quick connect
 
@@ -24,14 +24,16 @@ presses: **Quick connect**.
   **⌘K** on a Mac) and runs whenever the app is open.
 - The list stays current even on Wi-Fi that drops broadcasts.
 
-### New: Mac and Linux
+### New: Windows, Mac and Linux
 
-- **Mac**: `chiral-ftp.app`. Double-click it, or drag it to Applications; it
-  carries its own libraries. **Linux**: one `.AppImage` file.
-- **Made for a computer** (Mac): a sidebar with the server, the web app,
-  Quick connect, the message log and Settings, each a page with ordinary
-  switches, fields and buttons, and the menu bar has everything, with
-  shortcuts. On Linux the window keeps the console layout.
+- **Windows**: one `.exe` (x64; it runs on Windows on ARM too), nothing to
+  install. **Mac**: `chiral-ftp.app`. Double-click it, or drag it to
+  Applications; it carries its own libraries. **Linux**: one `.AppImage`
+  file.
+- **Made for a computer** (Windows, Mac and Linux alike): a sidebar with
+  the server, the web app, Quick connect, the message log and Settings, each
+  a page with ordinary switches, fields and buttons; on a Mac the menu bar
+  has everything, with shortcuts.
 - **The mouse works everywhere**: hover, click, right-click, scroll, and
   click outside a panel to close it.
 - **Sharp text**: the layout follows the window instead of scaling a fixed

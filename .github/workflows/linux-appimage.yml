@@ -23,7 +23,7 @@ jobs:
       - name: Version
         run: echo "VERSION=$(sed -n 's/^VERSION := //p' Makefile)" >> "$GITHUB_ENV"
       - name: libssh2 and Mbed TLS for the SFTP client
-        run: ./tools/build-sftp-deps.sh
+        run: ./tools/build-sftp-deps.sh host
       - name: Build
         run: make PLATFORM=sdl VERSION="$VERSION" -j"$(nproc)"
       - name: AppImage

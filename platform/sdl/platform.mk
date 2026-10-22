@@ -17,8 +17,9 @@ GENERATED    := $(FONTS) $(WEB_GEN) $(GEN_I18N)
 
 # macOS: the menu bar and the folder chooser (Objective-C++), and the names
 # it gives its network interfaces ("Wi-Fi") for the settings screen.
-# The C++ library: libc++ on macOS, libstdc++ with Linux's GCC.
-CXX_LIB      := -lstdc++
+# The C++ library: libc++ on macOS, libstdc++ with Linux's GCC -- and libm,
+# which Linux keeps apart (macOS has it in libSystem).
+CXX_LIB      := -lstdc++ -lm
 ifeq ($(shell uname -s),Darwin)
 PLATFORM_MM  := platform/sdl/macos.mm
 OS_LIBS      := -framework SystemConfiguration -framework CoreFoundation
@@ -37,7 +38,7 @@ SSH_LIBS   := $(shell pkg-config libssh --libs)
 FT_CFLAGS  := $(shell pkg-config freetype2 --cflags) -DIMGUI_ENABLE_FREETYPE -Ivendor/imgui/misc/freetype
 FT_LIBS    := $(shell pkg-config freetype2 --libs)
 
-DEFINES  := -DVERSION_TAG=\"$(VERSION)-sdl\" -DIMGUI_USER_CONFIG=\"imgui_config.h\"
+DEFINES  := -DVERSION_TAG=\"$(VERSION)\" -DIMGUI_USER_CONFIG=\"imgui_config.h\"
 INCLUDE  := -Iapp -Iengine -Iweb -Ivendor/imgui -Igen -Iplatform/sdl -I$(DEPS)/include
 CFLAGS   := -O2 -g -Wall -pthread $(DEFINES) $(INCLUDE) $(MHD_CFLAGS) $(SSH_CFLAGS)
 CXXFLAGS := -std=c++17 -O2 -g -Wall $(DEFINES) $(INCLUDE) $(MHD_CFLAGS) $(SDL_CFLAGS) $(FT_CFLAGS)

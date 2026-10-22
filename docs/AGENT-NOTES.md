@@ -177,10 +177,20 @@ work here.
 - The Bash tool is Git Bash, not MSYS2 and not WSL. `make`, `gcc` and
   `python3` are absent from it; the devkitPro toolchain is reached by
   absolute path or by putting the scratch `bin/` first.
-- **Consequence to keep in mind:** this machine can build `PLATFORM=switch`
-  and nothing else. `PLATFORM=ps5` needs the macOS setup above and
-  `PLATFORM=sdl` needs SDL2. Anything touching shared code is therefore
-  half-verified here by construction. That is what `make check` is for, and
+- **The Windows build (`PLATFORM=sdl`) has its own MSYS2** in
+  `.deps/msys64`, unpacked from the msys2-base tarball (no installer, no
+  admin rights) with the UCRT64 packages the README lists; the one in
+  `C:\tools\msys64` is from 2020 and empty. Run things there through its
+  login shell, which ignores `CHERE_INVOKING` and starts in `~`:
+  `MSYSTEM=UCRT64 .deps/msys64/usr/bin/bash.exe -lc 'cd /c/Users/Simo/eclipse-workspace/Chiral-FTP && make PLATFORM=sdl dist'`.
+  Its first `pacman-key` leaves a `gpg-agent` running that holds the
+  calling shell open; end it. The checkout has CRLF line endings
+  (`core.autocrlf`), so shell scripts run as `bash -o igncr script.sh`.
+- **A running `chiral-ftp.exe` can't be overwritten**, so a rebuild fails to
+  link while the maintainer has it open; `make TARGET=.build/sdl/chiral-ftp.exe dist`
+  goes around it.
+- **Consequence to keep in mind:** this machine builds `PLATFORM=switch` and
+  `PLATFORM=sdl` (Windows); `PLATFORM=ps5` needs the macOS setup above.
   `make check` is *not* a substitute for a compiler.
 
 ### 2.3 Output locations, releases, and what goes stale

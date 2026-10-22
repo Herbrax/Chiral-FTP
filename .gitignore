@@ -4,6 +4,7 @@ dist/
 release/
 .deps/
 chiral-ftp
+chiral-ftp.exe
 chiral-ftp.nro
 chiral-ftp.nacp
 chiral-ftp.elf

@@ -105,7 +105,7 @@ check:
 	$(PYTHON) tools/check-platforms.py
 
 clean:
-	rm -rf .build gen dist release chiral-ftp tests/test_listparse data \
+	rm -rf .build gen dist release chiral-ftp chiral-ftp.exe tests/test_listparse data \
 	       chiral-ftp.nro chiral-ftp.nacp chiral-ftp.elf chiral-ftp.map
 
 .PHONY: all test check clean icon

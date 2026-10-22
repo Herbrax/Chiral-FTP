@@ -52,6 +52,7 @@ const char *tr(const char *english);
 #define READ_MAX (64 * 1024)  // the most one READ returns; clients ask again
 #define READDIR_BATCH 64
 #define HOST_KEY_NAME "sftpd_host_key"
+#define HOST_KEY_ECDSA_NAME "sftpd_host_key_ecdsa"
 
 /* An open file or folder, as the client knows it by its handle. */
 typedef struct handle {
@@ -200,14 +201,21 @@ sftpd_fingerprint(char *buf, size_t size) {
 /* ---------- the server's key ---------- */
 
 /* Made once and kept in the data folder, so an SFTP app that has trusted
-   this computer goes on trusting it after a restart. */
+   this computer goes on trusting it after a restart.
+
+   Two of them. Ed25519 is the one apps choose (OpenSSH, FileZilla, phones)
+   and the one the server screen shows. ECDSA P-256 is for chiral-ftp itself:
+   its client is libssh2 on Mbed TLS, on every platform, and that has no
+   Ed25519 -- without a second key, quick connect between two copies
+   couldn't agree on one. Each client takes the first of its own list the
+   server has, so neither changes what the other sees. */
 static int
-load_host_key(ssh_key *out) {
+load_host_key(const char *name, enum ssh_keytypes_e type, ssh_key *out) {
   char path[600];
 
-  data_path(path, sizeof(path), HOST_KEY_NAME);
+  data_path(path, sizeof(path), name);
   if(ssh_pki_import_privkey_file(path, NULL, NULL, NULL, out) == SSH_OK) return 0;
-  if(ssh_pki_generate_key(SSH_KEYTYPE_ED25519, NULL, out) != SSH_OK) return -1;
+  if(ssh_pki_generate_key(type, 0, out) != SSH_OK) return -1;
   /* A key that can't be saved still works; apps just see a new one next time. */
   if(ssh_pki_export_privkey_file(*out, NULL, NULL, NULL, path) == SSH_OK) chmod(path, 0600);
   return 0;
@@ -906,7 +914,7 @@ listen_main(void *arg) {
 int
 sftpd_start(const ftpd_config_t *cfg) {
   struct sockaddr_in addr;
-  ssh_key key = NULL;
+  ssh_key key = NULL, ecdsa = NULL;
   pthread_t t;
   int srv, err;
 
@@ -920,14 +928,18 @@ sftpd_start(const ftpd_config_t *cfg) {
   pthread_mutex_unlock(&g_lock);
 
   ssh_init();
-  if(load_host_key(&key)) {
+  if(load_host_key(HOST_KEY_NAME, SSH_KEYTYPE_ED25519, &key)) {
     errno = EIO;
     return -1;
   }
   remember_fingerprint(key);
+  /* Without it, only chiral-ftp's own client goes without (see
+     load_host_key); every other app still connects. */
+  if(load_host_key(HOST_KEY_ECDSA_NAME, SSH_KEYTYPE_ECDSA_P256, &ecdsa)) ecdsa = NULL;
 
   if((srv = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
     ssh_key_free(key);
+    if(ecdsa) ssh_key_free(ecdsa);
     return -1;
   }
   setsockopt(srv, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
@@ -939,20 +951,23 @@ sftpd_start(const ftpd_config_t *cfg) {
     err = errno;
     close(srv);
     ssh_key_free(key);
+    if(ecdsa) ssh_key_free(ecdsa);
     errno = err;
     return -1;
   }
-  /* The bind object only holds the key here: the socket is ours, so the
-     port and its errors are the same as the FTP server's. It owns the key
+  /* The bind object only holds the keys here: the socket is ours, so the
+     port and its errors are the same as the FTP server's. It owns the keys
      from now on. */
   if(!(g_bind = ssh_bind_new()) || ssh_bind_options_set(g_bind, SSH_BIND_OPTIONS_IMPORT_KEY, key) != SSH_OK) {
     if(g_bind) ssh_bind_free(g_bind);
     else ssh_key_free(key);
+    if(ecdsa) ssh_key_free(ecdsa);
     g_bind = NULL;
     close(srv);
     errno = EIO;
     return -1;
   }
+  if(ecdsa && ssh_bind_options_set(g_bind, SSH_BIND_OPTIONS_IMPORT_KEY, ecdsa) != SSH_OK) ssh_key_free(ecdsa);
 
   pthread_mutex_lock(&g_lock);
   g_stop = 0;

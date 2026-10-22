@@ -7,13 +7,14 @@
 #
 #   make PLATFORM=ps5 release && make PLATFORM=switch release && make PLATFORM=sdl release
 #
-# On a Mac, PLATFORM=sdl adds the .app (zipped); the Linux AppImage comes
-# from tools/make-appimage.sh on Linux (the GitHub workflow builds it) and is
+# On a Mac, PLATFORM=sdl adds the .app (zipped); on Windows, the .exe (x64
+# or arm64, whichever the shell builds for); the Linux AppImage comes from
+# tools/make-appimage.sh on Linux (the GitHub workflow builds it) and is
 # added with tools/make-release.sh linux once it is in dist/.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 version="${VERSION:?set VERSION}"
-platform="${1:?usage: make-release.sh <switch|ps5|mac|linux>}"
+platform="${1:?usage: make-release.sh <switch|ps5|mac|linux|windows>}"
 out="$root/release"
 mkdir -p "$out"
 
@@ -49,16 +50,26 @@ case "$platform" in
     rm -f "$out"/chiral-ftp-*.AppImage
     cp "$appimage" "$out/"
     ;;
+  windows)
+    # The program itself: one .exe per architecture, x64 and arm64 side by
+    # side in the same release.
+    exes=$(cd "$root/dist" 2>/dev/null && ls chiral-ftp-"$version"-windows-*.exe 2>/dev/null || true)
+    [[ -n "$exes" ]] || {
+      echo "missing dist/chiral-ftp-$version-windows-*.exe; run make PLATFORM=sdl dist in MSYS2" >&2; exit 1; }
+    for exe in $exes; do cp "$root/dist/$exe" "$out/$exe"; done
+    ;;
   *) echo "unknown platform: $platform" >&2; exit 2 ;;
 esac
 
 files=()
-for f in "chiral-ftp-ps5-$version.zip" chiral-ftp.nro $(cd "$out" && ls chiral-ftp-"$version"-*.AppImage 2>/dev/null); do
+for f in "chiral-ftp-ps5-$version.zip" chiral-ftp.nro $(cd "$out" && ls chiral-ftp-"$version"-*.AppImage chiral-ftp-"$version"-windows-*.exe 2>/dev/null); do
   [[ -f "$out/$f" ]] && files+=("$f")
 done
 # The Mac app is a folder: its checksum is the program inside it.
 [[ -f "$out/chiral-ftp.app/Contents/MacOS/chiral-ftp" ]] && files+=("chiral-ftp.app/Contents/MacOS/chiral-ftp")
-sha() { if command -v sha256sum >/dev/null; then sha256sum "$@"; else shasum -a 256 "$@"; fi; }
+# MSYS2's sha256sum marks every file binary ("<digest> *name"); the notes
+# want the plain name.
+sha() { if command -v sha256sum >/dev/null; then sha256sum "$@" | sed 's/ \*/  /'; else shasum -a 256 "$@"; fi; }
 (cd "$out" && sha "${files[@]}" > SHA256SUMS)
 
 "${PYTHON:-python3}" - "$root/CHANGELOG.md" "$version" "$out/RELEASE_NOTES.md" "$out/SHA256SUMS" <<'PY'
@@ -124,7 +135,22 @@ if appimages:
 
 Updating: replace the file. Your settings stay in `~/.local/share/chiral-ftp`.
 """
-notes += """
+exes = [f for f in present if f.endswith(".exe")]
+if exes:
+    names = " or ".join(f"`{f}`" for f in exes)
+    notes += f"""
+**Windows** (Windows 10 or 11)
+
+1. Download {names} below (arm64 for a Windows on ARM PC, x64 for any other).
+2. Run it; nothing needs installing. The program isn't signed, so the first
+   time Windows SmartScreen says it doesn't recognise it: choose
+   **More info > Run anyway**. When Windows Firewall asks, allow private
+   networks, so that a console or phone can reach the server.
+
+Updating: replace the `.exe`. Your settings stay in `%APPDATA%\\chiral-ftp`.
+"""
+else:
+    notes += """
 **Windows** is coming soon.
 """
 notes += f"""

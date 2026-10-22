@@ -275,8 +275,23 @@ first build cross-compiles it into `.deps/switch` (checksum pinned).
 dependency.
 
 **PC and Mac** need SDL2, libmicrohttpd and pkg-config, plus
-`tools/build-sftp-deps.sh host` for libssh2 and mbedTLS. On Windows, build
-under MSYS2.
+`tools/build-sftp-deps.sh host` for libssh2 and mbedTLS.
+
+**Windows** builds in [MSYS2](https://www.msys2.org): the UCRT64 shell for
+x64, CLANGARM64 for arm64 (use `mingw-w64-clang-aarch64-` instead of
+`mingw-w64-ucrt-x86_64-` below). Everything is linked statically, so the
+result is one `.exe` that needs nothing installed beside it.
+
+```sh
+pacman -S make mingw-w64-ucrt-x86_64-{gcc,pkgconf,cmake,ninja,python,SDL2,libmicrohttpd,libssh,freetype}
+CMAKE_GENERATOR=Ninja bash -o igncr tools/build-sftp-deps.sh host
+make PLATFORM=sdl dist     # dist/chiral-ftp-<version>-windows-x64.exe
+make PLATFORM=sdl release  # and adds it to release/
+```
+
+The shared code is written against POSIX; `platform/sdl/win32/posix.h`
+gives it that on Windows, with paths as MSYS2 writes them (`/c/Users`, and
+`/` for the list of drives).
 
 The generators are Python 3; if your `python3` is called something else, pass
 it: `make PYTHON=python`. `tools/render-icon.py` regenerates the Switch icon,

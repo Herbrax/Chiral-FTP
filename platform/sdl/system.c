@@ -1,11 +1,11 @@
 /* The desktop's answers to engine/system.h -- Linux, macOS, Windows under
-   MSYS2. This is the build most of the UI is developed against. */
+   MSYS2. This is the build most of the UI is developed against. On Windows,
+   paths are the POSIX ones of win32/posix.h: "/c/Users", and "/" for the
+   drives. */
 
 #include "system.h"
 
 #include <arpa/inet.h>
-#include <ifaddrs.h>
-#include <net/if.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,8 +14,15 @@
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/statvfs.h>
 #include <unistd.h>
+#ifdef _WIN32
+#include <iphlpapi.h>
+#include <windows.h>
+#else
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <sys/statvfs.h>
+#endif
 #ifdef __APPLE__
 #include <CoreFoundation/CoreFoundation.h>
 #include <SystemConfiguration/SystemConfiguration.h>
@@ -57,9 +64,57 @@ in_app_bundle(void) {
 }
 #endif
 
+#ifdef _WIN32
+/* The folder holding chiral-ftp.exe, as a POSIX path. */
+static void
+exe_dir(char *out, size_t size) {
+  wchar_t path[MAX_PATH * 4];
+  DWORD n = GetModuleFileNameW(NULL, path, sizeof(path) / sizeof(path[0]));
+  wchar_t *slash;
+
+  out[0] = 0;
+  if(!n || n >= sizeof(path) / sizeof(path[0])) return;
+  if((slash = wcsrchr(path, L'\\'))) *slash = 0;
+  chiral_posix_path(path, out, size);
+}
+
+static int
+enter_dir(const char *posix) {
+  wchar_t w[PATH_MAX + 8];
+  return chiral_win_path(posix, w, sizeof(w) / sizeof(w[0])) > 0 && SetCurrentDirectoryW(w);
+}
+#endif
+
 int
 system_data_dir_candidates(const char **out, int max) {
   if(max < 1) return 0;
+#ifdef _WIN32
+  {
+    /* Beside the program when a "data" folder is there already (a copy
+       carried on a USB stick); otherwise %APPDATA%\chiral-ftp, where
+       Windows programs keep their settings. Either way the folder is
+       reached from the working directory, by a relative path: libssh and
+       libssh2 open the host key and known_hosts themselves, with the C
+       library's fopen(), which knows nothing of "/c/...". */
+    static char rel[32];
+    char dir[1024], data[1100];
+    struct stat st;
+    const char *appdata = getenv("APPDATA");
+
+    exe_dir(dir, sizeof(dir));
+    snprintf(data, sizeof(data), "%s/data", dir);
+    if(dir[0] && !stat(data, &st) && S_ISDIR(st.st_mode) && enter_dir(dir)) {
+      snprintf(rel, sizeof(rel), "./data");
+    } else if(appdata && *appdata) {
+      chiral_posix_path_utf8(appdata, dir, sizeof(dir));
+      if(enter_dir(dir)) snprintf(rel, sizeof(rel), "./chiral-ftp");
+    }
+    if(rel[0]) {
+      out[0] = rel;
+      return 1;
+    }
+  }
+#endif
 #ifdef __APPLE__
   {
     static char support[200];
@@ -96,15 +151,45 @@ system_data_dir_candidates(const char **out, int max) {
 
 int
 system_storage_roots(system_root_t *out, int max) {
-  static system_root_t roots[4];
+  static system_root_t roots[30];
   int n = 0;
   const char *test = getenv("CHIRAL_TEST_ROOT");  /* the automated UI tests */
   const char *home = getenv("HOME");
 
   if(test) roots[n++] = (system_root_t){test, "Test drive", 0};
   if(home) roots[n++] = (system_root_t){home, "Home", 0};
+#ifdef _WIN32
+  {
+    /* Each drive, as Explorer names it: "Windows (C:)", or "D:" when it
+       has no label. Card readers and disc drives only with something in
+       them; a network drive's label isn't asked for, since a server that
+       has gone away takes its time to say so. */
+    static char paths[26][4], labels[26][80];
+    const DWORD drives = GetLogicalDrives();
+
+    for(int i = 0; i < 26 && n < (int)(sizeof(roots) / sizeof(roots[0])); i++) {
+      wchar_t root[4] = {(wchar_t)(L'A' + i), L':', L'\\', 0}, name[MAX_PATH + 1];
+      char label[64];
+      UINT type;
+
+      if(!(drives & (1u << i))) continue;
+      type = GetDriveTypeW(root);
+      if(type == DRIVE_NO_ROOT_DIR || type == DRIVE_UNKNOWN) continue;
+      snprintf(paths[i], sizeof(paths[i]), "/%c", 'a' + i);
+      label[0] = 0;
+      if(type != DRIVE_REMOTE && GetVolumeInformationW(root, name, MAX_PATH + 1, NULL, NULL, NULL, NULL, 0) &&
+         name[0]) {
+        WideCharToMultiByte(CP_UTF8, 0, name, -1, label, sizeof(label), NULL, NULL);
+      }
+      if(label[0]) snprintf(labels[i], sizeof(labels[i]), "%s (%c:)", label, 'A' + i);
+      else snprintf(labels[i], sizeof(labels[i]), "%c:", 'A' + i);
+      roots[n++] = (system_root_t){paths[i], labels[i], type == DRIVE_REMOVABLE || type == DRIVE_CDROM};
+    }
+  }
+#else
   roots[n++] = (system_root_t){"/tmp", "/tmp", 0};
   roots[n++] = (system_root_t){"/", "Root", 0};
+#endif
 
   if(n > max) n = max;
   memcpy(out, roots, (size_t)n * sizeof(*out));
@@ -113,12 +198,24 @@ system_storage_roots(system_root_t *out, int max) {
 
 long long
 system_free_space(const char *path, long long *total) {
+#ifdef _WIN32
+  wchar_t w[PATH_MAX + 8];
+  ULARGE_INTEGER avail, size;
+
+  if(total) *total = -1;
+  /* "/" is every drive at once: no one answer. */
+  if(chiral_win_path(path, w, sizeof(w) / sizeof(w[0])) <= 0) return -1;
+  if(!GetDiskFreeSpaceExW(w, &avail, &size, NULL)) return -1;
+  if(total) *total = (long long)size.QuadPart;
+  return (long long)avail.QuadPart;
+#else
   struct statvfs vfs;
 
   if(total) *total = -1;
   if(statvfs(path, &vfs)) return -1;
   if(total) *total = (long long)vfs.f_blocks * (long long)vfs.f_frsize;
   return (long long)vfs.f_bavail * (long long)vfs.f_frsize;
+#endif
 }
 
 void
@@ -140,9 +237,11 @@ system_local_ip(char *buf, size_t size) {
   close(fd);
 }
 
+#ifndef _WIN32
 /* What the system calls an interface: "Wi-Fi", "Ethernet", "Thunderbolt
    Bridge" on a Mac (already in the user's language), "VPN" for a tunnel.
-   Empty when there is nothing better than the interface's own name. */
+   Empty when there is nothing better than the interface's own name.
+   (Windows hands over the name itself: system_networks.) */
 static void
 interface_label(const char *name, char *out, size_t size) {
   out[0] = 0;
@@ -171,6 +270,7 @@ interface_label(const char *name, char *out, size_t size) {
   }
 #endif
 }
+#endif
 
 void
 system_device_name(char *buf, size_t size) {
@@ -211,6 +311,45 @@ system_device_kind(void) {
 #endif
 }
 
+#ifdef _WIN32
+int
+system_networks(system_net_t *out, int max) {
+  /* Named as in Settings > Network: "Wi-Fi", "Ethernet 2". */
+  ULONG size = 16 * 1024;
+  IP_ADAPTER_ADDRESSES *list = NULL;
+  ULONG r = ERROR_BUFFER_OVERFLOW;
+  int n = 0;
+
+  for(int tries = 0; tries < 3 && r == ERROR_BUFFER_OVERFLOW; tries++) {
+    free(list);
+    if(!(list = malloc(size))) return 0;
+    r = GetAdaptersAddresses(AF_INET, GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER,
+                             NULL, list, &size);
+  }
+  if(r != NO_ERROR) {
+    free(list);
+    return 0;
+  }
+  for(IP_ADAPTER_ADDRESSES *a = list; a && n < max; a = a->Next) {
+    if(a->OperStatus != IfOperStatusUp || a->IfType == IF_TYPE_SOFTWARE_LOOPBACK) continue;
+    for(IP_ADAPTER_UNICAST_ADDRESS *u = a->FirstUnicastAddress; u && n < max; u = u->Next) {
+      const struct sockaddr_in *in = (const struct sockaddr_in *)u->Address.lpSockaddr;
+      unsigned host;
+
+      if(!in || in->sin_family != AF_INET) continue;
+      host = ntohl(in->sin_addr.s_addr);
+      if(!host || (host >> 16) == 0xA9FE) continue;  /* none yet, or self-assigned 169.254 */
+      memset(&out[n], 0, sizeof(out[n]));
+      WideCharToMultiByte(CP_UTF8, 0, a->FriendlyName, -1, out[n].label, sizeof(out[n].label), NULL, NULL);
+      snprintf(out[n].name, sizeof(out[n].name), "%s", out[n].label);
+      inet_ntop(AF_INET, &in->sin_addr, out[n].addr, sizeof(out[n].addr));
+      n++;
+    }
+  }
+  free(list);
+  return n;
+}
+#else
 int
 system_networks(system_net_t *out, int max) {
   struct ifaddrs *list, *i;
@@ -234,6 +373,7 @@ system_networks(system_net_t *out, int max) {
   freeifaddrs(list);
   return n;
 }
+#endif
 
 void
 system_notify(const char *message) {
@@ -267,7 +407,20 @@ system_language(void) {
     if(langs) CFRelease(langs);
   }
 #endif
+#ifdef _WIN32
+  /* The display language chosen in Windows' settings. LANG, if set at
+     all, belongs to whatever terminal started the program. */
+  static char ui_lang[16];
+  if(!lang || !*lang) {
+    wchar_t name[LOCALE_NAME_MAX_LENGTH];
+    if(LCIDToLocaleName(MAKELCID(GetUserDefaultUILanguage(), SORT_DEFAULT), name, LOCALE_NAME_MAX_LENGTH, 0) &&
+       WideCharToMultiByte(CP_UTF8, 0, name, -1, ui_lang, sizeof(ui_lang), NULL, NULL)) {
+      lang = ui_lang;
+    }
+  }
+#else
   if(!lang || !*lang) lang = getenv("LANG");
+#endif
   if(!lang) return "en";
   code[0] = lang[0];
   code[1] = lang[0] ? lang[1] : 0;
@@ -302,6 +455,35 @@ system_script_fonts(system_font_t *out, int max, const char *current_lang) {
   const char *dir = getenv("CHIRAL_FONT_DIR");
   int n = 0;
 
+#ifdef _WIN32
+  /* Windows has no one font with every script in it, but one per script,
+     all in %WINDIR%\Fonts. */
+  static const struct { const char *lang, *file; } windows[] = {
+    {"ja", "YuGothM.ttc"},
+    {"zh", "msyh.ttc"},
+    {"ko", "malgun.ttf"},
+    {"ar", "segoeui.ttf"},
+  };
+  char fonts[512];
+  const char *windir = getenv("WINDIR");
+
+  if(!dir && windir && *windir) {
+    chiral_posix_path_utf8(windir, fonts, sizeof(fonts) - 8);
+    strcat(fonts, "/Fonts");
+    for(int pass = 0; pass < 2 && n < max; pass++) {
+      for(size_t i = 0; i < sizeof(windows) / sizeof(windows[0]) && n < max; i++) {
+        const int matches = !strcmp(windows[i].lang, current_lang);
+        char path[1024];
+        system_font_t f;
+
+        if(pass == 0 ? !matches : matches) continue;
+        snprintf(path, sizeof(path), "%s/%s", fonts, windows[i].file);
+        if(map_font(path, &f)) out[n++] = f;
+      }
+    }
+    return n;
+  }
+#endif
   if(!dir) {
     for(int i = 0; wide[i] && n < max; i++) {
       system_font_t f;
@@ -332,24 +514,15 @@ system_ftpd_default_root(void) {
      saved passwords, the SFTP server's private key), and sharing the whole
      computer is a separate, deliberate choice (system_ftpd_full_root). */
   const char *root = getenv("CHIRAL_FTPD_ROOT");
-  const char *home = getenv("HOME");
+  const char *home = getenv("HOME");  /* %USERPROFILE% on Windows (win32/posix.c) */
 
   if(root && *root) return root;
-#ifdef _WIN32
-  if(getenv("USERPROFILE") && *getenv("USERPROFILE")) return getenv("USERPROFILE");
-#endif
   if(home && *home) return home;
   return "/tmp";
 }
 
 const char *
 system_ftpd_full_root(void) {
-#ifdef _WIN32
-  static char drive[8];
-  const char *d = getenv("SystemDrive");
-  snprintf(drive, sizeof(drive), "%s/", d && *d ? d : "C:");
-  return drive;
-#else
+  /* Windows too: there "/" is the folder of drives, /c, /d... */
   return "/";
-#endif
 }

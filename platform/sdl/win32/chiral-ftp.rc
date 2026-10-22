@@ -1,0 +1,34 @@
+/* chiral-ftp.exe's resources: the icon Explorer and the taskbar show, the
+   version in its Properties, and the manifest. VERSION_STR (1.1) and
+   VERSION_NUM (1,1,0,0) come from the Makefile. */
+#include <winver.h>
+
+#define STR_(x) #x
+#define STR(x) STR_(x)
+
+1 ICON "gen/chiral-ftp.ico"
+1 24 "platform/sdl/win32/chiral-ftp.manifest"
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION VERSION_NUM
+PRODUCTVERSION VERSION_NUM
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904B0"
+    BEGIN
+      VALUE "FileDescription", "chiral-ftp"
+      VALUE "ProductName", "chiral-ftp"
+      VALUE "FileVersion", STR(VERSION_STR)
+      VALUE "ProductVersion", STR(VERSION_STR)
+      VALUE "OriginalFilename", "chiral-ftp.exe"
+      VALUE "LegalCopyright", "GPL-3.0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

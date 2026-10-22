@@ -1,6 +1,7 @@
 // Computer backend: an SDL window showing the software-rendered frame, with
 // keyboard shortcuts, the mouse (and an SDL game controller when one is
-// connected), and on macOS the menu bar and folder chooser (macos.mm).
+// connected), and on macOS the menu bar and folder chooser (macos.mm), on
+// Windows the folder chooser (win32/windows.cpp).
 
 #include "backend.h"
 #include "i18n.h"
@@ -12,6 +13,9 @@
 #ifdef __APPLE__
 void macos_menu_install();  // macos.mm
 bool macos_choose_folder(const char *start, std::string &out);
+#endif
+#ifdef _WIN32
+bool windows_choose_folder(const char *start, std::string &out);  // win32/windows.cpp
 #endif
 
 namespace backend {
@@ -139,6 +143,15 @@ void handle(const SDL_Event &e) {
 bool init(bool headless) {
   g_headless = headless;
   if(headless) SDL_setenv("SDL_VIDEODRIVER", "dummy", 1);
+#ifdef _WIN32
+  /* Sharp on a high-DPI screen, as on a Mac: the window measured in points
+     and drawn in pixels, rather than drawn small and stretched by Windows. */
+  SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
+  SDL_SetHint(SDL_HINT_WINDOWS_DPI_SCALING, "1");
+  /* main() is the program's own, not SDL2main's (SDL_MAIN_HANDLED in
+     platform.mk); SDL_Init refuses to start until it is told so. */
+  SDL_SetMainReady();
+#endif
   if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER)) {
     SDL_Log("SDL_Init: %s", SDL_GetError());
     return false;
@@ -242,6 +255,9 @@ bool copy_text(const char *text) {
 bool choose_folder(const char *start, std::string &out) {
 #ifdef __APPLE__
   if(!g_headless) return macos_choose_folder(start, out);
+#endif
+#ifdef _WIN32
+  if(!g_headless) return windows_choose_folder(start, out);
 #endif
   (void)start;
   (void)out;

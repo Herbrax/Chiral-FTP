@@ -623,7 +623,19 @@ api_poll(req_t *r) {
   unsigned long last;
 
   // drops: connections the session has given up on (session_drops), for the page to say so
-  strbuf_printf(&b, "{\"ok\":true,\"connected\":%d,\"drops\":%u,\"log\":", session_server(&s), session_drops());
+  const int connected = session_server(&s);
+  strbuf_printf(&b, "{\"ok\":true,\"connected\":%d,\"drops\":%u,", connected, session_drops());
+  /* And to what, as /api/state says it: a connection made from elsewhere --
+     quick connect, which opens this page while it is still connecting, or
+     the app's own window -- shows up here without reloading the page. */
+  if(connected) {
+    strbuf_append(&b, "\"server\":{\"host\":");
+    json_str(&b, s.host);
+    strbuf_printf(&b, ",\"port\":%u,\"protocol\":\"%s\",\"user\":", s.port, protocol_name(s.protocol));
+    json_str(&b, s.user);
+    strbuf_append(&b, "},");
+  }
+  strbuf_append(&b, "\"log\":");
   last = log_json(&b, since);
   strbuf_printf(&b, ",\"log_seq\":%lu,\"queue\":", last);
   queue_json(&b, tab, QUEUE_ITEMS_LIMIT);

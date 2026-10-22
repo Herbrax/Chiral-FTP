@@ -797,6 +797,24 @@
     };
   }
 
+  /* A connection the page didn't make itself -- quick connect, the app's
+     window, an earlier visit -- also fills the Quickconnect bar, so the top
+     line names it. Not the password: quick connect's is a one-time login. */
+  function fillQuickbar(server) {
+    if (!server) return;
+    $("q-proto").value = server.protocol || "ftp";
+    $("q-host").value = server.host || "";
+    $("q-user").value = server.user || "";
+    $("q-port").value = server.port || "";
+  }
+
+  /* The server already shown? By address and port only: the page keeps a
+     connection it made itself as typed (an empty user, say), so comparing
+     more would take it for a new one and send the listing back to "/". */
+  function sameServer(shown, now) {
+    return !!(state.connected && shown && now && shown.host === now.host && String(shown.port) === String(now.port));
+  }
+
   function setConnected(on, server) {
     state.connected = on;
     state.server = on ? server : null;
@@ -1374,6 +1392,13 @@
         var lost = state.drops !== undefined && data.drops !== state.drops, host = state.server ? state.server.host : "the server";
         setConnected(false);
         if (lost) toast("Lost the connection to " + host + ": it stopped answering", true);
+      } else if (data.connected && data.server && !connecting && !sameServer(state.server, data.server)) {
+        /* Connected from elsewhere -- quick connect opens this page while it
+           is still connecting -- or to another server than the one shown:
+           show it, top line and listing, without a reload. */
+        setConnected(true, data.server);
+        fillQuickbar(data.server);
+        remotePane.load("");
       }
       state.drops = data.drops;
       if (data.queue.running) delay = 600;
@@ -1432,6 +1457,7 @@
       $("sb-version").textContent = st.app + " " + st.version;
       if (st.connected) {
         setConnected(true, st.server);
+        fillQuickbar(st.server);
       }
     } catch (e) {
       errToast(e);
@@ -1441,7 +1467,7 @@
     state.history = lists[1] || [];
     if (lists[2] && lists[2][0]) Object.assign(state.prefs, lists[2][0]);
     renderRecent();
-    if (state.history[0]) {
+    if (state.history[0] && !state.connected) {  // connected: the bar already names that server
       $("q-proto").value = state.history[0].protocol || "ftp";
       $("q-host").value = state.history[0].host;
       $("q-port").value = state.history[0].port;

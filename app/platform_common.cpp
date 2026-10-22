@@ -4,6 +4,7 @@
 #include "platform.h"
 #include "platform_config.h"  // before the CHIRAL_BIG_ALLOC_VIA_MMAP test below
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdlib>
 #include <new>
@@ -38,6 +39,9 @@ extern "C" void startup_trace(const char *fmt, ...) __attribute__((weak));
 #include "i18n.h"
 #include "platform_config.h"
 #include "raster.h"
+#ifdef IMGUI_ENABLE_FREETYPE
+#include "imgui_freetype.h"
+#endif
 
 extern "C" {
 #include "system.h"
@@ -158,10 +162,28 @@ void load_script_fonts(const char *current_lang) {
   }
 }
 
+/* Glyphs at their own width in a window. ImGui otherwise renders text under
+   36 pixels twice as wide, for a GPU to blend back down; this renderer
+   samples the nearest texel instead (raster.cpp), which drops every other
+   column and leaves small text spindly. The consoles keep ImGui's choice. */
+int g_oversample = 0;  // 0: ImGui's automatic choice
+
+/* Where the build renders text with FreeType (IMGUI_ENABLE_FREETYPE, set by
+   platform/sdl/platform.mk), it uses FreeType's full hinting -- 0, its
+   default: stems, crossbars and the baseline land on whole pixels, which is
+   what keeps text crisp on a screen at one pixel per point. Compared on the
+   real window against no hinting and light hinting (vertical only), it was
+   the sharpest of the three. */
+int font_loader_flags() {
+  return 0;
+}
+
 // Merges the script fonts into the font just added.
 void merge_script_fonts(ImGuiIO &io) {
   for(const MappedFont &font : g_script_fonts) {
     ImFontConfig cfg;
+    cfg.OversampleH = cfg.OversampleV = g_oversample;
+    cfg.FontLoaderFlags = font_loader_flags();
     cfg.MergeMode = true;
     cfg.FontDataOwnedByAtlas = false;  // not ImGui's to free
     // The console's fonts draw larger than Noto Sans at the same size; 26 matches them.
@@ -173,22 +195,44 @@ void merge_script_fonts(ImGuiIO &io) {
 
 namespace {
 
-/* The UI is written in a 1920x1080 space and ImGui is told so, which is
-   what keeps one layout working on both consoles and on a PC window.
+/* On a console the UI is written in a 1920x1080 space and ImGui is told so,
+   which is what keeps one layout working on both consoles.
 
    What it is rasterised into is a separate question. On the Switch that is
    a 720p framebuffer: every pixel costs CPU in the rasteriser and again in
    libnx's swizzle to the Tegra layout, and at 1080p a d-pad press took long
    enough to feel broken. The draw data is scaled on its way out, so no
-   coordinate in the UI changes. */
-const int W = 1920, H = 1080;
+   coordinate in the UI changes.
+
+   A window on a computer is not a TV, and squeezing a TV's 1080p picture
+   into it made everything small and soft. There the layout takes the
+   window as it is (backend::window_size): W x H are its size in layout
+   units, UNITS_PER_POINT of them to a point; a bigger window has more room
+   rather than a bigger picture; and each frame is drawn at exactly the
+   window's pixels, glyphs and all.
+
+   1.5 units a point puts the 28-unit body text about where a Mac's 13 pt
+   is. Not 2: ImGui sizes a font by its line height, and Noto Sans's tall
+   ascenders leave the letters themselves about three quarters of that. */
+const float TV_W = 1920, TV_H = 1080;
+const float UNITS_PER_POINT = 1.5f;
+/* The least room the layout fits in. A window smaller than this, in units,
+   gets fewer units per point instead of a layout that overlaps itself. */
+const float MIN_W = 1600, MIN_H = 1000;
+float W = TV_W, H = TV_H;
+float g_zoom = 1.0f;
+float g_units_per_point = UNITS_PER_POINT;
+float g_density = 1.0f;  // pixels per layout unit, this frame
 /* What this platform actually rasterises into (platform_config.h). Usually
    the same as the layout, and then nothing is scaled. It was 720p on the
    Switch for a while, when a frame cost ~95 ms and almost all of it was the
    rasteriser walking bounding boxes; with that fixed, full size is
    affordable and text is drawn rather than resampled. Keeping these
-   separate from W/H is what makes a smaller target a one-line change. */
-const int RENDER_W = CHIRAL_RENDER_W, RENDER_H = CHIRAL_RENDER_H;
+   separate from W/H is what makes a smaller target a one-line change.
+
+   A window on a computer sets them every frame to its own pixels. */
+int RENDER_W = CHIRAL_RENDER_W, RENDER_H = CHIRAL_RENDER_H;
+bool g_windowed = false;  // a computer's window: the layout follows it
 const std::uint64_t REPEAT_DELAY = 380;
 const std::uint64_t REPEAT_RATE = 70;
 
@@ -220,6 +264,10 @@ Touch g_touch{};               // what the UI has not yet taken
 float g_touch_last_y = 0;
 float g_touch_start_x = 0, g_touch_start_y = 0;
 
+/* The mouse (computer only), reported by the backend as it moves. */
+bool g_pointer_seen = false;
+Pointer g_pointer{};
+
 void poll_touch() {
   int tx = 0, ty = 0;
   bool down = false;
@@ -233,8 +281,8 @@ void poll_touch() {
 
   /* Panel pixels to UI pixels. The panel is 1280x720 regardless of what
      the framebuffer happens to be, so this is the UI size over that. */
-  const float x = (float)tx * (float)W / 1280.0f;
-  const float y = (float)ty * (float)H / 720.0f;
+  const float x = (float)tx * TV_W / 1280.0f;
+  const float y = (float)ty * TV_H / 720.0f;
 
   if(down) {
     if(!g_touch_down) {
@@ -335,6 +383,36 @@ void key_enter() { g_enter = true; }
 void key_escape() { g_escape = true; }
 void quit() { g_queue.push_back(ACT_QUIT); }
 
+void pointer_move(float x, float y) {
+  g_pointer_seen = true;
+  g_pointer.x = x * g_units_per_point;  // points to layout units
+  g_pointer.y = y * g_units_per_point;
+  g_pointer.inside = true;
+  g_pointer.moved = true;
+}
+
+void pointer_button(bool right, bool down, bool modifier) {
+  g_pointer_seen = true;
+  if(down) return;  // a click is the button coming up, as with a key
+  if(right) g_pointer.right_clicked = true;
+  else g_pointer.clicked = true;
+  g_pointer.modifier = modifier;
+}
+
+void pointer_wheel(float notches) {
+  g_pointer_seen = true;
+  g_pointer.wheel += notches;
+}
+
+void pointer_leave() {
+  g_pointer.inside = false;
+  g_pointer.moved = true;
+}
+
+void command(Action a) {
+  g_queue.push_back(a);
+}
+
 }  // namespace detail
 
 bool init(bool headless) {
@@ -357,11 +435,17 @@ bool init(bool headless) {
   ImGuiIO &io = ImGui::GetIO();
   io.IniFilename = nullptr;
   io.LogFilename = nullptr;
-  io.DisplaySize = ImVec2((float)W, (float)H);
+  io.DisplaySize = ImVec2(W, H);
   io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
   io.BackendRendererName = "chiral-raster";
+  {
+    int pw, ph, xw, xh;
+    if(backend::window_size(&pw, &ph, &xw, &xh)) g_oversample = 1;
+  }
   ImFontConfig cfg;
   cfg.FontDataOwnedByAtlas = false;
+  cfg.OversampleH = cfg.OversampleV = g_oversample;
+  cfg.FontLoaderFlags = font_loader_flags();
   load_script_fonts(i18n_current());
   font_regular = io.Fonts->AddFontFromMemoryTTF((void *)font_regular_ttf, (int)font_regular_ttf_size,
                                                  30.0f, &cfg);
@@ -427,7 +511,52 @@ void begin_frame() {
   std::uint64_t now = backend::ticks_ms();
   io.DeltaTime = now > g_last_frame ? (float)(now - g_last_frame) / 1000.0f : 1.0f / 60.0f;
   g_last_frame = now;
+
+  int pw = 0, ph = 0, xw = 0, xh = 0;
+  g_windowed = backend::window_size(&pw, &ph, &xw, &xh) && pw > 0 && ph > 0 && xw > 0 && xh > 0;
+  float density = 1.0f;
+  if(g_windowed) {
+    float upp = UNITS_PER_POINT / g_zoom;
+    upp = std::max(upp, std::max(MIN_W / (float)pw, MIN_H / (float)ph));
+    g_units_per_point = upp;
+    W = (float)pw * upp;
+    H = (float)ph * upp;
+    RENDER_W = xw;
+    RENDER_H = xh;
+    if(g_frame.size() != (size_t)xw * xh) g_frame.assign((size_t)xw * xh, 0);
+    density = (float)xw / W;
+    io.DisplayFramebufferScale = ImVec2(density, density);
+    g_density = density;
+  } else {
+    W = TV_W;
+    H = TV_H;
+  }
+  io.DisplaySize = ImVec2(W, H);
   ImGui::NewFrame();
+  if(g_windowed) {
+    /* Glyphs baked for the pixels they will land on. ImGui sets this only
+       for the font it considers current; the UI draws with all three. The
+       anti-aliased fringe likewise stays one screen pixel wide rather than
+       one layout unit. */
+    for(ImFont *f : {font_regular, font_bold, font_mono}) f->CurrentRasterizerDensity = density;
+    ImGui::GetBackgroundDrawList()->_FringeScale = 1.0f / density;
+  }
+}
+
+float view_width() {
+  return W;
+}
+
+float view_height() {
+  return H;
+}
+
+float zoom() {
+  return g_zoom;
+}
+
+void set_zoom(float z) {
+  g_zoom = std::max(0.5f, std::min(2.0f, z));
 }
 
 void end_frame() {
@@ -435,7 +564,7 @@ void end_frame() {
   ImDrawData *data = ImGui::GetDrawData();
   raster::update_textures(data);
 
-  if(RENDER_W != W || RENDER_H != H) {
+  if((float)RENDER_W != W || (float)RENDER_H != H) {
     /* Scale the finished draw data instead of the UI. A few thousand
        vertices, against two million pixels saved. */
     const float kx = (float)RENDER_W / (float)W, ky = (float)RENDER_H / (float)H;
@@ -504,6 +633,53 @@ Touch take_touch() {
   g_touch.pressed = g_touch.released = false;
   g_touch.drag_y = 0;
   return t;
+}
+
+bool has_pointer() {
+  return g_pointer_seen;
+}
+
+Pointer take_pointer() {
+  Pointer p = g_pointer;
+  g_pointer.moved = g_pointer.clicked = g_pointer.right_clicked = g_pointer.modifier = false;
+  g_pointer.wheel = 0;
+  return p;
+}
+
+void pointer_hand(bool on) {
+  backend::pointer_hand(on);
+}
+
+bool open_url(const char *url) {
+  return backend::open_url(url);
+}
+
+bool in_foreground() {
+  return backend::in_foreground();
+}
+
+bool copy_text(const char *text) {
+  return backend::copy_text(text);
+}
+
+bool choose_folder(const char *start, std::string &out) {
+  return backend::choose_folder(start, out);
+}
+
+float pixel() {
+  return g_windowed ? 1.0f / g_density : 1.0f;
+}
+
+namespace {
+bool g_command_hidden[ACT_CMD_ZOOM_RESET + 1];
+}
+
+void set_command_shown(Action a, bool shown) {
+  if(a >= 0 && a <= ACT_CMD_ZOOM_RESET) g_command_hidden[a] = !shown;
+}
+
+bool command_shown(Action a) {
+  return a < 0 || a > ACT_CMD_ZOOM_RESET || !g_command_hidden[a];
 }
 
 bool has_native_keyboard() {
@@ -636,6 +812,13 @@ void rect(float x, float y, float w, float h, ImU32 col, float rounding) {
 }
 
 void frame(float x, float y, float w, float h, ImU32 col, float rounding, float thick) {
+  /* Whole pixels, two at least, where a layout unit is less than a pixel.
+     ImGui spends one pixel of an outline on its anti-aliased edge; what is
+     left of a 1.5-pixel one is too thin for the rasteriser's pixel centres
+     to find, and the line falls apart into dots. */
+  if(platform::g_windowed && platform::g_density < 1.0f) {
+    thick = std::max(2.0f, std::round(thick * platform::g_density)) / platform::g_density;
+  }
   dl()->AddRect(ImVec2(x, y), ImVec2(x + w, y + h), col, rounding, ImDrawFlags_None, thick);
 }
 
@@ -672,6 +855,36 @@ float button(float x, float y, float s, Action a) {
   case ACT_R2: label = "R2"; break;
   case ACT_OPTIONS: label = "OPTIONS"; break;
   case ACT_TOUCHPAD: label = "TOUCHPAD"; break;
+#elif CHIRAL_BUTTONS_KEYBOARD
+  // The keys the desktop backend maps, as key caps. A game controller works
+  // there too, but the keyboard is what every computer has.
+  case ACT_CROSS: label = "Enter"; break;
+  case ACT_CIRCLE: case ACT_CIRCLE_LONG: label = "Esc"; break;
+  case ACT_SQUARE: label = "Space"; break;
+  case ACT_TRIANGLE: label = "T"; break;
+  case ACT_L1: label = "Q"; break;
+  case ACT_R1: label = "E"; break;
+  case ACT_L2: label = "PgUp"; break;
+  case ACT_R2: label = "PgDn"; break;
+  case ACT_OPTIONS: label = "M"; break;
+  case ACT_TOUCHPAD: label = "G"; break;
+  /* Arrow keys rather than a d-pad: one cap with the pair of arrows the
+     hint means, as hint_lr() draws "switch side". */
+  case ACT_UP: case ACT_DOWN: case ACT_LEFT: case ACT_RIGHT: {
+    const float h = s * 0.80f, top = y + (s - h) / 2, w = s * 1.30f;
+    const float cy = top + h / 2, k = h * 0.22f;
+    const ImU32 face = IM_COL32(206, 216, 232, 255), ink = IM_COL32(16, 24, 40, 255);
+    d->AddRectFilled(ImVec2(x, top), ImVec2(x + w, top + h), face, s * 0.16f);
+    if(a == ACT_UP || a == ACT_DOWN) {
+      const float l = x + w * 0.32f, r = x + w * 0.68f;
+      d->AddTriangleFilled(ImVec2(l - k, cy + k * 0.6f), ImVec2(l + k, cy + k * 0.6f), ImVec2(l, cy - k * 0.8f), ink);
+      d->AddTriangleFilled(ImVec2(r - k, cy - k * 0.6f), ImVec2(r + k, cy - k * 0.6f), ImVec2(r, cy + k * 0.8f), ink);
+    } else {
+      d->AddTriangleFilled(ImVec2(x + w * 0.34f, cy - k), ImVec2(x + w * 0.34f, cy + k), ImVec2(x + w * 0.20f, cy), ink);
+      d->AddTriangleFilled(ImVec2(x + w * 0.66f, cy - k), ImVec2(x + w * 0.66f, cy + k), ImVec2(x + w * 0.80f, cy), ink);
+    }
+    return w;
+  }
 #else
   // The four face buttons, drawn where they sit on a Joy-Con: A right, B
   // bottom, X top, Y left. The actions keep their PS5 names through the
@@ -723,6 +936,7 @@ float button(float x, float y, float s, Action a) {
     return s;
   }
 #endif
+#if !CHIRAL_BUTTONS_KEYBOARD
   case ACT_UP: case ACT_DOWN: case ACT_LEFT: case ACT_RIGHT: {
     // D-pad: a small plus with the pressed arm highlighted.
     float t = s * 0.28f;
@@ -737,15 +951,24 @@ float button(float x, float y, float s, Action a) {
     }
     return s;
   }
+#endif
   default: return 0;
   }
   /* Light fill, dark letter. The old pill was a dark fill on a dark panel
-     with white text, which left the glyph barely visible. */
+     with white text, which left the glyph barely visible. A key cap is
+     squarer than a console's shoulder button, and a one-letter key no
+     narrower than it is tall. */
   float fs = s * 0.52f;
   ImVec2 ts = text_size(fs, label, true);
   float w = ts.x + s * 0.7f;
   const ImU32 face = IM_COL32(206, 216, 232, 255);
-  d->AddRectFilled(ImVec2(x, y + s * 0.10f), ImVec2(x + w, y + s * 0.90f), face, s * 0.32f);
+#if CHIRAL_BUTTONS_KEYBOARD
+  const float rounding = s * 0.16f;
+  if(w < s * 0.8f) w = s * 0.8f;
+#else
+  const float rounding = s * 0.32f;
+#endif
+  d->AddRectFilled(ImVec2(x, y + s * 0.10f), ImVec2(x + w, y + s * 0.90f), face, rounding);
   d->AddText(platform::font_bold, fs, ImVec2(x + (w - ts.x) / 2, y + (s - ts.y) / 2),
              IM_COL32(16, 24, 40, 255), label);
   return w;

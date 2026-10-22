@@ -17,14 +17,16 @@ BACKEND = ['init', 'shutdown', 'pump', 'present', 'frame_begin', 'frame_end',
            'ticks_ms', 'touch', 'early_init', 'has_native_keyboard',
            'keyboard_failed', 'native_text_prompt', 'set_text_input',
            'can_quit', 'startup_notice', 'report_startup_services',
-           'about_file_manager', 'about_thanks']
+           'about_file_manager', 'about_thanks', 'window_size', 'pointer_hand', 'open_url', 'copy_text', 'choose_folder', 'in_foreground']
 SYSTEM = ['system_data_dir_candidates', 'system_storage_roots',
           'system_free_space', 'system_local_ip', 'system_notify',
           'system_timegm', 'system_language', 'system_renderable_languages',
-          'system_script_fonts', 'system_ftpd_default_root']
+          'system_script_fonts', 'system_ftpd_default_root', 'system_ftpd_full_root', 'system_networks',
+          'system_device_name', 'system_device_kind']
 TRAITS = ['CHIRAL_FILE_MODE', 'CHIRAL_RENDER_W', 'CHIRAL_RENDER_H',
           'CHIRAL_WEB_MHD_OWNS_LISTENER', 'CHIRAL_WEB_MHD_NEEDS_SOCKETPAIR',
           'CHIRAL_BIG_ALLOC_VIA_MMAP', 'CHIRAL_PLATFORM_ID', 'CHIRAL_BUTTONS_PLAYSTATION',
+          'CHIRAL_BUTTONS_KEYBOARD', 'CHIRAL_DEVICE_COMPUTER', 'CHIRAL_HAS_SFTPD', 'CHIRAL_UI_DESKTOP',
           'CHIRAL_PLATFORM_NAME']
 
 def defined(path, name):

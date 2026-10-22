@@ -81,6 +81,10 @@ static long long g_rate_bytes;     // bytes since g_rate_start
 static struct timeval g_rate_start;
 static char g_recent[RECENT_MAX][160];
 static int g_recent_head, g_recent_count;
+static struct {
+  char user[64], pass[64], ip[INET_ADDRSTRLEN];
+} g_guests[FTPD_MAX_GUESTS];
+static int g_guest_next;
 
 /* ---------- bookkeeping ---------- */
 
@@ -126,6 +130,31 @@ ftpd_config_default(ftpd_config_t *c) {
   snprintf(c->user, sizeof(c->user), "%s", FTPD_DEFAULT_USER);
   snprintf(c->pass, sizeof(c->pass), "%s", FTPD_DEFAULT_PASS);
   snprintf(c->root, sizeof(c->root), "/");
+}
+
+void
+ftpd_add_guest(const char *user, const char *pass, const char *ip) {
+  pthread_mutex_lock(&g_lock);
+  snprintf(g_guests[g_guest_next].user, sizeof(g_guests[0].user), "%s", user);
+  snprintf(g_guests[g_guest_next].pass, sizeof(g_guests[0].pass), "%s", pass);
+  snprintf(g_guests[g_guest_next].ip, sizeof(g_guests[0].ip), "%s", ip);
+  g_guest_next = (g_guest_next + 1) % FTPD_MAX_GUESTS;
+  pthread_mutex_unlock(&g_lock);
+}
+
+static int same_secret(const char *a, const char *b);
+
+/* A quick-connect login, from the address it was given to. */
+static int
+guest_login(const client_t *c, const char *pass) {
+  int ok = 0;
+  pthread_mutex_lock(&g_lock);
+  for(int i = 0; i < FTPD_MAX_GUESTS && !ok; i++) {
+    ok = g_guests[i].user[0] && !strcmp(c->user, g_guests[i].user) && !strcmp(c->ip, g_guests[i].ip) &&
+         same_secret(pass, g_guests[i].pass);
+  }
+  pthread_mutex_unlock(&g_lock);
+  return ok;
 }
 
 void
@@ -387,6 +416,10 @@ resolve(client_t *c, const char *arg, char *real, size_t size, char *virt) {
   }
   if(virtual_path(c, arg, v, sizeof(v)) || real_path(v, real, size)) {
     reply(c, "553 Path too long");
+    return -1;
+  }
+  if(localfs_private(real)) {  // the app's own settings and keys, on a computer
+    reply(c, "550 Permission denied");
     return -1;
   }
   if(virt) snprintf(virt, PATH_MAX, "%s", v);
@@ -757,7 +790,7 @@ cmd_pass(client_t *c, const char *pass) {
   pthread_mutex_unlock(&g_lock);
   if(!c->user[0]) return reply(c, "503 Send USER first");
   if(cfg.anonymous && is_anonymous_name(c->user)) ok = 1;
-  else ok = !strcmp(c->user, cfg.user) && same_secret(pass, cfg.pass);
+  else ok = (!strcmp(c->user, cfg.user) && same_secret(pass, cfg.pass)) || guest_login(c, pass);
   if(!ok) {
     c->failures++;
     event(tr("%s: wrong username or password"), c->who);
@@ -1052,6 +1085,7 @@ listen_main(void *arg) {
   }
   event(tr("FTP server stopped"));
   pthread_mutex_lock(&g_lock);
+  memset(g_guests, 0, sizeof(g_guests));  // a quick connect lasts as long as the server
   g_running = 0;
   pthread_mutex_unlock(&g_lock);
   return NULL;

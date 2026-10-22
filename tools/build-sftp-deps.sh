@@ -36,7 +36,12 @@ fetch() {  # url file sha256
     curl -fsSL -o "$work/$2.part" "$1"
     mv "$work/$2.part" "$work/$2"
   fi
-  echo "$3  $work/$2" | shasum -a 256 -c - >/dev/null
+  echo "$3  $work/$2" | sha256 -c - >/dev/null
+}
+
+# macOS has shasum; MSYS2 on Windows has only coreutils' sha256sum.
+sha256() {
+  if command -v shasum >/dev/null; then shasum -a 256 "$@"; else sha256sum "$@"; fi
 }
 
 mbedtls_tar="mbedtls-$MBEDTLS_VER.tar.bz2"

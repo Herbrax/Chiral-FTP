@@ -12,7 +12,7 @@
 <div id="app">
   <header class="toolbar" id="toolbar">
     <a class="brand" href="/" title="chiral-ftp"><img class="dark-mark" src="/mark.svg" alt=""><img class="light-mark" src="/mark-light.svg" alt=""><span class="wordmark">chiral<span class="ftp">-ftp</span></span></a>
-    <a class="btn" href="/" style="text-decoration:none" title="Browse the console's files, upload from and download to this device">&#128193; Console files</a>
+    <a class="btn" href="/" style="text-decoration:none" title="Browse the console's files, upload from and download to this device" data-computer-title="Browse this computer's files, upload and download">&#128193; <span data-computer="Files">Console files</span></a>
     <button class="btn" id="btn-sites" title="Site Manager">&#9776; Site Manager</button>
     <div class="dropdown" id="recent-wrap">
       <button class="btn" id="btn-recent" title="Recent connections">Recent &#9662;</button>
@@ -43,7 +43,7 @@
   </section>
 
   <nav class="mobile-tabs" id="mobile-tabs">
-    <button class="active" data-pane="local">Console</button>
+    <button class="active" data-pane="local" data-computer="This computer">Console</button>
     <button data-pane="remote">Server</button>
     <button data-pane="queue">Queue <span id="mt-queue"></span></button>
   </nav>
@@ -68,7 +68,7 @@
     </div>
     <div class="queue-body">
       <table class="qtable">
-        <thead><tr><th class="c-dir"></th><th>Console file</th><th>Server file</th><th class="c-size">Size</th><th class="c-prog">Progress</th><th class="c-status">Status</th><th class="c-act"></th></tr></thead>
+        <thead><tr><th class="c-dir"></th><th data-computer="Local file">Console file</th><th>Server file</th><th class="c-size">Size</th><th class="c-prog">Progress</th><th class="c-status">Status</th><th class="c-act"></th></tr></thead>
         <tbody id="queue-rows"></tbody>
       </table>
       <div class="empty" id="queue-empty">Nothing here yet. Select files and press Upload or Download, or drag them to the other side.</div>
@@ -114,7 +114,7 @@
         <label>Username <input name="user" spellcheck="false"></label>
         <label>Password <input name="pass" type="password"></label>
       </div>
-      <label class="sftp-only">Private key file on the console (optional)
+      <label class="sftp-only"><span data-computer="Private key file on this computer (optional)">Private key file on the console (optional)</span>
         <input name="keyfile" placeholder="/data/chiral-ftp/id_rsa" spellcheck="false">
         <small>Put the matching .pub file next to it. With a key, the password field is the key's passphrase.</small>
       </label>
@@ -164,7 +164,7 @@
       <button class="btn small" type="button" id="btn-forget-keys" style="align-self:flex-start">Forget saved host keys</button>
     </label>
     <div class="row end">
-      <button class="btn danger" type="button" id="btn-exit" title="Stop the web server in chiral-ftp on the console">Stop web server</button>
+      <button class="btn danger" type="button" id="btn-exit" title="Stop the web server in chiral-ftp on the console" data-computer-title="Stop the web server in chiral-ftp">Stop web server</button>
       <span class="spacer"></span>
       <button class="btn primary" type="submit">Save</button>
     </div>

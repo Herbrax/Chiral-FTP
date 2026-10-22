@@ -15,6 +15,12 @@ int websrv_start(unsigned short port);  /* 0, or -1 with errno */
 void websrv_stop(void);                 /* asks; websrv_running() turns 0 when done */
 int websrv_running(void);
 unsigned short websrv_port(void);
+/* Who may connect, from the next websrv_start(): 0 (the default) anyone on
+   the network, 1 only this machine (127.0.0.1) -- a computer whose web app
+   opens in its own browser. Only where the app makes its own listener
+   (CHIRAL_WEB_MHD_OWNS_LISTENER 0); the Switch's libmicrohttpd binds for
+   itself and is always reachable from the network. */
+void websrv_set_local_only(int on);
 
 #ifdef __cplusplus
 }

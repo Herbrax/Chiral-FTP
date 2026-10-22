@@ -32,6 +32,12 @@ int ftpd_running(void);
 void ftpd_set_config(const ftpd_config_t *c);
 void ftpd_get_stats(ftpd_stats_t *out);
 
+/* A login that works only from one address: what quick connect hands a
+   device the person here allowed (engine/discovery.h). Kept until the
+   server stops; the newest replaces the oldest past FTPD_MAX_GUESTS. */
+#define FTPD_MAX_GUESTS 8
+void ftpd_add_guest(const char *user, const char *pass, const char *ip);
+
 /* Recent server events for the TV screen, oldest first. Returns how many
    were copied (at most max), each line NUL-terminated in 160 bytes. */
 int ftpd_recent(char lines[][160], int max);

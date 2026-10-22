@@ -45,6 +45,28 @@ long long system_free_space(const char *path, long long *total);
    and web app screens. Writes "unknown" when there isn't one. */
 void system_local_ip(char *buf, size_t size);
 
+/* The networks this machine is on, for the settings screen to offer a choice
+   of which address to show. A computer is often on several at once -- Wi-Fi,
+   Ethernet, a VPN -- and the one that routes to the internet is not
+   necessarily the one the console or phone across the room can reach.
+   name is the interface ("en0"), label what the system calls it ("Wi-Fi",
+   or empty), addr its IPv4 address. Writes at most max entries and returns
+   how many; 0 where there is no choice to make, which hides the setting. */
+typedef struct system_net {
+  char name[24];
+  char label[64];
+  char addr[48];
+} system_net_t;
+int system_networks(system_net_t *out, int max);
+
+/* How this machine shows up on the others' Quick connect list (discovery.h):
+   a name people recognise, and its kind -- "ps5", "switch", "mac",
+   "windows" or "linux" -- for the badge next to it. A console's own
+   nickname would take a system call no build has made yet, so for now a
+   console is just what it is. */
+void system_device_name(char *buf, size_t size);
+const char *system_device_kind(void);
+
 /* Tells the user something outside the app's own window, if the platform
    has any way to. Falls back to the in-app message log. */
 void system_notify(const char *message);
@@ -74,9 +96,13 @@ typedef struct system_font {
 } system_font_t;
 int system_script_fonts(system_font_t *out, int max, const char *current_lang);
 
-/* Default root the FTP server shares. The whole drive on a console; a
-   folder you nominate on a computer, which has no business serving "/". */
+/* Default root the FTP server shares. The whole drive on a console; on a
+   computer the person's own folder, which the server screen can change. */
 const char *system_ftpd_default_root(void);
+/* What "the whole computer" means for the server screen's button that
+   shares everything: "/", or the system drive on Windows. The same as the
+   default on a console, which shares all of itself already. */
+const char *system_ftpd_full_root(void);
 
 /* UTC struct tm to time_t. timegm() where it exists; computed where it
    doesn't (newlib has no such function). */

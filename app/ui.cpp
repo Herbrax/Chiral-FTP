@@ -37,12 +37,24 @@ extern "C" {
 #include "system.h"
 #include "strbuf.h"
 #include "websrv.h"
+#include "discovery.h"
+#if CHIRAL_HAS_SFTPD
+#include "sftpd.h"
+#endif
 }
+
+#if CHIRAL_HAS_SFTPD
+#define SFTPD_PORT SFTPD_DEFAULT_PORT
+#else
+#define SFTPD_PORT 2222  // kept in the settings, unused without an SFTP server
+#endif
 
 namespace ui {
 namespace {
 
-const float W = 1920, H = 1080;
+/* The space the layout fills: 1920x1080 on a console, the window on a
+   computer (platform::view_width), set at the start of every frame. */
+float W = 1920, H = 1080;
 const float TOP_H = 96, HINT_H = 76, STATUS_H = 46;
 const float PANE_Y = TOP_H + 12, PANE_GAP = 20, MARGIN = 36;
 const float ROW_H = 54, PANE_HEAD = 84, PANE_FOOT = 46;
@@ -51,6 +63,20 @@ const float FS = 28, FS_SMALL = 23, FS_TITLE = 34;
    at -- the About screen's body, the start screen's card descriptions and
    the note under its heading. On a TV across a room, FS_SMALL is small. */
 const float FS_READ = 27, FS_CARD = 32;
+
+/* Text that names the machine. A console's says "the console", and a
+   computer's (CHIRAL_DEVICE_COMPUTER) says "this computer" -- and leaves out
+   what only a console has, the SD card or the TV. Both are marked N_() at
+   the call, so each is in the catalogue; translate the result with tr(). */
+inline const char *device_text(const char *console, const char *computer) {
+#if CHIRAL_DEVICE_COMPUTER
+  (void)console;
+  return computer;
+#else
+  (void)computer;
+  return console;
+#endif
+}
 
 /* ---------- small helpers ---------- */
 
@@ -306,6 +332,7 @@ struct Pane {
   /* Free space on the drive this folder is on, -1 when the platform won't
      say (system_free_space). Shown in the footer only when it is known. */
   long long free_bytes = -1;
+  double free_asked = 0;  // when refresh_free_space() last asked (now())
   std::string path;  // "" = drive list (local) / server list (remote, disconnected)
   std::vector<Entry> entries;
   int cursor = 0, scroll = 0;
@@ -319,7 +346,7 @@ struct ServerItem {
   int index;
 };
 
-enum OverlayKind { OV_OTHER, OV_QUEUE, OV_LOG, OV_TEXT, OV_MENU };
+enum OverlayKind { OV_OTHER, OV_QUEUE, OV_LOG, OV_TEXT, OV_MENU, OV_QUICK, OV_PROMPT };
 
 /* Touch. The UI is drawn fresh every frame, so rather than keep a parallel
    model of where everything is, each screen records the rectangles it has
@@ -331,39 +358,65 @@ enum OverlayKind { OV_OTHER, OV_QUEUE, OV_LOG, OV_TEXT, OV_MENU };
    Taps are deliberately not the same as presses. On a list, the first tap
    moves the cursor and the second opens what it is on, so a mis-tap in a
    file manager costs nothing; menus and cards act on the first tap, since
-   there the choice is the whole point. */
+   there the choice is the whole point.
+
+   A mouse on a computer uses the same rectangles, and more of them: it is
+   always somewhere, so what it is over takes the highlight, and a click then
+   acts on it straight away (handle_pointer). */
 enum HitKind {
   HIT_ROW,            // a file or folder in a pane
   HIT_SERVER,         // a saved site or recent connection
   HIT_SETTING,        // a row on the FTP server / web app screens
   HIT_CARD,           // a mode on the start screen
-  HIT_MENU_ITEM,
+  HIT_MENU_ITEM,      // a menu's item, or any overlay's: a is which, b a sub-kind
   HIT_OVERLAY_BODY,
   HIT_DISCONNECT,
   HIT_SCROLL,
+  HIT_HINT,           // a key in a hint bar: a is its Action
+  HIT_QUICK,          // the start screen's Quick connect button
 };
 
 struct Hit {
   float x, y, w, h;
   HitKind kind;
   int a, b;  // row: pane index, entry index. card/menu: which one.
+  int layer;  // 0 the screen, n the n-th overlay up
 };
 
 std::vector<Hit> g_hits;
+int g_hit_layer = 0;         // which layer is being drawn
 bool g_touch_dirty = false;  // keeps the main loop redrawing while in use
 
 void hit_add(HitKind kind, float x, float y, float w, float h, int a = 0, int b = 0) {
-  if(!platform::has_touch()) return;
-  g_hits.push_back({x, y, w, h, kind, a, b});
+  if(!platform::has_touch() && !platform::has_pointer()) return;
+  g_hits.push_back({x, y, w, h, kind, a, b, g_hit_layer});
 }
 
-const Hit *hit_at(float x, float y, HitKind kind) {
+// layer -1: any layer.
+const Hit *hit_at(float x, float y, HitKind kind, int layer = -1) {
   // Last drawn wins, so something drawn on top takes the tap.
   for(size_t i = g_hits.size(); i-- > 0;) {
     const Hit &h = g_hits[i];
-    if(h.kind == kind && x >= h.x && x < h.x + h.w && y >= h.y && y < h.y + h.h) return &g_hits[i];
+    if(h.kind == kind && (layer < 0 || h.layer == layer) && x >= h.x && x < h.x + h.w && y >= h.y &&
+       y < h.y + h.h) {
+      return &g_hits[i];
+    }
   }
   return nullptr;
+}
+
+// A hint whose key can be clicked. The hint bars are drawn with these.
+float hint(float x, float y, Action a, const char *caption) {
+  const float w = draw::hint(x, y, a, caption);
+  hit_add(HIT_HINT, x - 6, y - 8, w - 28, 54, a);
+  return w;
+}
+
+// "Switch side": clicking it switches, as Tab does.
+float hint_lr(float x, float y, const char *caption) {
+  const float w = draw::hint_lr(x, y, caption);
+  hit_add(HIT_HINT, x - 6, y - 8, w - 28, 54, ACT_R1);
+  return w;
 }
 
 struct Overlay {
@@ -371,6 +424,21 @@ struct Overlay {
   virtual OverlayKind kind() { return OV_OTHER; }
   virtual bool input(Action a) = 0;  // false closes the overlay
   virtual void draw() = 0;
+  /* The mouse is over item a (b: which part of it, where an item has
+     several) -- what each overlay's HIT_MENU_ITEM rectangles mean. Moves
+     the overlay's own highlight there; a click then sends ACT_CROSS. */
+  virtual void focus(int a, int b) {
+    (void)a;
+    (void)b;
+  }
+  /* A click on item a: the highlight moves there and it is chosen, as with
+     Enter. False when that closed the overlay. A right click does nothing
+     unless an overlay gives it a meaning. */
+  virtual bool click(int a, int b, bool right) {
+    if(right) return true;
+    focus(a, b);
+    return input(ACT_CROSS);
+  }
 };
 
 enum Mode { MODE_HOME, MODE_CLIENT, MODE_FILES, MODE_FTPD, MODE_WEB };
@@ -424,6 +492,13 @@ struct App {
   ftp_server_t server;
   std::vector<json::Object> sites, history;
   bool show_hidden = true, save_pass = true;
+  /* The network whose address the server screens show, by interface name
+     ("en0"); empty for automatic. Only a computer offers the choice
+     (system_networks). */
+  std::string network;
+  /* What the client calls the server it is connected to: the device's
+     name after a quick connect, else "" (and it says "Server"). */
+  std::string server_label;
   std::vector<ServerItem> servers;
   std::vector<std::unique_ptr<Overlay>> overlays;
   std::string toast;
@@ -440,6 +515,16 @@ struct App {
 };
 
 App g;
+
+/* On the start screen: built in (mode_enabled), and never on a computer for
+   the file manager and the client -- there they live in the web app, in its
+   own browser. */
+bool mode_shown(Mode m) {
+#if CHIRAL_DEVICE_COMPUTER
+  if(m == MODE_FILES || m == MODE_CLIENT) return false;
+#endif
+  return mode_enabled(m);
+}
 
 void show_toast(const std::string &msg, bool err = false) {
   g.toast = msg;
@@ -467,7 +552,7 @@ std::vector<json::Object> load_store(const char *name) {
 
 void save_store(const char *name, const std::vector<json::Object> &items) {
   std::string s = json::dump_array(items);
-  if(store_write(name, s.c_str(), s.size())) show_toast(tr("Could not save to the console"), true);
+  if(store_write(name, s.c_str(), s.size())) show_toast(tr(device_text(N_("Could not save to the console"), N_("Could not save to this computer"))), true);
 }
 
 void load_all() {
@@ -477,6 +562,8 @@ void load_all() {
   if(!prefs.empty()) {
     g.show_hidden = json::get_bool(prefs[0], "show_hidden", true);
     g.save_pass = json::get_bool(prefs[0], "save_pass", true);
+    g.network = json::get_str(prefs[0], "network");
+    platform::set_zoom((float)json::get_num(prefs[0], "zoom", 1.0));
   }
 }
 
@@ -485,6 +572,8 @@ void save_prefs() {
   json::set_bool(o, "show_hidden", g.show_hidden);
   json::set_bool(o, "save_pass", g.save_pass);
   json::set_str(o, "language", i18n_choice());
+  json::set_str(o, "network", g.network);
+  json::set_num(o, "zoom", platform::zoom());
   save_store("prefs", {o});
 }
 
@@ -593,6 +682,24 @@ void load_drives(Pane &p = local()) {
   clamp_cursor(p, (int)v.size());
 }
 
+/* Free space that wasn't known yet when the list was made. Some platforms
+   answer on a thread of their own (the Switch: a USB drive took 350 ms), so
+   the first answer is "unknown" and the real one comes a moment later; ask
+   again, about once a second, until it does -- the answer is kept, so asking
+   costs nothing. Without this a drive's free space only appeared once the
+   list was made again. */
+void refresh_free_space(Pane &p) {
+  if(p.remote || now() - p.free_asked < 1) return;
+  p.free_asked = now();
+  if(p.path.empty()) {
+    for(Entry &e : p.entries) {
+      if(e.drive && e.size < 0) e.size = system_free_space(e.name.c_str(), nullptr);
+    }
+  } else if(p.free_bytes < 0) {
+    p.free_bytes = system_free_space(p.path.c_str(), nullptr);
+  }
+}
+
 // Lists a local folder into a pane: the client's left side by default, or a
 // file manager pane.
 void load_local(const std::string &path, bool keep = false, Pane *target = nullptr) {
@@ -635,7 +742,14 @@ int do_list(ftp_conn_t *c, void *p) {
   return ftp_list(c, ctx->path.c_str(), &ctx->listing, ctx->resolved, sizeof(ctx->resolved));
 }
 
+double g_remote_load_at = 0;  // when the listing still in flight was asked for
+
 void load_remote(const std::string &path, bool keep = false) {
+  /* One listing at a time. Pressing Open or Back again while the server
+     hasn't answered would only send it another request behind the first;
+     after five seconds without an answer, a new one may go. */
+  if(remote().loading && now() - g_remote_load_at < 5) return;
+  g_remote_load_at = now();
   auto ctx = std::make_shared<ListCtx>();
   auto err = std::make_shared<std::string>();
   auto ok = std::make_shared<bool>(false);
@@ -730,9 +844,12 @@ void connect(json::Object site) {
         }
         g.connected = true;
         g.server = *srv;
+        // A quick connect's server is a device with a name: "Nintendo Switch".
+        g.server_label = json::get_bool(site, "quick") ? json::get_str(site, "name") : std::string();
         json::set_str(site, "protocol", srv->protocol == FTP_PROTO_SFTP ? "sftp" : "ftp");
         json::set_num(site, "port", srv->port);
-        add_history(site);
+        // A quick connect's login lasts only while that server runs: nothing to remember.
+        if(!json::get_bool(site, "quick")) add_history(site);
         show_toast(trf("Connected to {0}", {srv->host}));
         std::string dir = json::get_str(site, "remote_dir");
         remote().path = "\x01";  // force a fresh pane state
@@ -743,15 +860,38 @@ void connect(json::Object site) {
       });
 }
 
+// The remote side, as it is when nothing is connected.
+void forget_connection() {
+  g.connected = false;
+  g.server_label.clear();
+  remote().path.clear();
+  remote().entries.clear();
+  remote().marked.clear();
+  rebuild_servers();
+}
+
 void disconnect() {
   g_jobs.run([] { session_disconnect(); }, [] {
-    g.connected = false;
-    remote().path.clear();
-    remote().entries.clear();
-    remote().marked.clear();
-    rebuild_servers();
+    forget_connection();
     show_toast(tr("Disconnected"));
   });
+}
+
+void go_mode(Mode m);  // further down
+
+/* The session gave the connection up: the server hadn't answered for 30
+   seconds (session_drops). The client stops saying it is connected, and
+   closes -- on a computer, back to the page it was opened from. */
+void watch_connection() {
+  static unsigned seen = session_drops();
+  const unsigned drops = session_drops();
+  if(drops == seen) return;
+  seen = drops;
+  if(!g.connected) return;
+  const std::string who = g.server_label.empty() ? std::string(g.server.host) : g.server_label;
+  forget_connection();
+  if(g.mode == MODE_CLIENT) go_mode(MODE_HOME);
+  show_toast(trf("Lost the connection to {0}", {who}), true);
 }
 
 /* ---------- text entry ---------- */
@@ -796,6 +936,7 @@ struct TextEntry : Overlay {
     float w = 1100, h = 250, x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 150));
     draw::rect(x, y, w, h, draw::PANEL, 18);
+    hit_add(HIT_OVERLAY_BODY, x, y, w, h);
     draw::text(x + 40, y + 30, FS_TITLE, draw::TEXT, title.c_str(), true);
     draw::rect(x + 40, y + 100, w - 80, 64, draw::BG, 10);
     std::string shown = text_kind == TEXT_PASSWORD ? std::string(value.size(), '*') : value;
@@ -831,6 +972,11 @@ struct Menu : Overlay {
   std::string title, subtitle;
   std::vector<MenuItem> items;
   int cursor = 0;
+
+  void focus(int a, int b) override {
+    (void)b;
+    if(a >= 0 && a < (int)items.size() && items[a].enabled) cursor = a;
+  }
 
   bool input(Action a) override {
     int n = (int)items.size();
@@ -874,6 +1020,11 @@ struct Confirm : Overlay {
   std::function<void()> run;
   int choice = 1;  // default to Cancel
 
+  void focus(int a, int b) override {
+    (void)b;
+    choice = a ? 1 : 0;
+  }
+
   bool input(Action a) override {
     if(a == ACT_CIRCLE) return false;
     if(a == ACT_LEFT || a == ACT_RIGHT || a == ACT_UP || a == ACT_DOWN) choice = 1 - choice;
@@ -888,11 +1039,13 @@ struct Confirm : Overlay {
     float w = 980, h = 300, x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 150));
     draw::rect(x, y, w, h, draw::PANEL, 18);
+    hit_add(HIT_OVERLAY_BODY, x, y, w, h);
     draw::text(x + 40, y + 30, FS_TITLE, draw::TEXT, title.c_str(), true);
     draw::text_clip(x + 40, y + 96, FS, draw::MUTED, text.c_str(), w - 80);
     const char *labels[2] = {yes.c_str(), tr("Cancel")};
     for(int i = 0; i < 2; i++) {
       float bx = x + w - 40 - (2 - i) * 250 + 10;
+      hit_add(HIT_MENU_ITEM, bx, y + 200, 230, 64, i);
       draw::rect(bx, y + 200, 230, 64, i == choice ? (i == 0 ? draw::ERR : draw::ACCENT) : draw::PANEL2, 12);
       ImVec2 ts = draw::text_size(FS, labels[i], true);
       draw::text(bx + (230 - ts.x) / 2, y + 216, FS, draw::TEXT, labels[i], true);
@@ -952,7 +1105,7 @@ struct Form : Overlay {
     case ANON: return tr("Anonymous login");
     case KEY: return tr("Private key file");
     case NAME: return tr("Site name");
-    case LOCAL_DIR: return tr("Start in a console folder");
+    case LOCAL_DIR: return tr(device_text(N_("Start in a console folder"), N_("Start in a local folder")));
     case REMOTE_DIR: return tr("Start in server folder");
     default: return "";
     }
@@ -1034,6 +1187,11 @@ struct Form : Overlay {
     show_toast(trf("Saved {0}", {json::get_str(site, "name")}));
   }
 
+  void focus(int a, int b) override {
+    (void)b;
+    cursor = a;
+  }
+
   bool input(Action a) override {
     std::vector<int> f = fields();
     int idx = (int)(std::find(f.begin(), f.end(), cursor) - f.begin());
@@ -1072,12 +1230,14 @@ struct Form : Overlay {
     float x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 150));
     draw::rect(x, y, w, h, draw::PANEL, 18);
+    hit_add(HIT_OVERLAY_BODY, x, y, w, h);
     draw::text(x + 40, y + 28, FS_TITLE, draw::TEXT,
                site_index >= 0 ? trf("Edit site: {0}", {json::get_str(site, "name")}).c_str() : tr("Connect to a server"), true);
     float yy = y + 96;
     for(int fi : f) {
       if(fi >= CONNECT) break;
       bool on = fi == cursor;
+      hit_add(HIT_MENU_ITEM, x + 20, yy, w - 40, row - 6, fi);
       if(on) draw::rect(x + 20, yy, w - 40, row - 6, draw::SEL, 10);
       draw::text(x + 44, yy + 12, FS, on ? draw::TEXT : draw::MUTED, label(fi));
       std::string v = value(fi);
@@ -1093,6 +1253,7 @@ struct Form : Overlay {
     for(int i = 0; i < 3; i++) {
       float bx = x + w - 40 - (3 - i) * (bw + 20) + 20;
       bool on = cursor == CONNECT + i;
+      hit_add(HIT_MENU_ITEM, bx, yy + 24, bw, 64, CONNECT + i);
       draw::rect(bx, yy + 24, bw, 64, on ? (i == 0 ? draw::ACCENT : draw::SEL) : draw::PANEL2, 12);
       ImVec2 ts = draw::text_size(FS, labels[i], true);
       draw::text(bx + (bw - ts.x) / 2, yy + 40, FS, draw::TEXT, labels[i], true);
@@ -1102,9 +1263,32 @@ struct Form : Overlay {
 
 /* ---------- settings ---------- */
 
+// Defined with the server screens, further down.
+const std::string &local_ip();
+void ip_changed();
+
 struct Settings : Overlay {
-  int cursor = 0;
-  enum { LANG, CONNS, POLICY, RETRIES, MTIME, HIDDEN, SAVEPASS, KEYS, LOGVIEW, COUNT };
+  int cursor = 0;  // an index into rows()
+  enum { LANG, NETWORK, CONNS, POLICY, RETRIES, MTIME, HIDDEN, SAVEPASS, KEYS, LOGVIEW, COUNT };
+
+  /* The rows shown. Network only where the machine is on networks to choose
+     between, which is a computer (system_networks returns 0 elsewhere). */
+  static std::vector<int> rows() {
+    system_net_t nets[16];
+    const bool networks = system_networks(nets, 16) > 0;
+    std::vector<int> r;
+    for(int i = 0; i < COUNT; i++) {
+      if(i == NETWORK && !networks) continue;
+      r.push_back(i);
+    }
+    return r;
+  }
+
+  int id() {
+    std::vector<int> r = rows();
+    if(cursor >= (int)r.size()) cursor = (int)r.size() - 1;
+    return r[cursor];
+  }
 
   // "Automatic (English)" or a language's own name.
   static std::string language_value() {
@@ -1125,6 +1309,36 @@ struct Settings : Overlay {
     save_prefs();
   }
 
+  // "Wi-Fi  ·  192.168.1.23"; a tunnel says which one, there may be several.
+  static std::string network_name(const system_net_t &n) {
+    std::string label = n.label;
+    if(label.empty()) label = n.name;
+    else if(label == "VPN") label += std::string(" (") + n.name + ")";
+    return label + "  \xc2\xb7  " + n.addr;
+  }
+
+  // "Automatic (192.168.1.23)", or the chosen network.
+  static std::string network_value() {
+    if(!g.network.empty()) {
+      system_net_t nets[16];
+      const int n = system_networks(nets, 16);
+      for(int i = 0; i < n; i++) if(g.network == nets[i].name) return network_name(nets[i]);
+    }
+    return trf("Automatic ({0})", {local_ip()});
+  }
+
+  // Automatic, then each network the machine is on.
+  static void change_network(int dir) {
+    system_net_t nets[16];
+    const int n = system_networks(nets, 16);
+    int at = 0;
+    for(int i = 0; i < n; i++) if(g.network == nets[i].name) at = i + 1;
+    at = (at + n + 1 + dir) % (n + 1);
+    g.network = at ? nets[at - 1].name : "";
+    save_prefs();
+    ip_changed();
+  }
+
   static const char *policy_name(int p) {
     switch(p) {
     case POLICY_OVERWRITE: return tr("Always overwrite");
@@ -1136,8 +1350,9 @@ struct Settings : Overlay {
 
   void change(int dir) {
     settings_t s = settings_get();
-    switch(cursor) {
+    switch(id()) {
     case LANG: change_language(dir); return;
+    case NETWORK: change_network(dir); return;
     case CONNS: s.connections = std::max(1, std::min(MAX_TRANSFER_CONNECTIONS, s.connections + dir)); break;
     case POLICY: s.policy = (s.policy + 4 + dir) % 4; break;
     case RETRIES: s.retries = std::max(0, std::min(10, s.retries + dir)); break;
@@ -1157,18 +1372,38 @@ struct Settings : Overlay {
     queue_kick();
   }
 
+  void focus(int a, int b) override {
+    (void)b;
+    cursor = a;
+  }
+
+  // A right click steps a value back, as Left does.
+  bool click(int a, int b, bool right) override {
+    focus(a, b);
+    if(right) {
+      change(-1);
+      return true;
+    }
+    return input(ACT_CROSS);
+  }
+
   bool input(Action a) override;
 
   void draw() override {
     settings_t s = settings_get();
-    float row = 66, w = 1240, h = 140 + row * (float)COUNT + 74;
+    const std::vector<int> shown = rows();
+    const int count = (int)shown.size();
+    // An extra row still fits above the hint bar.
+    float row = count > 9 ? 62 : 66, w = 1240, h = 140 + row * (float)count + 74;
     float x = (W - w) / 2, y = (H - h) / 2;
     char buf[64];
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 150));
     draw::rect(x, y, w, h, draw::PANEL, 18);
+    hit_add(HIT_OVERLAY_BODY, x, y, w, h);
     draw::text(x + 40, y + 28, FS_TITLE, draw::TEXT, tr("Settings"), true);
     struct { const char *label; std::string value; } rows[COUNT];
     rows[LANG] = {tr("Language"), "<  " + language_value() + "  >"};
+    rows[NETWORK] = {tr("Network"), "<  " + network_value() + "  >"};
     snprintf(buf, sizeof(buf), "<  %d  >", s.connections);
     rows[CONNS] = {tr("Simultaneous transfers"), buf};
     rows[POLICY] = {tr("When the file already exists"), std::string("<  ") + policy_name(s.policy) + "  >"};
@@ -1179,18 +1414,25 @@ struct Settings : Overlay {
     rows[SAVEPASS] = {tr("Remember passwords in Recent"), g.save_pass ? tr("On") : tr("Off")};
     rows[KEYS] = {tr("Forget saved SFTP host keys"), ""};
     rows[LOGVIEW] = {tr("Message log"), ""};
+    const int current = id();
     float yy = y + 100;
-    for(int i = 0; i < COUNT; i++) {
-      bool on = i == cursor;
+    for(int k = 0; k < count; k++) {
+      const int i = shown[k];
+      bool on = k == cursor;
+      hit_add(HIT_MENU_ITEM, x + 20, yy, w - 40, row - 6, k);
       if(on) draw::rect(x + 20, yy, w - 40, row - 6, draw::SEL, 10);
-      draw::text(x + 44, yy + 15, FS, draw::TEXT, rows[i].label, on);
+      draw::text(x + 44, yy + (row - 36) / 2, FS, draw::TEXT, rows[i].label, on);
       ImVec2 ts = draw::text_size(FS, rows[i].value.c_str());
-      draw::text(x + w - 60 - ts.x, yy + 15, FS, i == CONNS || i == LANG ? draw::ACCENT2 : draw::MUTED, rows[i].value.c_str());
+      draw::text(x + w - 60 - ts.x, yy + (row - 36) / 2, FS,
+                 i == CONNS || i == LANG || i == NETWORK ? draw::ACCENT2 : draw::MUTED, rows[i].value.c_str());
       yy += row;
     }
-    const char *hint = cursor == CONNS ? tr("Each transfer logs in with its own connection, like FileZilla. Up to 30; the queue backs off if the server allows fewer.")
-                       : cursor == LANG ? tr("Automatic follows the console's system language.")
-                                        : tr("Left/Right to change. Settings are saved on the console right away.");
+    const char *hint = current == CONNS ? tr("Each transfer logs in with its own connection, like FileZilla. Up to 30; the queue backs off if the server allows fewer.")
+                       : current == NETWORK ? tr("The address the FTP server and web app screens show. Automatic picks your local network (192.168.x.x) over a VPN.")
+                       : current == LANG ? tr(device_text(N_("Automatic follows the console's system language."),
+                                                          N_("Automatic follows your system language.")))
+                                         : tr(device_text(N_("Left/Right to change. Settings are saved on the console right away."),
+                                                          N_("Left/Right or click to change. Settings are saved right away.")));
     std::vector<std::string> hint_lines = wrap_text(hint, FS_SMALL, w - 88);
     for(size_t k = 0; k < hint_lines.size() && k < 2; k++)
       draw::text(x + 44, yy + 6 + 32 * (float)k, FS_SMALL, draw::MUTED, hint_lines[k].c_str());
@@ -1220,6 +1462,7 @@ struct LogView : Overlay {
     float x = 60, y = 60, w = W - 120, h = H - 120;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 170));
     draw::rect(x, y, w, h, draw::PANEL, 18);
+    hit_add(HIT_OVERLAY_BODY, x, y, w, h);
     draw::text(x + 36, y + 24, FS_TITLE, draw::TEXT, tr("Message log"), true);
     float lh = 30;
     int rows = (int)((h - 160) / lh);
@@ -1234,9 +1477,9 @@ struct LogView : Overlay {
       yy += lh;
     }
     float hx = x + 36, hy = y + h - 60;
-    hx += draw::hint(hx, hy, ACT_UP, tr("Scroll"));
-    hx += draw::hint(hx, hy, ACT_TRIANGLE, tr("Clear"));
-    draw::hint(hx, hy, ACT_CIRCLE, tr("Close"));
+    hx += hint(hx, hy, ACT_UP, tr("Scroll"));
+    hx += hint(hx, hy, ACT_TRIANGLE, tr("Clear"));
+    hint(hx, hy, ACT_CIRCLE, tr("Close"));
   }
 };
 
@@ -1256,14 +1499,18 @@ struct About : Overlay {
     float w = 1400, h = 900, x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 160));
     draw::rect(x, y, w, h, draw::PANEL, 18);
+    hit_add(HIT_OVERLAY_BODY, x, y, w, h);
     draw::brand_mark(x + 50, y + 34, 84);
     float ww = draw::brand_wordmark(x + 150, y + 44, 56);
     draw::text(x + 150 + ww + 24, y + 66, FS, draw::MUTED, trf("version {0}", {VERSION_TAG}).c_str());
     struct Line { float size; ImU32 col; bool bold; const char *text; };
     std::vector<Line> lines = {
-        {FS, draw::TEXT, false, N_("The ultimate file manager and FTP interface for this console:")},
-        {FS_READ, draw::MUTED, false, N_("  FTP server: other devices connect to the console with any FTP app.")},
-        {FS_READ, draw::MUTED, false, N_("  Web app: manage the console's files from a browser, upload and download.")},
+        {FS, draw::TEXT, false, device_text(N_("The ultimate file manager and FTP interface for this console:"),
+                                            N_("The ultimate file manager and FTP interface for this computer:"))},
+        {FS_READ, draw::MUTED, false, device_text(N_("  FTP server: other devices connect to the console with any FTP app."),
+                                                  N_("  FTP server: other devices connect to this computer with any FTP app."))},
+        {FS_READ, draw::MUTED, false, device_text(N_("  Web app: manage the console's files from a browser, upload and download."),
+                                                  N_("  Web app: manage this computer's files from another device's browser."))},
         {FS_READ, draw::MUTED, false, platform::about_file_manager()},
         {FS_READ, draw::MUTED, false, N_("  FTP / SFTP client: up to 30 transfers at once with your laptop, PC or NAS.")},
         {FS_READ, draw::TEXT, false, N_("chiral-ftp runs on PS5, Nintendo Switch, PC and Mac. Android, PS4 and more are coming soon.")},
@@ -1286,21 +1533,22 @@ struct About : Overlay {
       yy += lines[i].size + 17;
       if(yy > y + h - 100) break;
     }
-    draw::hint(x + 50, y + h - 70, ACT_CIRCLE, tr("Close"));
+    hint(x + 50, y + h - 70, ACT_CIRCLE, tr("Close"));
   }
 };
 
 bool Settings::input(Action a) {
+  const int n = (int)rows().size();
   if(a == ACT_CIRCLE || a == ACT_OPTIONS) return false;
-  if(a == ACT_UP) cursor = (cursor + COUNT - 1) % COUNT;
-  if(a == ACT_DOWN) cursor = (cursor + 1) % COUNT;
+  if(a == ACT_UP) cursor = (cursor + n - 1) % n;
+  if(a == ACT_DOWN) cursor = (cursor + 1) % n;
   if(a == ACT_LEFT) change(-1);
   if(a == ACT_RIGHT) change(1);
   if(a == ACT_CROSS) {
-    if(cursor == KEYS) {
+    if(id() == KEYS) {
       confirm(tr("Forget host keys"), tr("Forget every saved SFTP server key? The next connection trusts the server's current key."),
               tr("Forget"), [] { show_toast(ftp_forget_host_keys() ? tr("Could not remove the keys") : tr("Saved host keys forgotten")); });
-    } else if(cursor == LOGVIEW) {
+    } else if(id() == LOGVIEW) {
       push(new LogView);
     } else {
       change(1);
@@ -1324,6 +1572,22 @@ struct QueueView : Overlay {
     items.assign(buf, buf + n);
     if(cursor >= n) cursor = n - 1;
     if(cursor < 0) cursor = 0;
+  }
+
+  // b: 0 a transfer's row, 1 a tab.
+  void focus(int a, int b) override {
+    if(b == 0) cursor = a;
+  }
+
+  bool click(int a, int b, bool right) override {
+    if(right) return true;
+    if(b == 1) {
+      tab = a;
+      cursor = 0;
+      return true;
+    }
+    focus(a, b);
+    return input(ACT_CROSS);
   }
 
   bool input(Action a) override {
@@ -1361,20 +1625,22 @@ struct QueueView : Overlay {
     float x = 36, y = 300, w = W - 72, h = H - y - HINT_H - 10;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 110));
     draw::rect(x, y, w, h, draw::PANEL, 18);
+    hit_add(HIT_OVERLAY_BODY, x, y, w, h);
     const char *tabs[3] = {tr("Queued"), tr("Failed"), tr("Successful")};
     int counts[3] = {g.qs.queued, g.qs.failed, g.qs.done};
     float tx = x + 36;
-    draw::button(tx, y + 24, 40, ACT_L1);
+    hit_add(HIT_HINT, tx, y + 24, draw::button(tx, y + 24, 40, ACT_L1), 40, ACT_L1);
     tx += 70;
     for(int i = 0; i < 3; i++) {
       char buf[64];
       snprintf(buf, sizeof(buf), "%s  %d", tabs[i], counts[i]);
       ImVec2 ts = draw::text_size(FS, buf, true);
+      hit_add(HIT_MENU_ITEM, tx - 16, y + 18, ts.x + 32, 54, i, 1);
       if(i == tab) draw::rect(tx - 16, y + 18, ts.x + 32, 54, draw::SEL, 12);
       draw::text(tx, y + 28, FS, i == tab ? draw::TEXT : draw::MUTED, buf, true);
       tx += ts.x + 56;
     }
-    draw::button(tx - 20, y + 24, 40, ACT_R1);
+    hit_add(HIT_HINT, tx - 20, y + 24, draw::button(tx - 20, y + 24, 40, ACT_R1), 40, ACT_R1);
     char sum[160];
     snprintf(sum, sizeof(sum), "%s%s%s", g.qs.paused ? (std::string(tr("Paused")) + "  ·  ").c_str() : "",
              trf("{0} of {1} connections busy", {std::to_string(g.qs.running), std::to_string(settings_get().connections)}).c_str(),
@@ -1386,13 +1652,15 @@ struct QueueView : Overlay {
     int rows = (int)((h - 110) / row);
     int start = std::max(0, std::min(cursor - rows / 2, (int)items.size() - rows));
     if(items.empty()) {
-      const char *msg = tab == 0 ? tr("No transfers. Mark files and press triangle to send them to the other side.") :
+      const char *msg = tab == 0 ? tr(device_text(N_("No transfers. Mark files and press triangle to send them to the other side."),
+                                                  N_("No transfers. Mark files and press T to send them to the other side."))) :
                         tab == 1 ? tr("No failed transfers.") : tr("Finished transfers appear here.");
       draw::text(x + 40, yy + 20, FS, draw::MUTED, msg);
     }
     for(int i = start; i < (int)items.size() && i < start + rows; i++) {
       queue_view_t &it = items[i];
       bool on = i == cursor;
+      hit_add(HIT_MENU_ITEM, x + 20, yy, w - 40, row - 8, i, 0);
       if(on) draw::rect(x + 20, yy, w - 40, row - 8, draw::SEL, 10);
       draw::text(x + 40, yy + 8, FS, it.upload ? draw::ACCENT : draw::ACCENT2, it.upload ? tr("UP") : tr("DN"), true);
       std::string name = base_of(it.upload ? it.local : it.remote);
@@ -1454,7 +1722,8 @@ void transfer(Pane &from) {
     return;
   }
   if(to.path.empty()) {
-    show_toast(from.remote ? tr("Open a console folder on the left first") : tr("Open a server folder first"), true);
+    show_toast(from.remote ? tr(device_text(N_("Open a console folder on the left first"), N_("Open a local folder on the left first")))
+                            : tr("Open a server folder first"), true);
     return;
   }
   std::vector<Entry> items = selection(from);
@@ -1496,6 +1765,11 @@ int run_rename(ftp_conn_t *c, void *p) {
 int run_chmod(ftp_conn_t *c, void *p) {
   PathCtx *x = (PathCtx *)p;
   return ftp_chmod(c, x->a.c_str(), x->mode);
+}
+
+int run_chmod_tree(ftp_conn_t *c, void *p) {
+  PathCtx *x = (PathCtx *)p;
+  return remote_chmod_tree(c, x->a.c_str(), x->mode);
 }
 
 struct DeleteCtx {
@@ -1573,7 +1847,8 @@ void delete_items(Pane &p) {
   Pane *pp = &p;
   std::string what = items.size() == 1 ? "\"" + items[0].name + "\"" : trf("{0} items", {std::to_string(items.size())});
   confirm(tr("Delete"), trf(is_remote ? N_("Permanently delete {0} from the server? Folders are deleted with everything inside.")
-                                      : N_("Permanently delete {0} from the console? Folders are deleted with everything inside."), {what}),
+                                      : device_text(N_("Permanently delete {0} from the console? Folders are deleted with everything inside."),
+                                                    N_("Permanently delete {0} from this computer? Folders are deleted with everything inside.")), {what}),
           tr("Delete"), [items, is_remote, dir, pp] {
     if(is_remote) {
       auto ctx = std::make_shared<DeleteCtx>();
@@ -1600,34 +1875,47 @@ void delete_items(Pane &p) {
   });
 }
 
-void chmod_items(Pane &p) {
+/* deep: folders with everything in them (remote_chmod_tree,
+   localfs_chmod_tree) -- "Change permissions recursively". */
+void chmod_items(Pane &p, bool deep = false) {
   std::vector<Entry> items = selection(p);
   if(items.empty()) return;
   bool is_remote = p.remote;
   std::string dir = p.path;
   std::string cur = items[0].perm.size() == 4 ? items[0].perm.substr(1) : "644";
   Pane *pp = &p;
-  prompt(tr("Permissions (octal, e.g. 755)"), cur, TEXT_NUMBER, [items, is_remote, dir, pp](std::string mode) {
+  prompt(tr("Permissions (octal, e.g. 755)"), cur, TEXT_NUMBER, [items, is_remote, dir, pp, deep](std::string mode) {
     if(mode.size() < 3 || mode.size() > 4 || mode.find_first_not_of("01234567") != std::string::npos) {
       show_toast(tr("Use an octal mode like 755"), true);
       return;
     }
-    unsigned m = (unsigned)strtoul(mode.c_str(), nullptr, 8);
+    const unsigned m = (unsigned)strtoul(mode.c_str(), nullptr, 8);
     if(is_remote) {
-      auto paths = std::make_shared<std::vector<std::string>>();
-      for(auto &e : items) paths->push_back(join(dir, e.name));
+      auto paths = std::make_shared<std::vector<std::pair<std::string, bool>>>();
+      for(auto &e : items) paths->push_back({join(dir, e.name), deep && e.dir && !e.link});
       remote_op([paths, m](char *e, size_t n) {
         for(auto &p : *paths) {
-          PathCtx x{p, "", m, nullptr};
-          if(session_run(run_chmod, &x, e, n)) return -1;
+          PathCtx x{p.first, "", m, nullptr};
+          if(session_run(p.second ? run_chmod_tree : run_chmod, &x, e, n)) return -1;
         }
         return 0;
       }, tr("Permissions changed"));
     } else {
-      for(auto &e : items) chmod(join(dir, e.name).c_str(), m);
+      bool failed = false;
+      for(auto &e : items) {
+        const std::string path = join(dir, e.name);
+        if(deep && e.dir && !e.link ? localfs_chmod_tree(path.c_str(), m) : chmod(path.c_str(), m)) failed = deep;
+      }
+      if(failed) show_toast(tr("Some permissions couldn't be changed"), true);
       load_local(dir, true, pp);
     }
   });
+}
+
+// Whether a folder is among what the item actions would act on (selection()).
+bool selection_has_folder(Pane &p) {
+  for(auto &e : selection(p)) if(e.dir && !e.link) return true;
+  return false;
 }
 
 void open_entry(Pane &p) {
@@ -1651,14 +1939,16 @@ void open_entry(Pane &p) {
     m->items.push_back({tr("Copy to the other side"), [pp] { fm_copy(*pp, false); }});
     m->items.push_back({tr("Move to the other side"), [pp] { fm_copy(*pp, true); }});
   } else {
-    m->items.push_back({p.remote ? tr("Download to the console") : tr("Upload to server"), [pp] { transfer(*pp); }, g.connected});
+    m->items.push_back({p.remote ? tr(device_text(N_("Download to the console"), N_("Download to this computer"))) : tr("Upload to server"),
+                        [pp] { transfer(*pp); }, g.connected});
   }
   m->items.push_back({p.marked.count(e.name) ? tr("Unmark") : tr("Mark"), [pp, e] {
     if(pp->marked.count(e.name)) pp->marked.erase(e.name);
     else pp->marked.insert(e.name);
   }});
   m->items.push_back({tr("Rename"), [pp, e] { rename_item(*pp, e); }});
-  m->items.push_back({tr("Permissions"), [pp] { chmod_items(*pp); }});
+  m->items.push_back({tr("Change permissions"), [pp] { chmod_items(*pp); }});
+  if(selection_has_folder(p)) m->items.push_back({tr("Change permissions recursively"), [pp] { chmod_items(*pp, true); }});
   m->items.push_back({tr("Delete"), [pp] { delete_items(*pp); }, true, true});
   push(m);
 }
@@ -1709,6 +1999,18 @@ void main_menu() {
   if(g.connected) m->items.push_back({tr("Disconnect"), [] { disconnect(); }});
   m->items.push_back({tr("Refresh"), [pp] { refresh(*pp); }, in_folder});
   m->items.push_back({tr("New folder"), [pp] { make_folder(*pp); }, in_folder});
+  /* What the cursor is on, or what is marked -- the only way to rename,
+     chmod or delete a folder, since Cross opens one. */
+  const bool on_item = in_folder && (!p.marked.empty() || (p.cursor < (int)p.entries.size() && !p.entries[p.cursor].drive));
+  if(on_item && p.marked.empty()) {
+    Entry e = p.entries[p.cursor];
+    m->items.push_back({trf("Rename \"{0}\"", {e.name}), [pp, e] { rename_item(*pp, e); }});
+  }
+  if(on_item) {
+    m->items.push_back({tr("Change permissions"), [pp] { chmod_items(*pp); }});
+    if(selection_has_folder(p)) m->items.push_back({tr("Change permissions recursively"), [pp] { chmod_items(*pp, true); }});
+    m->items.push_back({tr("Delete"), [pp] { delete_items(*pp); }, true, true});
+  }
   m->items.push_back({tr("Mark all"), [pp] { for(auto &e : pp->entries) if(!e.drive) pp->marked.insert(e.name); }, in_folder});
   m->items.push_back({tr("Clear marks"), [pp] { pp->marked.clear(); }, !p.marked.empty()});
   if(!p.remote) m->items.push_back({tr("Drives"), [] { load_drives(); }});
@@ -1828,16 +2130,20 @@ void draw_pane(Pane &p, int idx, bool fm, float x, float y, float w, float h) {
   if(focus) draw::frame(x, y, w, h, draw::ACCENT, 16, 3);
 
   // Header: which side, and where we are.
-  const char *who = !server_side ? "Console" : (g.connected ? tr("Server") : tr("Servers"));
+  const char *who = !server_side ? device_text("Console", tr("This computer"))
+                    : g.connected ? (g.server_label.empty() ? tr("Server") : g.server_label.c_str())
+                                  : tr("Servers");
   draw::text(x + 28, y + 14, FS_TITLE, focus ? draw::TEXT : draw::MUTED, who, true);
   /* Disconnect, where it is actually wanted. It was only in the menu
      behind Plus, which is a poor place for the one thing you look for
      while connected. */
+  float right = x + w - 20;  // where the header's text has to stop
   if(server_side && g.connected) {
     const char *label = tr("Disconnect");
     const float pad = 18, bh = 44;
     const float bw = draw::text_size(FS_SMALL, label, true).x + pad * 2;
     const float bx = x + w - bw - 20, by = y + 16;
+    right = bx - 16;
     const bool on = g.disconnect_focus && focus;
     draw::rect(bx, by, bw, bh, on ? draw::ERR : IM_COL32(86, 34, 42, 255), 12);
     draw::frame(bx, by, bw, bh, draw::ERR, 12, on ? 3 : 2);
@@ -1848,16 +2154,22 @@ void draw_pane(Pane &p, int idx, bool fm, float x, float y, float w, float h) {
   std::string where;
   if(!server_side) where = p.path.empty() ? tr("Choose a drive") : p.path;
   else where = g.connected ? std::string(g.server.protocol == FTP_PROTO_SFTP ? "sftp://" : "ftp://") + g.server.host + "  " + p.path
-                           : tr("Connect to your laptop, PC or NAS");
+                           : tr(device_text(N_("Connect to your laptop, PC or NAS"), N_("Connect to a server, NAS or console")));
+  /* Loading: the spinner just left of Disconnect (or of the edge), and the
+     path stops before it rather than running underneath. */
+  if(p.loading) {
+    draw::spinner(right - 14, y + 38, 14, draw::ACCENT);
+    right -= 44;
+  }
   float wx = x + 32 + draw::text_size(FS_TITLE, who, true).x + 20;
-  draw::text_clip(wx, y + 22, FS_SMALL, draw::MUTED, where.c_str(), x + w - wx - 70);
-  if(p.loading) draw::spinner(x + w - 40, y + 38, 14, draw::ACCENT);
+  draw::text_clip(wx, y + 22, FS_SMALL, draw::MUTED, where.c_str(), right - wx);
   draw::rect(x + 16, y + PANE_HEAD - 6, w - 32, 2, draw::LINE);
 
   float ly = y + PANE_HEAD;
   if(server_side && !g.connected) {
     draw_server_list(x, ly, w);
   } else {
+    refresh_free_space(p);
     int rows = visible_rows();
     int n = (int)p.entries.size();
     if(p.cursor < p.scroll) p.scroll = p.cursor;
@@ -1894,9 +2206,15 @@ void draw_pane(Pane &p, int idx, bool fm, float x, float y, float w, float h) {
       float dw = 230, sw = 150;
       float name_w = right - nx - dw - sw - 20;
       std::string name = e.name + (e.link ? "  ->" : "");
-      draw::text_clip(nx, yy + 11, FS, draw::TEXT, e.drive ? e.detail.c_str() : name.c_str(), name_w, on);
       if(e.drive) {
+        /* The label and the path share the name column: each keeps to its
+           part, so a long label ("USB drive: AM8180 NVME, exFAT") is cut
+           short instead of running under the path. */
+        const float label_w = name_w * 0.62f - 16;
+        draw::text_clip(nx, yy + 11, FS, draw::TEXT, e.detail.c_str(), label_w, on);
         draw::text_clip(nx + name_w * 0.62f, yy + 15, FS_SMALL, draw::MUTED, e.name.c_str(), name_w * 0.38f);
+      } else {
+        draw::text_clip(nx, yy + 11, FS, draw::TEXT, name.c_str(), name_w, on);
       }
       ImVec2 ss = draw::text_size(FS_SMALL, size.c_str());
       draw::text(right - dw - 20 - ss.x, yy + 15, FS_SMALL, draw::MUTED, size.c_str());
@@ -1969,42 +2287,42 @@ void draw_bottom() {
   if(!g.overlays.empty()) {
     if(g.overlays.back()->kind() == OV_QUEUE) {
       int tab = static_cast<QueueView *>(g.overlays.back().get())->tab;
-      x += draw::hint(x, y, ACT_CROSS, tr("Options"));
-      x += draw::hint(x, y, ACT_TRIANGLE, g.qs.paused ? tr("Resume") : tr("Pause"));
-      x += draw::hint(x, y, ACT_SQUARE, tab == 0 ? tr("Cancel all") : tab == 1 ? tr("Retry all") : tr("Clear list"));
-      x += draw::hint(x, y, ACT_L1, tr("Tabs"));
-      draw::hint(x, y, ACT_CIRCLE, tr("Close"));
+      x += hint(x, y, ACT_CROSS, tr("Options"));
+      x += hint(x, y, ACT_TRIANGLE, g.qs.paused ? tr("Resume") : tr("Pause"));
+      x += hint(x, y, ACT_SQUARE, tab == 0 ? tr("Cancel all") : tab == 1 ? tr("Retry all") : tr("Clear list"));
+      x += hint(x, y, ACT_L1, tr("Tabs"));
+      hint(x, y, ACT_CIRCLE, tr("Close"));
     } else if(g.overlays.back()->kind() != OV_LOG) {
-      x += draw::hint(x, y, ACT_CROSS, tr("Select"));
-      x += draw::hint(x, y, ACT_LEFT, tr("Change"));
-      draw::hint(x, y, ACT_CIRCLE, tr("Back"));
+      x += hint(x, y, ACT_CROSS, tr("Select"));
+      x += hint(x, y, ACT_LEFT, tr("Change"));
+      hint(x, y, ACT_CIRCLE, tr("Back"));
     }
     return;
   }
   Pane &p = active();
   if(p.remote && !g.connected) {
-    x += draw::hint(x, y, ACT_CROSS, tr("Connect"));
-    x += draw::hint(x, y, ACT_TRIANGLE, tr("Edit"));
-    x += draw::hint(x, y, ACT_SQUARE, tr("Delete"));
-    x += draw::hint(x, y, ACT_CIRCLE, tr("Start screen"));
+    x += hint(x, y, ACT_CROSS, tr("Connect"));
+    x += hint(x, y, ACT_TRIANGLE, tr("Edit"));
+    x += hint(x, y, ACT_SQUARE, tr("Delete"));
+    x += hint(x, y, ACT_CIRCLE, tr("Start screen"));
   } else {
     bool on_dir = p.cursor < (int)p.entries.size() && p.entries[p.cursor].dir;
-    x += draw::hint(x, y, ACT_CROSS, on_dir ? tr("Open") : tr("Actions"));
-    x += draw::hint(x, y, ACT_SQUARE, tr("Mark"));
+    x += hint(x, y, ACT_CROSS, on_dir ? tr("Open") : tr("Actions"));
+    x += hint(x, y, ACT_SQUARE, tr("Mark"));
     if(g.connected && !p.path.empty()) {
       char t[64];
       size_t n = p.marked.empty() ? 1 : p.marked.size();
       snprintf(t, sizeof(t), "%s", trf(p.remote ? N_("Download {0}") : N_("Upload {0}"), {std::to_string(n)}).c_str());
-      x += draw::hint(x, y, ACT_TRIANGLE, t);
+      x += hint(x, y, ACT_TRIANGLE, t);
     }
-    x += draw::hint(x, y, ACT_CIRCLE, !p.remote && p.path.empty() ? tr("Start screen") : tr("Back"));
+    x += hint(x, y, ACT_CIRCLE, !p.remote && p.path.empty() ? tr("Start screen") : tr("Back"));
     if(!(!p.remote && p.path.empty())) {
-      x += draw::hint(x, y, ACT_CIRCLE_LONG, tr("Hold: start screen"));
+      x += hint(x, y, ACT_CIRCLE_LONG, tr("Hold: start screen"));
     }
   }
-  x += draw::hint_lr(x, y, tr("Switch side"));
-  x += draw::hint(x, y, ACT_OPTIONS, tr("Menu"));
-  draw::hint(x, y, ACT_TOUCHPAD, tr("Transfers"));
+  x += hint_lr(x, y, tr("Switch side"));
+  x += hint(x, y, ACT_OPTIONS, tr("Menu"));
+  hint(x, y, ACT_TOUCHPAD, tr("Transfers"));
 }
 
 /* ---------- log & queue polling ---------- */
@@ -2029,9 +2347,79 @@ void on_log(void *ctx, unsigned long seq, long long t, int conn, log_kind_t kind
 struct ServerPrefs {
   ftpd_config_t ftp;
   int web_port = WEB_DEFAULT_PORT;
+  /* Where the platform has an SFTP server (CHIRAL_HAS_SFTPD): which of the
+     two the server screen runs, SFTP unless chosen otherwise, and SFTP's
+     own port. The login and the shared folder are the same for both. */
+  bool sftp = true;
+  int sftp_port = SFTPD_PORT;
+  /* A computer's web app opens in its own browser, so by default nothing
+     else on the network can reach it (websrv_set_local_only). */
+  bool web_local = true;
+  /* The shared folder was picked on the server screen. Until it is, the
+     platform's default applies (system_ftpd_default_root), and follows it
+     when that changes -- a root saved only because it was the default
+     isn't anyone's choice. */
+  bool root_chosen = false;
 };
 
 ServerPrefs g_srv;
+
+void save_server_prefs();  // further down
+
+#if CHIRAL_DEVICE_COMPUTER
+/* Shares what the server screen was told to: a folder, or the whole
+   computer (system_ftpd_full_root). */
+void set_shared_root(const std::string &v) {
+  snprintf(g_srv.ftp.root, sizeof(g_srv.ftp.root), "%s", v.c_str());
+  g_srv.root_chosen = true;
+  save_server_prefs();
+}
+
+void share_whole_computer() {
+  confirm(tr("Share the whole computer?"),
+          tr("Anyone with the server's login could read, change and delete every file this account can reach, not just one folder. chiral-ftp's own settings stay hidden."),
+          tr("Share everything"), [] {
+            set_shared_root(system_ftpd_full_root());
+            show_toast(tr("Sharing the whole computer"));
+          });
+}
+#endif
+
+/* The server screen's server. Where there is no SFTP server, the FTP
+   server, and these are just its own calls. */
+bool server_is_sftp() {
+#if CHIRAL_HAS_SFTPD
+  return g_srv.sftp;
+#else
+  return false;
+#endif
+}
+
+bool server_running() {
+#if CHIRAL_HAS_SFTPD
+  if(g_srv.sftp) return sftpd_running();
+#endif
+  return ftpd_running();
+}
+
+void server_stats(ftpd_stats_t *st) {
+#if CHIRAL_HAS_SFTPD
+  if(g_srv.sftp) return sftpd_get_stats(st);
+#endif
+  ftpd_get_stats(st);
+}
+
+int server_recent(char lines[][160], int max) {
+#if CHIRAL_HAS_SFTPD
+  if(g_srv.sftp) return sftpd_recent(lines, max);
+#endif
+  return ftpd_recent(lines, max);
+}
+
+unsigned short server_port() {
+  return server_is_sftp() ? (unsigned short)g_srv.sftp_port : g_srv.ftp.port;
+}
+
 std::string g_ip = "unknown";
 double g_ip_at = -100;
 
@@ -2050,6 +2438,23 @@ void load_server_prefs() {
   g_srv.ftp.anonymous = json::get_bool(o, "ftp_anonymous", false);
   port = (int)json::get_num(o, "web_port", WEB_DEFAULT_PORT);
   if(port > 0 && port < 65536) g_srv.web_port = port;
+#if CHIRAL_HAS_SFTPD
+  g_srv.sftp = json::get_str(o, "server_protocol", "sftp") != "ftp";
+  port = (int)json::get_num(o, "sftp_port", SFTPD_PORT);
+  if(port > 0 && port < 65536) g_srv.sftp_port = port;
+#endif
+#if CHIRAL_DEVICE_COMPUTER
+  g_srv.web_local = json::get_bool(o, "web_local", true);
+  {
+    /* A folder chosen on the server screen, while it is still there. */
+    std::string root = json::get_str(o, "ftp_root");
+    struct stat st;
+    if(json::get_bool(o, "ftp_root_chosen", false) && !root.empty() && !stat(root.c_str(), &st) && S_ISDIR(st.st_mode)) {
+      snprintf(g_srv.ftp.root, sizeof(g_srv.ftp.root), "%s", root.c_str());
+      g_srv.root_chosen = true;
+    }
+  }
+#endif
 }
 
 void save_server_prefs() {
@@ -2059,44 +2464,116 @@ void save_server_prefs() {
   json::set_str(o, "ftp_pass", g_srv.ftp.pass);
   json::set_bool(o, "ftp_anonymous", g_srv.ftp.anonymous);
   json::set_num(o, "web_port", g_srv.web_port);
+#if CHIRAL_HAS_SFTPD
+  json::set_str(o, "server_protocol", g_srv.sftp ? "sftp" : "ftp");
+  json::set_num(o, "sftp_port", g_srv.sftp_port);
+#endif
+#if CHIRAL_DEVICE_COMPUTER
+  json::set_bool(o, "web_local", g_srv.web_local);
+  json::set_str(o, "ftp_root", g_srv.ftp.root);
+  json::set_bool(o, "ftp_root_chosen", g_srv.root_chosen);
+#endif
   save_store("servers", {o});
   ftpd_set_config(&g_srv.ftp);
+#if CHIRAL_HAS_SFTPD
+  {
+    ftpd_config_t c = g_srv.ftp;
+    c.port = (unsigned short)g_srv.sftp_port;
+    sftpd_set_config(&c);
+  }
+#endif
+}
+
+/* The address to show for the servers. Where the machine is on several
+   networks (system_networks), the one chosen in Settings; else, or when
+   that one has gone, the first on a 192.168 network -- the usual home or
+   office LAN, where the console or phone that wants to connect is. A VPN
+   tends to be the route to the internet, which is what the platform's own
+   answer goes by, and nobody across the room can reach it. */
+std::string pick_ip() {
+  system_net_t nets[16];
+  const int n = system_networks(nets, 16);
+  if(!g.network.empty()) {
+    for(int i = 0; i < n; i++) if(g.network == nets[i].name) return nets[i].addr;
+  }
+  for(int i = 0; i < n; i++) if(!strncmp(nets[i].addr, "192.168.", 8)) return nets[i].addr;
+  char buf[64];
+  net_local_ip(buf, sizeof(buf));
+  return buf;
 }
 
 // The IP can change (Wi-Fi reconnects), so look again every few seconds.
 const std::string &local_ip() {
   if(now() - g_ip_at > 5) {
-    char buf[64];
-    net_local_ip(buf, sizeof(buf));
-    g_ip = buf;
+    g_ip = pick_ip();
     g_ip_at = now();
   }
   return g_ip;
 }
 
-std::string ftp_address() {
-  return "ftp://" + local_ip() + ":" + std::to_string(g_srv.ftp.port);
+void ip_changed() {
+  g_ip_at = -100;  // look again on the next frame
+}
+
+std::string server_address() {
+  return std::string(server_is_sftp() ? "sftp://" : "ftp://") + local_ip() + ":" + std::to_string(server_port());
+}
+
+// Only this computer's own browser: the loopback address, which needs no network.
+bool web_local() {
+#if CHIRAL_DEVICE_COMPUTER
+  return g_srv.web_local;
+#else
+  return false;
+#endif
 }
 
 std::string web_address() {
-  return "http://" + local_ip() + ":" + std::to_string(g_srv.web_port) + "/";
+  return "http://" + (web_local() ? std::string("127.0.0.1") : local_ip()) + ":" + std::to_string(g_srv.web_port) + "/";
 }
 
-void start_ftpd() {
+void start_server() {
+#if CHIRAL_HAS_SFTPD
+  if(g_srv.sftp) {
+    ftpd_config_t c = g_srv.ftp;
+    c.port = (unsigned short)g_srv.sftp_port;
+    if(sftpd_start(&c)) {
+      show_toast(errno == EADDRINUSE ? trf("Could not start the SFTP server: {0} (port in use, choose another one)", {strerror(errno)})
+                                     : trf("Could not start the SFTP server: {0}", {strerror(errno)}), true);
+    } else {
+      show_toast(trf("SFTP server running at {0}", {server_address()}));
+    }
+    return;
+  }
+#endif
   if(ftpd_start(&g_srv.ftp)) {
     show_toast(errno == EADDRINUSE ? trf("Could not start the FTP server: {0} (port in use, choose another one)", {strerror(errno)})
                                    : trf("Could not start the FTP server: {0}", {strerror(errno)}), true);
   } else {
-    show_toast(trf("FTP server running at {0}", {ftp_address()}));
+    show_toast(trf("FTP server running at {0}", {server_address()}));
   }
 }
 
-void start_web() {
+void stop_server() {
+#if CHIRAL_HAS_SFTPD
+  if(g_srv.sftp) return sftpd_stop();
+#endif
+  ftpd_stop();
+}
+
+void start_web(bool open_browser = true) {
+  websrv_set_local_only(web_local());
   if(websrv_start((unsigned short)g_srv.web_port)) {
     show_toast(errno == EADDRINUSE ? trf("Could not start the web app: {0} (port in use, choose another one)", {strerror(errno)})
                                    : trf("Could not start the web app: {0}", {strerror(errno)}), true);
   } else {
     show_toast(trf("Web app running at {0}", {web_address()}));
+#if CHIRAL_DEVICE_COMPUTER
+    /* A computer has its own browser: that's where the web app is used. */
+    if(open_browser) platform::open_url(web_address().c_str());
+#else
+    (void)open_browser;
+#endif
   }
 }
 
@@ -2119,6 +2596,7 @@ struct Row {
 };
 
 int g_home_cursor = 0;
+bool g_home_quick = false;  // the start screen's focus is on Quick connect, above the cards
 int g_row_cursor = 0;
 
 void draw_rows(const std::vector<Row> &rows, float x, float y, float w, float row = 70) {
@@ -2157,37 +2635,82 @@ void go_mode(Mode m) {
   g_row_cursor = 0;
 }
 
-std::vector<Row> ftpd_rows() {
+#if CHIRAL_DEVICE_COMPUTER
+/* A folder as the server screen shows it: the home folder as "~". */
+std::string short_path(const std::string &path) {
+  const char *home = getenv("HOME");
+  const size_t n = home ? strlen(home) : 0;
+  if(n > 1 && !path.compare(0, n, home) && (path.size() == n || path[n] == '/')) return "~" + path.substr(n);
+  return path;
+}
+#endif
+
+std::vector<Row> server_rows() {
   std::vector<Row> rows;
-  bool running = ftpd_running();
-  rows.push_back({running ? tr("Stop the FTP server") : tr("Start the FTP server"), "",
-                  [running] { if(running) ftpd_stop(); else start_ftpd(); }, true});
-  rows.push_back({tr("Username"), g_srv.ftp.user, [] {
-    prompt(tr("FTP username"), g_srv.ftp.user, TEXT_DEFAULT, [](std::string v) {
+  const bool running = server_running(), sftp = server_is_sftp();
+  rows.push_back({running ? (sftp ? tr("Stop the SFTP server") : tr("Stop the FTP server"))
+                          : (sftp ? tr("Start the SFTP server") : tr("Start the FTP server")),
+                  "", [running] { if(running) stop_server(); else start_server(); }, true});
+#if CHIRAL_HAS_SFTPD
+  /* One server at a time: SFTP, encrypted, unless something can only speak
+     FTP. Changed while stopped, like the port. */
+  rows.push_back({tr("Protocol"), running ? trf("{0}  (stop to change)", {sftp ? "SFTP" : "FTP"})
+                                          : std::string("<  ") + (sftp ? "SFTP" : "FTP") + "  >",
+                  [] {
+                    g_srv.sftp = !g_srv.sftp;
+                    save_server_prefs();
+                  },
+                  false, !running});
+#endif
+  rows.push_back({tr("Username"), g_srv.ftp.user, [sftp] {
+    prompt(sftp ? tr("Username") : tr("FTP username"), g_srv.ftp.user, TEXT_DEFAULT, [](std::string v) {
       if(v.empty()) return show_toast(tr("The username can't be empty"), true);
       snprintf(g_srv.ftp.user, sizeof(g_srv.ftp.user), "%s", v.c_str());
       save_server_prefs();
       show_toast(tr("Username saved; new logins use it"));
     });
   }});
-  rows.push_back({tr("Password"), g_srv.ftp.pass, [] {
-    prompt(tr("FTP password"), g_srv.ftp.pass, TEXT_DEFAULT, [](std::string v) {
+  rows.push_back({tr("Password"), g_srv.ftp.pass, [sftp] {
+    prompt(sftp ? tr("Password") : tr("FTP password"), g_srv.ftp.pass, TEXT_DEFAULT, [](std::string v) {
       if(v.empty()) return show_toast(tr("The password can't be empty; turn on anonymous login instead"), true);
       snprintf(g_srv.ftp.pass, sizeof(g_srv.ftp.pass), "%s", v.c_str());
       save_server_prefs();
       show_toast(tr("Password saved; new logins use it"));
     });
   }});
-  rows.push_back({tr("Anonymous login"), g_srv.ftp.anonymous ? tr("On") : tr("Off"), [] {
-    g_srv.ftp.anonymous = !g_srv.ftp.anonymous;
-    save_server_prefs();
-  }});
-  rows.push_back({tr("Port"), running ? trf("{0}  (stop to change)", {std::to_string(g_srv.ftp.port)}) : std::to_string(g_srv.ftp.port), [] {
-    prompt_port(tr("FTP server port"), g_srv.ftp.port, [](int p) {
-      g_srv.ftp.port = (unsigned short)p;
+  if(!sftp) {  // SSH has no anonymous login
+    rows.push_back({tr("Anonymous login"), g_srv.ftp.anonymous ? tr("On") : tr("Off"), [] {
+      g_srv.ftp.anonymous = !g_srv.ftp.anonymous;
+      save_server_prefs();
+    }});
+  }
+  const std::string port = std::to_string(server_port());
+  rows.push_back({tr("Port"), running ? trf("{0}  (stop to change)", {port}) : port, [sftp] {
+    prompt_port(sftp ? tr("SFTP server port") : tr("FTP server port"), server_port(), [sftp](int p) {
+      if(sftp) g_srv.sftp_port = p;
+      else g_srv.ftp.port = (unsigned short)p;
       save_server_prefs();
     });
   }, false, !running});
+#if CHIRAL_DEVICE_COMPUTER
+  /* A console shares the whole of itself; a computer, the one folder chosen
+     here (the person's own to start with: system_ftpd_default_root), or
+     all of it when asked to. */
+  rows.push_back({tr("Shared folder"), short_path(g_srv.ftp.root), [] {
+    prompt(tr("Shared folder"), short_path(g_srv.ftp.root), TEXT_URL, [](std::string v) {
+      const char *home = getenv("HOME");
+      if(!v.empty() && v[0] == '~' && home) v = home + v.substr(1);
+      while(v.size() > 1 && v.back() == '/') v.pop_back();
+      struct stat st;
+      if(v.empty() || v[0] != '/' || stat(v.c_str(), &st) || !S_ISDIR(st.st_mode)) {
+        return show_toast(trf("Not a folder: {0}", {v}), true);
+      }
+      set_shared_root(v);
+      show_toast(trf("Sharing {0}", {short_path(v)}));
+    });
+  }});
+  rows.push_back({tr("Whole computer"), "", [] { share_whole_computer(); }});
+#endif
   rows.push_back({trf("Reset to {0} / {1}", {FTPD_DEFAULT_USER, FTPD_DEFAULT_PASS}), "", [] {
     confirm(tr("Reset login"), trf("Set the username back to \"{0}\" and the password to \"{1}\"?", {FTPD_DEFAULT_USER, FTPD_DEFAULT_PASS}),
             tr("Reset"), [] {
@@ -2205,6 +2728,18 @@ std::vector<Row> web_rows() {
   bool running = websrv_running();
   rows.push_back({running ? tr("Stop the web app") : tr("Start the web app"), "",
                   [running] { if(running) websrv_stop(); else start_web(); }, true});
+#if CHIRAL_DEVICE_COMPUTER
+  if(running) rows.push_back({tr("Open in your browser"), "", [] { platform::open_url(web_address().c_str()); }});
+  {
+    const std::string reach = g_srv.web_local ? tr("This computer only") : tr("Your home network");
+    rows.push_back({tr("Reachable from"), running ? trf("{0}  (stop to change)", {reach}) : "<  " + reach + "  >",
+                    [] {
+                      g_srv.web_local = !g_srv.web_local;
+                      save_server_prefs();
+                    },
+                    false, !running});
+  }
+#endif
   rows.push_back({tr("Port"), running ? trf("{0}  (stop to change)", {std::to_string(g_srv.web_port)}) : std::to_string(g_srv.web_port), [] {
     prompt_port(tr("Web app port"), g_srv.web_port, [](int p) {
       g_srv.web_port = p;
@@ -2237,27 +2772,47 @@ void draw_hints(std::initializer_list<std::pair<Action, const char *>> hints) {
   float hy = H - HINT_H;
   draw::rect(0, hy, W, HINT_H, draw::PANEL2);
   float x = MARGIN, y = hy + (HINT_H - 38) / 2;
-  for(auto &h : hints) x += draw::hint(x, y, h.first, h.second);
+  for(auto &h : hints) x += hint(x, y, h.first, h.second);
 }
 
 void draw_ftpd() {
-  bool running = ftpd_running();
-  draw_header(tr("FTP server"), tr("Other devices connect to the console with FileZilla, a file manager or any FTP app."));
+  const bool running = server_running(), sftp = server_is_sftp();
+#if CHIRAL_HAS_SFTPD
+  draw_header(tr("FTP / SFTP server"),
+              tr(device_text(N_("Other devices connect to the console with FileZilla, a file manager or any FTP app."),
+                             N_("Other devices connect to this computer with FileZilla, Cyberduck, a file manager or any SFTP or FTP app."))));
+#else
+  draw_header(tr("FTP server"), tr(device_text(N_("Other devices connect to the console with FileZilla, a file manager or any FTP app."),
+                                               N_("Other devices connect to this computer with FileZilla, a file manager or any FTP app."))));
+#endif
   float x = MARGIN, y = TOP_H + 180, w = 860, h = H - y - HINT_H - STATUS_H - 20;
   draw::rect(x, y, w, h, draw::PANEL, 16);
   draw_status_pill(x + 30, y + 30, running, tr("Running"), tr("Stopped"));
-  std::string addr = ftp_address();
+  std::string addr = server_address();
   draw::text_clip(x + 30, y + 100, 46, running ? draw::TEXT : draw::MUTED, addr.c_str(), w - 60, true);
-  std::string login = g_srv.ftp.anonymous ? trf("Login: {0} / {1}   or anonymous", {g_srv.ftp.user, g_srv.ftp.pass})
-                                          : trf("Login: {0} / {1}", {g_srv.ftp.user, g_srv.ftp.pass});
+  std::string login = g_srv.ftp.anonymous && !sftp ? trf("Login: {0} / {1}   or anonymous", {g_srv.ftp.user, g_srv.ftp.pass})
+                                                   : trf("Login: {0} / {1}", {g_srv.ftp.user, g_srv.ftp.pass});
+  float rows_y = y + 232, row_h = 60;
+#if CHIRAL_HAS_SFTPD
+  /* Two more rows than a console's (protocol, shared folder), and for SFTP
+     the key an app asks you to trust the first time it connects. */
+  row_h = 54;
+  draw::text_clip(x + 30, y + 160, FS, draw::ACCENT2, login.c_str(), w - 60);
+  char fp[128] = "";
+  if(sftp) sftpd_fingerprint(fp, sizeof(fp));
+  if(fp[0]) draw::text_clip(x + 30, y + 198, FS_SMALL, draw::MUTED, trf("Key: {0}", {fp}).c_str(), w - 60);
+  draw::rect(x + 20, y + 236, w - 40, 2, draw::LINE);
+  rows_y = y + 244;
+#else
   draw::text_clip(x + 30, y + 170, FS, draw::ACCENT2, login.c_str(), w - 60);
   draw::rect(x + 20, y + 222, w - 40, 2, draw::LINE);
-  draw_rows(ftpd_rows(), x, y + 232, w, 60);
+#endif
+  draw_rows(server_rows(), x, rows_y, w, row_h);
 
   float rx = x + w + PANE_GAP, rw = W - MARGIN - rx;
   draw::rect(rx, y, rw, h, draw::PANEL, 16);
   ftpd_stats_t st;
-  ftpd_get_stats(&st);
+  server_stats(&st);
   char line[200];
   draw::text(rx + 30, y + 28, FS_TITLE, draw::TEXT, tr("Activity"), true);
   snprintf(line, sizeof(line), "%s%s", trf("Connected: {0}  ·  Transfers: {1}", {std::to_string(st.clients), std::to_string(st.transfers)}).c_str(),
@@ -2267,7 +2822,7 @@ void draw_ftpd() {
   draw::text(rx + 30, y + 128, FS_SMALL, draw::MUTED, line);
   draw::rect(rx + 20, y + 175, rw - 40, 2, draw::LINE);
   char lines[16][160];
-  int n = ftpd_recent(lines, 16);
+  int n = server_recent(lines, 16);
   float yy = y + 192;
   if(!n) draw::text(rx + 30, yy, FS_SMALL, draw::MUTED, tr("Logins and transfers show here."));
   for(int i = 0; i < n && yy < y + h - 40; i++, yy += 36) draw::text_clip(rx + 30, yy, FS_SMALL, draw::TEXT, lines[i], rw - 60);
@@ -2276,22 +2831,357 @@ void draw_ftpd() {
 
 void draw_web() {
   bool running = websrv_running();
-  draw_header(tr("Web app"), tr("Use chiral-ftp from a browser on your PC or phone."));
   float x = MARGIN, y = TOP_H + 180, w = W - 2 * MARGIN, h = H - y - HINT_H - STATUS_H - 20;
+#if CHIRAL_DEVICE_COMPUTER
+  /* On a computer the web app is where its file manager and client live,
+     in its own browser -- opened for you when it starts. */
+  const bool local = web_local();
+  draw_header(tr("Web app"), tr("The file manager and the FTP / SFTP client, in your browser."));
   draw::rect(x, y, w, h, draw::PANEL, 16);
   draw_status_pill(x + 30, y + 30, running, tr("Running"), tr("Stopped"));
-  draw::text(x + 30, y + 100, FS, draw::MUTED, running ? tr("Open this address in a browser on your PC:") : tr("Start it, then open this address in a browser on your PC:"));
+  draw::text(x + 30, y + 100, FS, draw::MUTED,
+             local ? (running ? tr("Open in your browser at:") : tr("Start it to open it in your browser:"))
+                   : (running ? tr("Open it in a browser here or on another device:")
+                              : tr("Start it, then open it in a browser here or on another device:")));
   draw::text_clip(x + 30, y + 150, 64, running ? draw::TEXT : draw::MUTED, web_address().c_str(), w - 60, true);
   draw::text_clip(x + 30, y + 236, FS_SMALL, draw::TEXT,
-                  tr("Console files: browse, download to your PC, upload from it (drag and drop works), copy, move, rename, delete."),
+                  tr("Files: this computer's files. Browse, upload and download (drag and drop works), copy, move, rename, delete."),
                   w - 60);
   draw::text_clip(x + 30, y + 268, FS_SMALL, draw::MUTED,
-                  tr("FTP client tab: the client from the TV, sharing its connection and queue. Anyone on your network can open the page while it runs."),
+                  local ? tr("FTP / SFTP client: connect to servers and transfer files, with this window's connections and queue.")
+                        : tr("FTP / SFTP client: connect to servers and transfer files. Anyone on your network can open the page while it runs."),
                   w - 60);
+#else
+  draw_header(tr("Web app"), tr(device_text(N_("Use chiral-ftp from a browser on your PC or phone."),
+                                            N_("Use chiral-ftp from a browser on a phone, a tablet or another computer."))));
+  draw::rect(x, y, w, h, draw::PANEL, 16);
+  draw_status_pill(x + 30, y + 30, running, tr("Running"), tr("Stopped"));
+  draw::text(x + 30, y + 100, FS, draw::MUTED,
+             running ? tr(device_text(N_("Open this address in a browser on your PC:"), N_("Open this address in a browser on another device:")))
+                     : tr(device_text(N_("Start it, then open this address in a browser on your PC:"),
+                                      N_("Start it, then open this address in a browser on another device:"))));
+  draw::text_clip(x + 30, y + 150, 64, running ? draw::TEXT : draw::MUTED, web_address().c_str(), w - 60, true);
+  draw::text_clip(x + 30, y + 236, FS_SMALL, draw::TEXT,
+                  tr(device_text(N_("Console files: browse, download to your PC, upload from it (drag and drop works), copy, move, rename, delete."),
+                                 N_("This computer's files: browse, download to the other device, upload from it (drag and drop works), copy, move, rename, delete."))),
+                  w - 60);
+  draw::text_clip(x + 30, y + 268, FS_SMALL, draw::MUTED,
+                  tr(device_text(N_("FTP client tab: the client from the TV, sharing its connection and queue. Anyone on your network can open the page while it runs."),
+                                 N_("FTP client tab: the same client as this window, sharing its connection and queue. Anyone on your network can open the page while it runs."))),
+                  w - 60);
+#endif
   draw::rect(x + 20, y + 314, w - 40, 2, draw::LINE);
   float rw = 900;
   draw_rows(web_rows(), x, y + 330, rw);
   draw_hints({{ACT_CROSS, tr("Select")}, {ACT_CIRCLE, tr("Start screen (the web app keeps running)")}, {ACT_OPTIONS, tr("Menu")}});
+}
+
+/* ---------- quick connect ---------- */
+
+/* The other chiral-ftp devices on the network (engine/discovery.h). One
+   asks another to share; the person there allows it; this side connects
+   with a login that only works from here, and opens the client. */
+
+const char *kind_label(const char *kind) {
+  if(!strcmp(kind, "ps5")) return "PS5";
+  if(!strcmp(kind, "switch")) return "Nintendo Switch";
+  if(!strcmp(kind, "mac")) return "Mac";
+  if(!strcmp(kind, "windows")) return "Windows";
+  if(!strcmp(kind, "linux")) return "Linux";
+  return kind;
+}
+
+const char *kind_badge(const char *kind) {
+  if(!strcmp(kind, "ps5")) return "PS5";
+  if(!strcmp(kind, "switch")) return "NX";
+  if(!strcmp(kind, "mac")) return "Mac";
+  return "PC";
+}
+
+ImU32 kind_tint(const char *kind) {
+  if(!strcmp(kind, "switch")) return IM_COL32(0x3A, 0x14, 0x16, 255);
+  if(!strcmp(kind, "mac")) return IM_COL32(0x2A, 0x24, 0x16, 255);
+  return IM_COL32(0x14, 0x32, 0x5C, 255);
+}
+
+ImU32 kind_ink(const char *kind) {
+  if(!strcmp(kind, "switch")) return IM_COL32(0xFF, 0x8A, 0x8A, 255);
+  if(!strcmp(kind, "mac")) return IM_COL32(0xF2, 0xD9, 0x8A, 255);
+  return IM_COL32(0xA9, 0xCE, 0xFF, 255);
+}
+
+void kind_square(float x, float y, float s, const char *kind) {
+  draw::rect(x, y, s, s, kind_tint(kind), s * 0.22f);
+  const char *b = kind_badge(kind);
+  const float fs = s * 0.36f;
+  ImVec2 ts = draw::text_size(fs, b, true);
+  draw::text(x + (s - ts.x) / 2, y + (s - ts.y) / 2, fs, kind_ink(kind), b, true);
+}
+
+// The four digits both screens show, one to a box.
+void code_boxes(float cx, float y, float box, const char *code, ImU32 bg) {
+  const float gap = box * 0.2f, total = 4 * box + 3 * gap;
+  for(int i = 0; i < 4 && code[i]; i++) {
+    const float bx = cx - total / 2 + i * (box + gap);
+    draw::rect(bx, y, box, box * 1.2f, bg, box * 0.16f);
+    char d[2] = {code[i], 0};
+    const float fs = box * 0.68f;
+    ImVec2 ts = draw::text_size(fs, d, true);
+    draw::text(bx + (box - ts.x) / 2, y + (box * 1.2f - ts.y) / 2, fs, draw::ACCENT2, d, true);
+  }
+}
+
+
+/* Allowed: start the server if it isn't running, and hand the asker a login
+   of its own that only works from its address, for as long as the server
+   runs. */
+void quick_allow(const discovery_request_t &r) {
+  if(!server_running()) start_server();
+  if(!server_running()) {  // start_server() has said why, here
+    discovery_answer(r.nonce, -1, "", 0, "", "");
+    return;
+  }
+  char token[7], pass[25];
+  discovery_token(token, sizeof(token));
+  discovery_token(pass, sizeof(pass));
+  const std::string user = std::string("quick-") + token;
+#if CHIRAL_HAS_SFTPD
+  if(server_is_sftp()) sftpd_add_guest(user.c_str(), pass, r.ip);
+  else
+#endif
+    ftpd_add_guest(user.c_str(), pass, r.ip);
+  discovery_answer(r.nonce, 1, server_is_sftp() ? "sftp" : "ftp", server_port(), user.c_str(), pass);
+  show_toast(trf("{0} is connecting", {r.name}));
+}
+
+void quick_deny(const discovery_request_t &r) {
+  discovery_answer(r.nonce, 0, "", 0, "", "");
+}
+
+#if CHIRAL_UI_DESKTOP
+void draw_quick_prompt_desktop(const discovery_request_t &r);  // ui_desktop.inc
+#endif
+
+/* Another device asks to connect: what it is, the code it shows, Allow or
+   Deny. Refused on its own when the time runs out. */
+struct QuickPrompt : Overlay {
+  discovery_request_t req;
+  explicit QuickPrompt(const discovery_request_t &r) : req(r) {}
+  OverlayKind kind() override { return OV_PROMPT; }
+
+  bool input(Action a) override {
+    if(a == ACT_CROSS) {
+      quick_allow(req);
+      return false;
+    }
+    if(a == ACT_CIRCLE) {
+      quick_deny(req);
+      return false;
+    }
+    return true;
+  }
+
+  // a: 0 Deny, 1 Allow
+  bool click(int a, int b, bool right) override {
+    (void)b;
+    if(right) return true;
+    if(a == 1) quick_allow(req);
+    else quick_deny(req);
+    return false;
+  }
+
+  void draw() override {
+    discovery_request_t now;
+    if(discovery_pending(&now) && !strcmp(now.nonce, req.nonce)) req.seconds_left = now.seconds_left;
+#if CHIRAL_UI_DESKTOP
+    draw_quick_prompt_desktop(req);
+#else
+    const float w = 960, h = 560, x = (W - w) / 2, y = (H - h) / 2;
+    draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 160));
+    draw::rect(x, y, w, h, draw::PANEL, 18);
+    hit_add(HIT_OVERLAY_BODY, x, y, w, h);
+    kind_square(x + 44, y + 40, 78, req.kind);
+    draw::text_clip(x + 144, y + 44, FS_TITLE, draw::TEXT, trf("{0} wants to connect", {req.name}).c_str(), w - 190, true);
+    draw::text(x + 144, y + 92, FS_SMALL, draw::MUTED, req.ip);
+    float ty = y + 150;
+    for(const std::string &l : wrap_text(tr("It will be able to browse, download, upload and delete everything this server shares. Allow it only if it shows the same code."), FS_READ, w - 88)) {
+      draw::text(x + 44, ty, FS_READ, draw::TEXT, l.c_str());
+      ty += 38;
+    }
+    code_boxes(x + w / 2, ty + 18, 84, req.code, draw::BG);
+    const float by = y + h - 100;
+    const char *deny = tr("Deny"), *allow = tr("Allow");
+    const float bw = 230;
+    /* Each button: its key's glyph, then the word, centred together. The
+       glyph's width differs by platform (a round button, a key cap). */
+    auto key_button = [&](float bx, Action key, const char *word, ImU32 fill, int item) {
+      hit_add(HIT_MENU_ITEM, bx, by, bw, 64, item);
+      draw::rect(bx, by, bw, 64, fill, 12);
+      const float glyph = draw::button(-1000, -1000, 38, key);  // measured off screen
+      const float total = glyph + 14 + draw::text_size(FS, word, true).x;
+      const float gx = bx + (bw - total) / 2;
+      draw::button(gx, by + 13, 38, key);
+      draw::text(gx + glyph + 14, by + 16, FS, draw::TEXT, word, true);
+    };
+    key_button(x + w - 44 - 2 * bw - 20, ACT_CIRCLE, deny, draw::PANEL2, 0);
+    key_button(x + w - 44 - bw, ACT_CROSS, allow, draw::ACCENT, 1);
+    draw::text(x + 44, by + 18, FS_SMALL, draw::MUTED, trf("Refused on its own in {0} s", {std::to_string(req.seconds_left)}).c_str());
+#endif
+  }
+};
+
+/* This side asking: the devices nearby, then the wait for an answer. The
+   answer itself is acted on by quick_outcome(), whatever is on screen. */
+struct QuickList : Overlay {
+  int cursor = 0;
+  std::vector<discovery_peer_t> peers;
+  QuickList() { discovery_probe(); }
+  OverlayKind kind() override { return OV_QUICK; }
+
+  void refresh() {
+    discovery_peer_t buf[DISCOVERY_MAX_PEERS];
+    const int n = discovery_peers(buf, DISCOVERY_MAX_PEERS);
+    peers.assign(buf, buf + n);
+    if(cursor >= n) cursor = n - 1;
+    if(cursor < 0) cursor = 0;
+  }
+
+  static bool asking(discovery_outcome_t *o) {
+    discovery_get_outcome(o);
+    return o->state == DISCOVERY_ASKING;
+  }
+
+  void focus(int a, int b) override {
+    (void)b;
+    cursor = a;
+  }
+
+  bool input(Action a) override {
+    discovery_outcome_t o;
+    if(asking(&o)) {
+      if(a == ACT_CIRCLE) discovery_cancel();
+      return true;
+    }
+    if(a == ACT_CIRCLE) return false;
+    refresh();
+    const int n = (int)peers.size();
+    if(a == ACT_UP && n) cursor = (cursor + n - 1) % n;
+    if(a == ACT_DOWN && n) cursor = (cursor + 1) % n;
+    if(a == ACT_TRIANGLE) discovery_probe();
+    if(a == ACT_CROSS && n) discovery_ask(&peers[cursor]);
+    return true;
+  }
+
+  void draw() override {
+    refresh();
+    const float w = 1180, h = 760, x = (W - w) / 2, y = (H - h) / 2;
+    draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 150));
+    draw::rect(x, y, w, h, draw::PANEL, 18);
+    hit_add(HIT_OVERLAY_BODY, x, y, w, h);
+    draw::text(x + 44, y + 34, FS_TITLE, draw::TEXT, tr("Quick connect"), true);
+    discovery_outcome_t o;
+    if(asking(&o)) {
+      draw::text_clip(x + 44, y + 110, 40, draw::TEXT, trf("Asking {0}...", {o.name}).c_str(), w - 88, true);
+      draw::text_clip(x + 44, y + 172, FS_READ, draw::MUTED,
+                      trf("Accept on {0} to connect. Check that it shows the same code:", {o.name}).c_str(), w - 88);
+      code_boxes(x + w / 2, y + 250, 110, o.code, draw::BG);
+      draw::spinner(x + 62, y + 470, 14, draw::ACCENT);
+      draw::text(x + 90, y + 455, FS_SMALL, draw::MUTED,
+                 trf("Waiting · {0} · gives up in {1} s", {o.ip, std::to_string(o.seconds_left)}).c_str());
+      hint(x + 44, y + h - 74, ACT_CIRCLE, tr("Cancel"));
+      return;
+    }
+    draw::text_clip(x + 44, y + 86, FS_SMALL, draw::MUTED,
+                    tr("chiral-ftp on other devices on this network. Ask one to share, then browse it here."), w - 88);
+    float yy = y + 140;
+    const float row = 92;
+    if(peers.empty()) {
+      if(!discovery_running() && discovery_problem()[0]) {
+        draw::text(x + 44, yy + 20, FS, draw::ERR, tr("Quick connect isn't available here: the network refused it (see the message log)."));
+      } else {
+        draw::spinner(x + 62, yy + 34, 14, draw::ACCENT);
+        draw::text(x + 92, yy + 18, FS, draw::TEXT, tr("Looking for chiral-ftp on your network..."));
+        draw::text(x + 92, yy + 60, FS_SMALL, draw::MUTED, tr("Open chiral-ftp on the other device: it shows up here by itself."));
+      }
+    }
+    for(int i = 0; i < (int)peers.size() && yy + row < y + h - 120; i++, yy += row) {
+      const discovery_peer_t &p = peers[i];
+      const bool on = i == cursor;
+      hit_add(HIT_MENU_ITEM, x + 24, yy, w - 48, row - 10, i);
+      if(on) draw::rect(x + 24, yy, w - 48, row - 10, draw::SEL, 12);
+      kind_square(x + 44, yy + 14, 54, p.kind);
+      draw::text_clip(x + 118, yy + 12, FS, draw::TEXT, p.name, w - 420, true);
+      const std::string sub = std::string(kind_label(p.kind)) + "  \xc2\xb7  " + p.ip + "  \xc2\xb7  chiral-ftp " + p.version;
+      draw::text_clip(x + 118, yy + 48, FS_SMALL, draw::MUTED, sub.c_str(), w - 420);
+    }
+    char me[64];
+    system_device_name(me, sizeof(me));
+    draw::text_clip(x + 44, y + h - 130, FS_SMALL, draw::MUTED,
+                    trf(device_text(N_("This console shows up on the others as \"{0}\"."),
+                                    N_("This computer shows up on the others as \"{0}\".")), {me}).c_str(), w - 88);
+    float hx = x + 44, hy = y + h - 74;
+    if(!peers.empty()) hx += hint(hx, hy, ACT_CROSS, tr("Ask to connect"));
+    hx += hint(hx, hy, ACT_TRIANGLE, tr("Refresh"));
+    hint(hx, hy, ACT_CIRCLE, tr("Close"));
+  }
+};
+
+bool open_mode(Mode m);  // with the start screen, further down
+
+/* Connected by quick connect: the login the other side handed out, and the
+   client to see it in -- here, or on a computer that keeps its client in
+   the web app, there, in the browser. */
+void quick_connected(const discovery_outcome_t &o) {
+  json::Object site;
+  json::set_str(site, "protocol", o.protocol);
+  json::set_str(site, "host", o.ip);
+  json::set_num(site, "port", o.port);
+  json::set_str(site, "user", o.user);
+  json::set_str(site, "pass", o.pass);
+  json::set_str(site, "name", o.name);
+  json::set_bool(site, "quick", true);
+  connect(site);
+  if(mode_shown(MODE_CLIENT)) {
+    open_mode(MODE_CLIENT);
+  } else {
+    if(!websrv_running()) start_web(false);
+    if(websrv_running()) platform::open_url((web_address() + "index.html").c_str());
+  }
+}
+
+// An answer to our request, whatever screen it arrives on.
+void quick_outcome() {
+  discovery_outcome_t o;
+  discovery_get_outcome(&o);
+  if(o.state == DISCOVERY_IDLE || o.state == DISCOVERY_ASKING) return;
+  discovery_cancel();  // seen: back to idle
+  for(size_t i = g.overlays.size(); i-- > 0;) {
+    if(g.overlays[i]->kind() == OV_QUICK) g.overlays.erase(g.overlays.begin() + i);
+  }
+  if(o.state == DISCOVERY_ALLOWED) quick_connected(o);
+  else if(o.state == DISCOVERY_BUSY) show_toast(trf("{0} is answering someone else; try again in a moment", {o.name}), true);
+  else if(o.state == DISCOVERY_TIMEOUT) show_toast(trf("{0} didn't answer", {o.name}), true);
+  else if(o.state == DISCOVERY_FAILED) show_toast(trf("{0} said yes, but its server wouldn't start", {o.name}), true);
+  else show_toast(trf("{0} said no", {o.name}), true);
+}
+
+// Being asked: the prompt comes up over whatever is open, and goes when the request does.
+void quick_requests() {
+  discovery_request_t r;
+  const bool pending = discovery_pending(&r);
+  for(size_t i = 0; i < g.overlays.size(); i++) {
+    if(g.overlays[i]->kind() != OV_PROMPT) continue;
+    QuickPrompt *p = static_cast<QuickPrompt *>(g.overlays[i].get());
+    if(!pending || strcmp(r.nonce, p->req.nonce)) g.overlays.erase(g.overlays.begin() + i);  // withdrawn, or timed out
+    return;
+  }
+  if(!pending) return;
+  /* A text entry open underneath would keep the keys from the prompt. */
+  for(size_t i = g.overlays.size(); i-- > 0;) {
+    if(g.overlays[i]->kind() == OV_TEXT) g.overlays.erase(g.overlays.begin() + i);
+  }
+  push(new QuickPrompt(r));
+  g_touch_dirty = true;
 }
 
 /* ---------- file manager ---------- */
@@ -2338,7 +3228,8 @@ void fm_menu() {
     Entry e = p.entries[p.cursor];
     m->items.push_back({trf("Rename \"{0}\"", {e.name}), [pp, e] { rename_item(*pp, e); }});
   }
-  m->items.push_back({tr("Permissions"), [pp] { chmod_items(*pp); }, on_item});
+  m->items.push_back({tr("Change permissions"), [pp] { chmod_items(*pp); }, on_item});
+  if(on_item && selection_has_folder(p)) m->items.push_back({tr("Change permissions recursively"), [pp] { chmod_items(*pp, true); }});
   m->items.push_back({tr("Mark all"), [pp] { for(auto &e : pp->entries) if(!e.drive) pp->marked.insert(e.name); }, in_folder});
   m->items.push_back({tr("Clear marks"), [pp] { pp->marked.clear(); }, !p.marked.empty()});
   m->items.push_back({tr("Refresh"), [pp] { refresh(*pp); }, in_folder});
@@ -2411,37 +3302,52 @@ void draw_fm() {
   draw::rect(0, hy, W, HINT_H, draw::PANEL2);
   float x = MARGIN, y = hy + (HINT_H - 38) / 2;
   if(!g.overlays.empty()) {
-    x += draw::hint(x, y, ACT_CROSS, tr("Select"));
-    draw::hint(x, y, ACT_CIRCLE, tr("Back"));
+    x += hint(x, y, ACT_CROSS, tr("Select"));
+    hint(x, y, ACT_CIRCLE, tr("Back"));
     return;
   }
   Pane &p = g.fm[g.fm_active];
   bool on_dir = p.cursor < (int)p.entries.size() && p.entries[p.cursor].dir;
-  x += draw::hint(x, y, ACT_CROSS, on_dir ? tr("Open") : tr("Actions"));
-  x += draw::hint(x, y, ACT_SQUARE, tr("Mark"));
+  x += hint(x, y, ACT_CROSS, on_dir ? tr("Open") : tr("Actions"));
+  x += hint(x, y, ACT_SQUARE, tr("Mark"));
   if(!p.path.empty()) {
     char t[64];
     size_t n = p.marked.empty() ? 1 : p.marked.size();
     snprintf(t, sizeof(t), "%s", trf("Copy {0} to the other side", {std::to_string(n)}).c_str());
-    x += draw::hint(x, y, ACT_TRIANGLE, t);
+    x += hint(x, y, ACT_TRIANGLE, t);
   }
-  x += draw::hint(x, y, ACT_CIRCLE, p.path.empty() ? tr("Start screen") : tr("Back"));
-  if(!p.path.empty()) x += draw::hint(x, y, ACT_CIRCLE_LONG, tr("Hold: start screen"));
-  x += draw::hint_lr(x, y, tr("Switch side"));
-  draw::hint(x, y, ACT_OPTIONS, tr("Menu: move, rename, delete..."));
+  x += hint(x, y, ACT_CIRCLE, p.path.empty() ? tr("Start screen") : tr("Back"));
+  if(!p.path.empty()) x += hint(x, y, ACT_CIRCLE_LONG, tr("Hold: start screen"));
+  x += hint_lr(x, y, tr("Switch side"));
+  hint(x, y, ACT_OPTIONS, tr("Menu: move, rename, delete..."));
+}
+
+// The FTP / SFTP client: this console on the left, the server on the right.
+void draw_client() {
+  draw::rect(0, 0, W, H, draw::BG);
+  draw_top();
+  float ph = H - PANE_Y - STATUS_H - HINT_H - 16;
+  float pw = (W - 2 * MARGIN - PANE_GAP) / 2;
+  draw_pane(g.panes[0], 0, false, MARGIN, PANE_Y, pw, ph);
+  draw_pane(g.panes[1], 1, false, MARGIN + pw + PANE_GAP, PANE_Y, pw, ph);
+  draw_bottom();
 }
 
 struct HomeCard {
-  const char *title, *text;
+  const char *title, *text, *computer_text;  // the description on a console, and on a computer
   Mode mode;
 };
 
 const int kCardCount = 4;
 const HomeCard kCards[kCardCount] = {
-    {N_("FTP server"), N_("Turn the console into an FTP server. Connect to it from your PC, phone or another console."), MODE_FTPD},
-    {N_("Web app"), N_("Open chiral-ftp in a browser on your PC: manage the console's files, upload and download."), MODE_WEB},
-    {N_("File manager"), N_("Copy and move files on the console: the SD card, the homebrew folder, anywhere."), MODE_FILES},
-    {N_("FTP / SFTP client"), N_("Connect from the console to your laptop, PC or NAS and transfer files both ways."), MODE_CLIENT},
+    {N_("FTP server"), N_("Turn the console into an FTP server. Connect to it from your PC, phone or another console."),
+     N_("Share a folder of this computer over SFTP or FTP, with a phone, a console or another computer."), MODE_FTPD},
+    {N_("Web app"), N_("Open chiral-ftp in a browser on your PC: manage the console's files, upload and download."),
+     N_("The file manager and the FTP / SFTP client, in your browser."), MODE_WEB},
+    {N_("File manager"), N_("Copy and move files on the console: the SD card, the homebrew folder, anywhere."),
+     N_("Copy and move files on this computer: your home folder, other drives, anywhere."), MODE_FILES},
+    {N_("FTP / SFTP client"), N_("Connect from the console to your laptop, PC or NAS and transfer files both ways."),
+     N_("Connect to a server, a NAS or a console and transfer files both ways."), MODE_CLIENT},
 };
 
 void draw_card_icon(Mode m, float cx, float cy) {
@@ -2465,21 +3371,19 @@ void draw_card_icon(Mode m, float cx, float cy) {
   }
 }
 
-// Set once at startup by main (Switch only).
+// Set once at startup by main, where the platform has something to say.
 bool g_launch_known = false, g_launch_full = false;
-std::string g_launch_detail;  // English, translated when drawn
+std::string g_launch_line, g_launch_detail;  // English, translated when drawn
 int g_launch_status = 0;
 
-/* How much of the console the app got. hbmenu hands homebrew either a full
-   application slot (hold R while starting a game) or a library applet, and
-   the second one caps the heap well below what a 1080p font atlas plus 30
-   transfer buffers would like to use. Worth saying out loud on the start
-   screen, since it is the one thing the user can still change. */
+/* How the app was launched, in the platform's own words
+   (backend::startup_notice): on the PS5 whether it got the console's
+   storage and how, on the Switch whether it got a full application slot.
+   Worth saying out loud on the start screen, since it is the one thing the
+   user can still change. */
 void draw_launch_banner(float y) {
-  if(!g_launch_known) return;
-  std::string text = g_launch_full ? std::string(tr("Full memory: launched over a game"))
-                                   : trf("Applet mode: {0} (type {1}). Hold R on a game in hbmenu for the full console.",
-                                         {tr(g_launch_detail.c_str()), std::to_string(g_launch_status)});
+  if(!g_launch_known || g_launch_line.empty()) return;
+  const std::string text = trf(g_launch_line.c_str(), {tr(g_launch_detail.c_str()), std::to_string(g_launch_status)});
   ImVec2 ts = draw::text_size(FS_SMALL, text.c_str(), true);
   float w = std::min(W - 2 * MARGIN, ts.x + 70);
   draw::rect(MARGIN, y, w, 48, g_launch_full ? IM_COL32(24, 64, 44, 255) : IM_COL32(80, 56, 18, 255), 24);
@@ -2491,16 +3395,52 @@ void draw_home() {
   draw::rect(0, 0, W, H, draw::BG);
   draw_top();
   draw::text(MARGIN + 8, TOP_H + 50, 52, draw::TEXT, tr("What would you like to do?"), true);
+  {
+    /* Quick connect, above the cards: Up reaches it. Level with the
+       heading, out of the way of the Switch's launch banner at the bottom. */
+    discovery_peer_t peers[DISCOVERY_MAX_PEERS];
+    const int n = discovery_peers(peers, DISCOVERY_MAX_PEERS);
+    const char *label = tr("Quick connect");
+    const std::string count = n ? trf("{0} nearby", {std::to_string(n)}) : std::string();
+    const float lw = draw::text_size(FS, label, true).x, cwid = n ? draw::text_size(FS_SMALL, count.c_str(), true).x + 36 : 0;
+    const float bh = 64, bw = 92 + lw + (n ? cwid + 16 : 0), bx = W - MARGIN - bw, by = TOP_H + 44;
+    const bool on = g_home_quick && g.overlays.empty();
+    hit_add(HIT_QUICK, bx, by, bw, bh);
+    draw::rect(bx, by, bw, bh, on ? draw::SEL : draw::PANEL2, 16);
+    if(on) draw::frame(bx, by, bw, bh, draw::ACCENT, 16, 3);
+    /* A small radar: a dot and two arcs. */
+    ImDrawList *d = draw::dl();
+    const ImVec2 c(bx + 40, by + bh / 2 + 8);
+    d->AddCircleFilled(c, 5, draw::ACCENT2, 12);
+    for(int k = 1; k <= 2; k++) {
+      d->PathArcTo(c, 11.0f * k + 2, -2.4f, -0.74f, 12);
+      d->PathStroke(draw::ACCENT2, ImDrawFlags_None, 3.0f);
+    }
+    draw::text(bx + 70, by + (bh - FS) / 2 - 2, FS, draw::TEXT, label, true);
+    if(n) {
+      const float px = bx + 70 + lw + 16;
+      draw::rect(px, by + 16, cwid, bh - 32, IM_COL32(24, 64, 44, 255), (bh - 32) / 2);
+      draw::text(px + 18, by + (bh - FS_SMALL) / 2 - 2, FS_SMALL, draw::OK, count.c_str(), true);
+    }
+  }
   draw::text(MARGIN + 8, TOP_H + 124, FS_CARD, draw::MUTED,
-             tr("Servers keep running while you use the other modes or go to the home screen. Closing chiral-ftp stops them."));
+             tr(device_text(N_("Servers keep running while you use the other modes or go to the home screen. Closing chiral-ftp stops them."),
+                            N_("Servers keep running while you use the other modes. Quitting chiral-ftp stops them."))));
   draw_launch_banner(H - HINT_H - 64);
-  float gap = 30, cw = (W - 2 * MARGIN - (kCardCount - 1) * gap) / kCardCount, ch = 580, cy = TOP_H + 210;
-  for(int i = 0; i < kCardCount; i++) {
+  std::vector<int> shown;
+  for(int i = 0; i < kCardCount; i++) if(mode_shown(kCards[i].mode) || !mode_enabled(kCards[i].mode)) shown.push_back(i);
+  const int count = (int)shown.size();
+  /* Fewer cards (a computer, without its file manager and client here)
+     are no wider than four would be, a row centred under the heading. */
+  float gap = 30, cw = std::min((W - 2 * MARGIN - (count - 1) * gap) / count, 720.0f), ch = 580, cy = TOP_H + 210;
+  const float row_x = count < kCardCount ? (W - count * cw - (count - 1) * gap) / 2 : MARGIN;
+  for(int k = 0; k < count; k++) {
+    const int i = shown[k];
     Mode mode = kCards[i].mode;
-    float cx = MARGIN + i * (cw + gap);
+    float cx = row_x + k * (cw + gap);
     const bool have = mode_enabled(mode);
-    if(have) hit_add(HIT_CARD, cx, cy, cw, ch, i);
-    bool on = i == g_home_cursor && g.overlays.empty();
+    if(have) hit_add(HIT_CARD, cx, cy, cw, ch, i);  // a: the card in kCards
+    bool on = i == g_home_cursor && g.overlays.empty() && !g_home_quick;
     draw::rect(cx, cy, cw, ch, on ? draw::PANEL2 : draw::PANEL, 22);
     if(on) draw::frame(cx, cy, cw, ch, draw::ACCENT, 22, 4);
     /* A mode this build was compiled without: still shown, so the start
@@ -2509,12 +3449,12 @@ void draw_home() {
     const ImU32 body_col = have ? draw::MUTED : IM_COL32(70, 78, 96, 255);
     if(have) draw_card_icon(mode, cx + cw / 2, cy + 120);
     else draw::dl()->AddCircleFilled(ImVec2(cx + cw / 2, cy + 120), 62, IM_COL32(24, 30, 46, 255), 40);
-    const char *card_title = tr(kCards[i].title);
+    const char *card_title = mode == MODE_FTPD && CHIRAL_HAS_SFTPD ? tr("FTP / SFTP server") : tr(kCards[i].title);
     ImVec2 ts = draw::text_size(36, card_title, true);
     draw::text(cx + (cw - ts.x) / 2, cy + 220, 36, title_col, card_title, true);
     // The description, over a few lines.
     float ty = cy + 290;
-    for(const std::string &line : wrap_text(tr(kCards[i].text), FS_CARD, cw - 60)) {
+    for(const std::string &line : wrap_text(tr(device_text(kCards[i].text, kCards[i].computer_text)), FS_CARD, cw - 60)) {
       draw::text(cx + 30, ty, FS_CARD, body_col, line.c_str());
       ty += 44;
     }
@@ -2527,7 +3467,7 @@ void draw_home() {
     bool active = false;
     fsjob_stats_t js;
     fsjob_get_stats(&js);
-    if(mode == MODE_FTPD && ftpd_running()) status = ftp_address(), active = true;
+    if(mode == MODE_FTPD && server_running()) status = server_address(), active = true;
     if(mode == MODE_WEB && websrv_running()) status = web_address(), active = true;
     if(mode == MODE_FILES && (js.running || js.queued)) status = trf(js.move ? N_("Moving {0}") : N_("Copying {0}"), {js.current}), active = true;
     if(mode == MODE_CLIENT && g.connected) status = trf("Connected to {0}", {g.server.host}), active = true;
@@ -2558,9 +3498,42 @@ void options_menu(bool in_mode) {
   push(m);
 }
 
+// Opens one of the four modes, from its card or from the menu bar.
+bool open_mode(Mode m) {
+  if(!mode_enabled(m)) {
+    show_toast(tr("Not in this build"), true);
+    return false;
+  }
+  if(!mode_shown(m)) return false;  // a computer's, kept to the web app
+  for(int i = 0; i < kCardCount; i++) if(kCards[i].mode == m) g_home_cursor = i;
+  if(m == MODE_FILES && g.fm[0].path.empty() && g.fm[0].entries.empty()) {
+    load_drives(g.fm[0]);
+    load_drives(g.fm[1]);
+  }
+  go_mode(m);
+  return true;
+}
+
 bool handle_home(Action a) {
   if(a == ACT_OPTIONS) {
     options_menu(false);
+    return true;
+  }
+  // Up to Quick connect, above the cards, and Down back to them.
+  if(a == ACT_UP) {
+    g_home_quick = true;
+    return true;
+  }
+  if(a == ACT_DOWN) {
+    g_home_quick = false;
+    return true;
+  }
+  if(g_home_quick && a == ACT_CROSS) {
+    push(new QuickList);
+    return true;
+  }
+  if(g_home_quick && (a == ACT_LEFT || a == ACT_RIGHT || a == ACT_L1 || a == ACT_R1)) {
+    g_home_quick = false;  // back to the cards, where it was
     return true;
   }
   // Step over the modes this build hasn't got rather than stopping on them.
@@ -2568,22 +3541,17 @@ bool handle_home(Action a) {
     const int step = (a == ACT_LEFT || a == ACT_L1) ? kCardCount - 1 : 1;
     for(int i = 0; i < kCardCount; i++) {
       g_home_cursor = (g_home_cursor + step) % kCardCount;
-      if(mode_enabled(kCards[g_home_cursor].mode)) break;
+      if(mode_shown(kCards[g_home_cursor].mode)) break;
     }
   } else if(a == ACT_CROSS) {
-    Mode m = kCards[g_home_cursor].mode;
-    if(!mode_enabled(m)) {
-      show_toast(tr("Not in this build"), true);
-      return true;
-    }
-    if(m == MODE_FILES && g.fm[0].path.empty() && g.fm[0].entries.empty()) {
-      load_drives(g.fm[0]);
-      load_drives(g.fm[1]);
-    }
-    go_mode(m);
+    open_mode(kCards[g_home_cursor].mode);
   }
   return true;
 }
+
+#if CHIRAL_UI_DESKTOP
+#include "ui_desktop.inc"
+#endif
 
 }  // namespace
 
@@ -2621,7 +3589,7 @@ void init() {
   }
   /* Put the cursor on something this build can actually open. */
   for(int i = 0; i < kCardCount; i++) {
-    if(mode_enabled(kCards[i].mode)) {
+    if(mode_shown(kCards[i].mode)) {
       g_home_cursor = i;
       break;
     }
@@ -2670,9 +3638,15 @@ void handle_touch() {
   }
 
   if(g.mode == MODE_HOME) {
+    if(hit_at(t.x, t.y, HIT_QUICK)) {
+      handle(ACT_CMD_QUICK);
+      return;
+    }
     if(const Hit *card = hit_at(t.x, t.y, HIT_CARD)) {
-      // A mode is a harmless place to end up, so one tap opens it.
+      // A mode is a harmless place to end up, so one tap opens it -- the
+      // card tapped, not Quick connect if the pad had left the focus there.
       g_home_cursor = card->a;
+      g_home_quick = false;
       handle(ACT_CROSS);
     }
     return;
@@ -2711,8 +3685,201 @@ void handle_touch() {
   }
 }
 
+/* The top overlay's result, as handle() treats it: input() may have pushed
+   new overlays, so only the one that closed is removed. */
+void overlay_click(const Hit *item, bool right) {
+  size_t depth = g.overlays.size();
+  if(!g.overlays.back()->click(item->a, item->b, right)) g.overlays.erase(g.overlays.begin() + (depth - 1));
+}
+
+/* Rows of a pane the wheel has scrolled, kept between events so a trackpad's
+   small steps add up. */
+float g_wheel_carry = 0;
+
+/* The mouse. What it is over takes the highlight, the way the d-pad would
+   move it there; a click acts on it as Enter does (Cmd-click marks a file);
+   a right click is the menu key; the wheel scrolls. While a panel is open
+   only the panel counts, and a click outside it backs out, as Esc does.
+   Called from update(), on the UI thread, like every other input. */
+void handle_pointer() {
+  if(!platform::has_pointer()) return;
+  platform::Pointer p = platform::take_pointer();
+  if(!p.moved && !p.clicked && !p.right_clicked && p.wheel == 0) return;
+#if CHIRAL_UI_DESKTOP
+  if(desk::pointer(p)) return;  // the desktop interface's own controls
+#endif
+  if(g_hits.empty()) g_touch_dirty = true;  // no rectangles yet: draw some
+  const int top = (int)g.overlays.size();
+  const float x = p.x, y = p.y;
+
+  // What is under it, top layer first.
+  const Hit *item = nullptr, *hint = nullptr, *card = nullptr, *row = nullptr, *server = nullptr,
+            *setting = nullptr, *disc = nullptr, *body = nullptr, *quick = nullptr;
+  if(p.inside) {
+    if(top) {
+      body = hit_at(x, y, HIT_OVERLAY_BODY, top);
+      item = body ? hit_at(x, y, HIT_MENU_ITEM, top) : nullptr;
+      hint = body ? hit_at(x, y, HIT_HINT, top) : hit_at(x, y, HIT_HINT, 0);
+    } else {
+      hint = hit_at(x, y, HIT_HINT, 0);
+      card = hit_at(x, y, HIT_CARD, 0);
+      row = hit_at(x, y, HIT_ROW, 0);
+      server = hit_at(x, y, HIT_SERVER, 0);
+      setting = hit_at(x, y, HIT_SETTING, 0);
+      disc = hit_at(x, y, HIT_DISCONNECT, 0);
+      quick = hit_at(x, y, HIT_QUICK, 0);
+    }
+  }
+
+  // Hover: move the highlight, and redraw only when something changed.
+  static const Hit *last = nullptr;
+  static Hit last_hit{};
+  const Hit *over = item ? item : hint ? hint : quick ? quick : card ? card : disc ? disc : server ? server : row ? row : setting;
+  const bool same = (!over && !last) || (over && last && over->kind == last_hit.kind && over->a == last_hit.a &&
+                                         over->b == last_hit.b && over->layer == last_hit.layer);
+  if(p.moved && !same) {
+    g_touch_dirty = true;
+    if(item) g.overlays.back()->focus(item->a, item->b);
+    if(quick) g_home_quick = true;
+    if(card && mode_shown(kCards[card->a].mode)) {
+      g_home_cursor = card->a;
+      g_home_quick = false;
+    }
+    if(setting) g_row_cursor = setting->a;
+    if(server) {
+      g.active = 1;
+      remote().cursor = server->a;
+    }
+    if(row) {
+      const bool fm = row->a >= 2;
+      const int idx = fm ? row->a - 2 : row->a;
+      (fm ? g.fm_active : g.active) = idx;
+      (fm ? g.fm[idx] : g.panes[idx]).cursor = row->b;
+    }
+  }
+  last = over;
+  if(over) last_hit = *over;
+  platform::pointer_hand(over != nullptr);
+
+  if(p.wheel != 0) {
+    g_touch_dirty = true;
+    g_wheel_carry -= p.wheel * 0.6f;  // up scrolls toward the top
+    const int steps = (int)g_wheel_carry;
+    g_wheel_carry -= (float)steps;
+    if(top) {
+      for(int k = 0; k < std::abs(steps); k++) handle(steps < 0 ? ACT_UP : ACT_DOWN);
+    } else if(const Hit *z = p.inside ? hit_at(x, y, HIT_SCROLL, 0) : nullptr) {
+      Pane *pn = z->b ? &g.fm[z->a] : &g.panes[z->a];
+      const int n = (int)pn->entries.size();
+      const int rows = (int)(z->h / ROW_H);
+      pn->scroll = std::max(0, std::min(std::max(0, n - rows), pn->scroll + steps));
+      if(pn->cursor < pn->scroll) pn->cursor = pn->scroll;
+      if(pn->cursor >= pn->scroll + rows) pn->cursor = std::max(0, pn->scroll + rows - 1);
+    }
+  }
+
+  if(p.clicked || p.right_clicked) {
+    g_touch_dirty = true;
+    const bool right = p.right_clicked && !p.clicked;
+    if(top) {
+      if(!body) {
+        if(hint && !right) handle((Action)hint->a);  // the bar below the panel
+        else handle(ACT_CIRCLE);                     // outside the panel: back out of it
+      } else if(hint && !right) {
+        handle((Action)hint->a);
+      } else if(item) {
+        overlay_click(item, right);
+      }
+      return;
+    }
+    if(right) {
+      // The menu, for what is under the pointer when that is a file or a site.
+      if(row) {
+        const bool fm = row->a >= 2;
+        const int idx = fm ? row->a - 2 : row->a;
+        (fm ? g.fm_active : g.active) = idx;
+        (fm ? g.fm[idx] : g.panes[idx]).cursor = row->b;
+      }
+      handle(ACT_OPTIONS);
+      return;
+    }
+    if(hint) {
+      handle((Action)hint->a);
+    } else if(quick) {
+      handle(ACT_CMD_QUICK);
+    } else if(card) {
+      g_home_cursor = card->a;
+      handle(ACT_CROSS);
+    } else if(disc) {
+      g.disconnect_focus = false;
+      disconnect();
+    } else if(setting) {
+      g_row_cursor = setting->a;
+      handle(ACT_CROSS);
+    } else if(server) {
+      g.active = 1;
+      remote().cursor = server->a;
+      handle(ACT_CROSS);
+    } else if(row) {
+      const bool fm = row->a >= 2;
+      const int idx = fm ? row->a - 2 : row->a;
+      Pane &pn = fm ? g.fm[idx] : g.panes[idx];
+      (fm ? g.fm_active : g.active) = idx;
+      pn.cursor = row->b;
+      if(p.modifier) {
+        // Cmd-click: mark it or unmark it, as a Finder selection would.
+        if(pn.cursor < (int)pn.entries.size() && !pn.entries[pn.cursor].drive) {
+          const std::string &n = pn.entries[pn.cursor].name;
+          if(pn.marked.count(n)) pn.marked.erase(n);
+          else pn.marked.insert(n);
+        }
+      } else {
+        handle(ACT_CROSS);
+      }
+    }
+  }
+}
+
+/* When quick connect runs. On a computer: for as long as the app is open,
+   whatever page or window is in front. On a console, only while someone
+   could use it: the app in front, on the start screen, or with an ask or a
+   request still going; anywhere else it stops, and the others stop listing
+   it, until it is back. This is the one place that starts it -- the network
+   thread never restarts itself -- so a socket that died (the network
+   changed, the console slept) is replaced here too, a few seconds on. */
+void quick_lifecycle() {
+  static double retry_at = 0;
+#if CHIRAL_DEVICE_COMPUTER
+  const bool want = !g.quit;
+#else
+  discovery_outcome_t o;
+  discovery_request_t r;
+  discovery_get_outcome(&o);
+  const bool want = !g.quit && platform::in_foreground() &&
+                    (g.mode == MODE_HOME || o.state == DISCOVERY_ASKING || discovery_pending(&r));
+#endif
+  if(!want) {
+    if(discovery_running()) discovery_stop();
+    retry_at = 0;  // back in front: at once
+    return;
+  }
+  if(discovery_running() || now() < retry_at) return;
+  char name[64];
+  system_device_name(name, sizeof(name));
+  /* Started: a thread that ends by itself again waits five seconds for the
+     next. Refused: the same. Only still stopping from a moment ago (no
+     problem to report) tries again on the next frame. */
+  const bool started = !discovery_start(name, system_device_kind());
+  retry_at = started || discovery_problem()[0] ? now() + 5 : 0;
+}
+
 void update() {
   handle_touch();
+  handle_pointer();
+  quick_requests();
+  quick_outcome();
+  quick_lifecycle();
+  watch_connection();
   g_jobs.poll();
   // Copies finished: show the new files on both sides.
   fsjob_stats_t js;
@@ -2741,6 +3908,39 @@ void handle(Action a) {
     g.quit = true;
     return;
   }
+  /* The menu bar: straight there, from whatever is open. A text entry left
+     open underneath would keep the keyboard for itself, so everything open
+     closes first. */
+  // View > Zoom: the whole window, whatever is open in it.
+  if(a == ACT_CMD_ZOOM_IN || a == ACT_CMD_ZOOM_OUT || a == ACT_CMD_ZOOM_RESET) {
+    const float z = platform::zoom();
+    platform::set_zoom(a == ACT_CMD_ZOOM_RESET ? 1.0f : a == ACT_CMD_ZOOM_IN ? z * 1.125f : z / 1.125f);
+    save_prefs();
+    return;
+  }
+#if CHIRAL_UI_DESKTOP
+  if(a >= ACT_CMD_HOME && desk::command(a)) return;  // pages, on the desktop
+#endif
+  if(a >= ACT_CMD_HOME) {
+    g.overlays.clear();
+    switch(a) {
+    case ACT_CMD_HOME: go_mode(MODE_HOME); break;
+    case ACT_CMD_FTPD: open_mode(MODE_FTPD); break;
+    case ACT_CMD_WEB: open_mode(MODE_WEB); break;
+    case ACT_CMD_FILES: open_mode(MODE_FILES); break;
+    case ACT_CMD_CLIENT: open_mode(MODE_CLIENT); break;
+    case ACT_CMD_CONNECT:
+      if(open_mode(MODE_CLIENT)) push(new Form(json::Object(), -1));
+      break;
+    case ACT_CMD_SETTINGS: push(new Settings); break;
+    case ACT_CMD_ABOUT: push(new About); break;
+    case ACT_CMD_QUEUE: push(new QueueView); break;
+    case ACT_CMD_LOG: push(new LogView); break;
+    case ACT_CMD_QUICK: push(new QuickList); break;
+    default: break;
+    }
+    return;
+  }
   /* Back, held down: straight out to the start screen, however deep in a
      folder tree or however many menus down. */
   if(a == ACT_CIRCLE_LONG) {
@@ -2756,6 +3956,9 @@ void handle(Action a) {
     if(!keep) g.overlays.erase(g.overlays.begin() + (depth - 1));
     return;
   }
+#if CHIRAL_UI_DESKTOP
+  if(desk::key(a)) return;  // the desktop pages; the file manager and client take their own
+#endif
   switch(g.mode) {
   case MODE_HOME:
     handle_home(a);
@@ -2767,7 +3970,7 @@ void handle(Action a) {
   case MODE_WEB:
     if(a == ACT_CIRCLE) go_mode(MODE_HOME);
     else if(a == ACT_OPTIONS) options_menu(true);
-    else rows_input(g.mode == MODE_FTPD ? ftpd_rows() : web_rows(), a);
+    else rows_input(g.mode == MODE_FTPD ? server_rows() : web_rows(), a);
     return;
   default:
     break;
@@ -2856,7 +4059,25 @@ void handle(Action a) {
 void draw_overlays();
 
 void render() {
+  W = platform::view_width();
+  H = platform::view_height();
+  /* Settings just took this mode off a computer's start screen. */
+  if(!mode_shown(g.mode)) go_mode(MODE_HOME);
+  if(!mode_shown(kCards[g_home_cursor].mode)) {
+    for(int i = 0; i < kCardCount; i++) if(mode_shown(kCards[i].mode)) { g_home_cursor = i; break; }
+  }
+  platform::set_command_shown(ACT_CMD_FILES, mode_shown(MODE_FILES));
+  platform::set_command_shown(ACT_CMD_CLIENT, mode_shown(MODE_CLIENT));
+  platform::set_command_shown(ACT_CMD_CONNECT, mode_shown(MODE_CLIENT));
   g_hits.clear();
+  g_hit_layer = 0;
+#if CHIRAL_UI_DESKTOP
+  /* A sidebar and pages instead of the start screen (ui_desktop.inc); the
+     dialogs are the same ones, over it. */
+  desk::render();
+  draw_overlays();
+  return;
+#endif
   if(g.mode != MODE_CLIENT) {
     if(g.mode == MODE_HOME) draw_home();
     else if(g.mode == MODE_FILES) draw_fm();
@@ -2865,18 +4086,16 @@ void render() {
     draw_overlays();
     return;
   }
-  draw::rect(0, 0, W, H, draw::BG);
-  draw_top();
-  float ph = H - PANE_Y - STATUS_H - HINT_H - 16;
-  float pw = (W - 2 * MARGIN - PANE_GAP) / 2;
-  draw_pane(g.panes[0], 0, false, MARGIN, PANE_Y, pw, ph);
-  draw_pane(g.panes[1], 1, false, MARGIN + pw + PANE_GAP, PANE_Y, pw, ph);
-  draw_bottom();
+  draw_client();
   draw_overlays();
 }
 
 void draw_overlays() {
-  for(auto &o : g.overlays) o->draw();
+  for(size_t i = 0; i < g.overlays.size(); i++) {
+    g_hit_layer = (int)i + 1;
+    g.overlays[i]->draw();
+  }
+  g_hit_layer = 0;
   // Host text entry consumes keystrokes while it's on top.
   if(!g.overlays.empty() && g.overlays.back()->kind() == OV_TEXT) {
     TextEntry *t = static_cast<TextEntry *>(g.overlays.back().get());
@@ -2900,9 +4119,10 @@ void draw_overlays() {
   }
 }
 
-void set_startup_notice(bool ok, const std::string &detail, int status) {
+void set_startup_notice(bool ok, const std::string &line, const std::string &detail, int status) {
   g_launch_known = true;
   g_launch_full = ok;
+  g_launch_line = line;
   g_launch_detail = detail;
   g_launch_status = status;
 }
@@ -2916,8 +4136,17 @@ bool quit_requested() {
 }
 
 bool busy() {
+  {
+    discovery_outcome_t o;
+    discovery_get_outcome(&o);
+    for(auto &ov : g.overlays) if(ov->kind() == OV_PROMPT || ov->kind() == OV_QUICK) return true;
+    if(o.state == DISCOVERY_ASKING) return true;
+  }
+#if CHIRAL_UI_DESKTOP
+  if(desk::editing()) return true;  // the caret blinks
+#endif
   ftpd_stats_t st;
-  ftpd_get_stats(&st);
+  server_stats(&st);
   if(g.mode == MODE_FTPD && st.transfers) return true;
   fsjob_stats_t js;
   fsjob_get_stats(&js);

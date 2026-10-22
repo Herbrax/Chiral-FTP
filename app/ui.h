@@ -10,9 +10,10 @@ void init();
 /* What the platform had to say about how the app was launched, for the
    banner on the start screen (backend::startup_notice): full storage access
    on the PS5, an application slot rather than a library applet on the
-   Switch, nothing at all on a computer. detail is English and translated
-   when drawn; status is a raw platform code, for the log. */
-void set_startup_notice(bool ok, const std::string &detail, int status);
+   Switch, nothing at all on a computer. line and detail are English and
+   translated when drawn -- line is the platform's own wording, with {0} for
+   detail and {1} for status. */
+void set_startup_notice(bool ok, const std::string &line, const std::string &detail, int status);
 // Background work and engine state (jobs, log, queue counters).
 void update();
 void handle(Action a);

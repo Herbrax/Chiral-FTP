@@ -16,6 +16,7 @@
 
 #include "i18n.h"
 #include "switch_init.h"
+#include "usb_drives.h"
 
 #include <cstdint>
 #include <cstring>
@@ -135,6 +136,9 @@ void shutdown() {
     g_fb_ready = false;
   }
   g_window = nullptr;
+  /* Last, like Goldleaf's Finalize(): by now main() has stopped the servers
+     and the workers, so nothing still has a file open on a drive. */
+  usb_drives_stop();
 }
 
 void pump(int timeout_ms) {
@@ -195,7 +199,7 @@ bool touch(int *x, int *y, bool *down) {
   return true;
 }
 
-bool startup_notice(bool *ok, const char **detail, int *status) {
+bool startup_notice(bool *ok, const char **line, const char **detail, int *status) {
   /* Launched over a game (R on a title in hbmenu) the app is a full
      application with the console's memory behind it; from the album it is a
      library applet, capped near 448 MB -- enough, but tight once a CJK
@@ -205,6 +209,8 @@ bool startup_notice(bool *ok, const char **detail, int *status) {
   const bool full = type == AppletType_Application || type == AppletType_SystemApplication;
 
   *ok = full;
+  *line = full ? N_("Full memory: launched over a game")
+               : N_("Applet mode: {0} (type {1}). Hold R on a game in hbmenu for the full console.");
   *detail = full ? N_("launched over a game, with the console's memory")
                  : N_("started from the album, so memory is limited");
   *status = (int)type;
@@ -222,8 +228,11 @@ void report_startup_services(void (*trace)(const char *fmt, ...)) {
 }
 
 void early_init() {
-  /* Nothing: the services come up in platform/switch/init.c before main,
-     and swkbd is an applet rather than a module to load. */
+  /* The services come up in platform/switch/init.c before main, and swkbd
+     is an applet rather than a module to load. What is left is USB drives
+     (usb_drives.c): before anything opens a file, so every path the app
+     uses goes through the router from the start. */
+  usb_drives_start();
 }
 
 bool keyboard_failed() {
@@ -274,7 +283,8 @@ const char *about_file_manager() {
 int about_thanks(const char *const **lines) {
   static const char *const kThanks[] = {
       "libnx and devkitPro (switchbrew, fincs, WinterMute), ftpd (Michael Theall), NX-Shell (Joel16),",
-      "websrv and ftpsrv (John T\xc3\xb6rnblom), libssh2, Mbed TLS, GNU libmicrohttpd, Dear ImGui, Noto Sans, IBM Plex Mono.",
+      "websrv and ftpsrv (John T\xc3\xb6rnblom), libssh2, Mbed TLS, GNU libmicrohttpd, Dear ImGui, Noto Sans, IBM Plex Mono,",
+      "libusbhsfs (DarkMatterCore), NTFS-3G, lwext4.",
   };
   *lines = kThanks;
   return (int)(sizeof(kThanks) / sizeof(kThanks[0]));
@@ -283,6 +293,43 @@ int about_thanks(const char *const **lines) {
 bool can_quit() {
   // Unlike a PS5 title, homebrew returns to hbmenu when main() returns.
   return true;
+}
+
+bool window_size(int *pt_w, int *pt_h, int *px_w, int *px_h) {
+  /* No window: the fixed 1920x1080 layout, drawn at CHIRAL_RENDER_W x
+     CHIRAL_RENDER_H. */
+  (void)pt_w;
+  (void)pt_h;
+  (void)px_w;
+  (void)px_h;
+  return false;
+}
+
+void pointer_hand(bool on) {
+  (void)on;  // no mouse
+}
+
+bool open_url(const char *url) {
+  (void)url;  // no browser
+  return false;
+}
+
+/* What appletMainLoop() (called from pump) last heard from the system: in
+   focus, or out of it -- the HOME menu, an overlay, the app suspended. A
+   read of libnx's own state, not a call to the system. */
+bool in_foreground() {
+  return appletGetFocusState() == AppletFocusState_InFocus;
+}
+
+bool copy_text(const char *text) {
+  (void)text;  // no clipboard
+  return false;
+}
+
+bool choose_folder(const char *start, std::string &out) {
+  (void)start;
+  (void)out;
+  return false;
 }
 
 }  // namespace backend

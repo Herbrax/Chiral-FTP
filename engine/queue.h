@@ -52,3 +52,9 @@ int queue_snapshot(const char *tab, queue_view_t *out, int max, queue_stats_t *s
 
 /* Starts workers up to the configured connection count. */
 void queue_kick(void);
+
+/* For leaving the app: nothing new starts, running transfers are canceled
+   and idle workers leave now instead of half a minute from now. Only asks;
+   queue_workers() turns 0 when the last one is gone. */
+void queue_stop(void);
+int queue_workers(void);

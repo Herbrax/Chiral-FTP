@@ -304,6 +304,12 @@ do_chmod(ftp_conn_t *c, void *p) {
   return ftp_chmod(c, ctx->a, ctx->mode);
 }
 
+static int
+do_chmod_tree(ftp_conn_t *c, void *p) {
+  path_ctx_t *ctx = p;
+  return remote_chmod_tree(c, ctx->a, ctx->mode);
+}
+
 static enum MHD_Result
 run_path(req_t *r, session_fn fn, path_ctx_t *ctx) {
   char err[512];
@@ -331,7 +337,8 @@ static enum MHD_Result
 api_remote_chmod(req_t *r) {
   path_ctx_t ctx = {arg(r, "path", NULL), NULL,
                     (unsigned int)strtoul(arg(r, "mode", "0"), NULL, 8), NULL};
-  return run_path(r, do_chmod, &ctx);
+  // recursive=1: a folder and everything in it
+  return run_path(r, atoi(arg(r, "recursive", "0")) ? do_chmod_tree : do_chmod, &ctx);
 }
 
 typedef struct delete_ctx {
@@ -474,7 +481,8 @@ api_local_chmod(req_t *r) {
   const char *path = arg(r, "path", NULL);
 
   if(!valid_path(path)) return fail(r->conn, "Invalid path");
-  if(chmod(path, (mode_t)strtoul(arg(r, "mode", "0"), NULL, 8))) {
+  const unsigned int mode = (unsigned int)strtoul(arg(r, "mode", "0"), NULL, 8);
+  if(atoi(arg(r, "recursive", "0")) ? localfs_chmod_tree(path, mode) : chmod(path, (mode_t)mode)) {
     return fail_errno(r->conn, "Could not change permissions");
   }
   return ok(r->conn);
@@ -614,7 +622,20 @@ api_poll(req_t *r) {
   strbuf_t b = {0};
   unsigned long last;
 
-  strbuf_printf(&b, "{\"ok\":true,\"connected\":%d,\"log\":", session_server(&s));
+  // drops: connections the session has given up on (session_drops), for the page to say so
+  const int connected = session_server(&s);
+  strbuf_printf(&b, "{\"ok\":true,\"connected\":%d,\"drops\":%u,", connected, session_drops());
+  /* And to what, as /api/state says it: a connection made from elsewhere --
+     quick connect, which opens this page while it is still connecting, or
+     the app's own window -- shows up here without reloading the page. */
+  if(connected) {
+    strbuf_append(&b, "\"server\":{\"host\":");
+    json_str(&b, s.host);
+    strbuf_printf(&b, ",\"port\":%u,\"protocol\":\"%s\",\"user\":", s.port, protocol_name(s.protocol));
+    json_str(&b, s.user);
+    strbuf_append(&b, "},");
+  }
+  strbuf_append(&b, "\"log\":");
   last = log_json(&b, since);
   strbuf_printf(&b, ",\"log_seq\":%lu,\"queue\":", last);
   queue_json(&b, tab, QUEUE_ITEMS_LIMIT);

@@ -22,6 +22,7 @@ fallback, PASV with the unroutable-address workaround, REST/APPE resume. */
 #include <sys/time.h>
 #include <unistd.h>
 
+#include "config.h"
 #include "ftp_internal.h"
 #include "log.h"
 
@@ -70,7 +71,7 @@ canceled(const ftp_conn_t *c) {
 
 static void
 drop(ftp_conn_t *c) {
-  if(c->ssh) sftp_drop(c);
+  if(c->ssh) sftpc_drop(c);
   if(c->fd >= 0) {
     close(c->fd);
     c->fd = -1;
@@ -184,8 +185,7 @@ read_line(ftp_conn_t *c, char *line, size_t size) {
     if(n == 0) {
       set_error(c, "Connection closed by server");
     } else if(errno == EAGAIN || errno == EWOULDBLOCK) {
-      set_error(c, "Connection timed out after %d seconds of inactivity",
-                CONTROL_TIMEOUT_S);
+      set_error(c, "Connection timed out: the server stopped answering");
     } else {
       set_error(c, "Could not read from socket: %s", strerror(errno));
     }
@@ -210,7 +210,7 @@ read_reply(ftp_conn_t *c) {
   c->reply[0] = 0;
   c->code = -1;
   if(read_line(c, line, sizeof(line))) return -1;
-  log_msg(c->log_id, LOG_RESPONSE, "%s", line);
+  if(!c->quiet) log_msg(c->log_id, LOG_RESPONSE, "%s", line);
   if(!strncmp(line, "SSH-", 4)) {
     drop(c);
     return FTP_CODE_SSH;
@@ -225,7 +225,7 @@ read_reply(ftp_conn_t *c) {
   if(line[3] == '-') {
     for(;;) {
       if(read_line(c, line, sizeof(line))) return -1;
-      log_msg(c->log_id, LOG_RESPONSE, "%s", line);
+      if(!c->quiet) log_msg(c->log_id, LOG_RESPONSE, "%s", line);
       if(used < sizeof(c->reply) - 1) {
         used += (size_t)snprintf(c->reply + used, sizeof(c->reply) - used,
                                  "\n%s", line);
@@ -260,8 +260,7 @@ ftp_command(ftp_conn_t *c, const char *fmt, ...) {
     set_error(c, "Refusing to send a command containing a line break");
     return -1;
   }
-  log_msg(c->log_id, LOG_COMMAND, "%s",
-          strncasecmp(cmd, "PASS ", 5) ? cmd : "PASS ****");
+  if(!c->quiet) log_msg(c->log_id, LOG_COMMAND, "%s", strncasecmp(cmd, "PASS ", 5) ? cmd : "PASS ****");
   len = strlen(cmd);
   memcpy(cmd + len, "\r\n", 2);
   len += 2;
@@ -421,7 +420,7 @@ ftp_open(ftp_conn_t *c, const ftp_server_t *server) {
   c->error[0] = 0;
   c->code = 0;
 
-  if(server->protocol == FTP_PROTO_SFTP) return sftp_open(c);
+  if(server->protocol == FTP_PROTO_SFTP) return sftpc_open(c);
   if(ftp_connect_socket(c, 21)) return -1;
   log_msg(c->log_id, LOG_STATUS, "Connection established, waiting for welcome message...");
 
@@ -433,7 +432,7 @@ ftp_open(ftp_conn_t *c, const ftp_server_t *server) {
     log_msg(c->log_id, LOG_STATUS, "Server speaks SSH; switching to SFTP");
     c->server.protocol = FTP_PROTO_SFTP;
     if(!c->server.port) c->server.port = 22;
-    return sftp_open(c);
+    return sftpc_open(c);
   }
   if(code < 0) return -1;
   if(code != 220) {
@@ -475,7 +474,7 @@ ftp_open(ftp_conn_t *c, const ftp_server_t *server) {
 void
 ftp_close(ftp_conn_t *c) {
   if(c->ssh) {
-    sftp_close(c);
+    sftpc_close(c);
     return;
   }
   if(c->fd >= 0) {
@@ -730,7 +729,7 @@ bad_path(ftp_conn_t *c, const char *path) {
 
 int
 ftp_pwd(ftp_conn_t *c, char *out, size_t size) {
-  if(c->server.protocol == FTP_PROTO_SFTP) return sftp_pwd(c, out, size);
+  if(c->server.protocol == FTP_PROTO_SFTP) return sftpc_pwd(c, out, size);
   const char *p;
   size_t n = 0;
   int code;
@@ -753,7 +752,7 @@ ftp_pwd(ftp_conn_t *c, char *out, size_t size) {
 
 int
 ftp_cwd(ftp_conn_t *c, const char *path) {
-  if(c->server.protocol == FTP_PROTO_SFTP) return sftp_cwd(c, path);
+  if(c->server.protocol == FTP_PROTO_SFTP) return sftpc_cwd(c, path);
   int code;
 
   if(bad_path(c, path)) return -1;
@@ -764,7 +763,7 @@ ftp_cwd(ftp_conn_t *c, const char *path) {
 int
 ftp_list(ftp_conn_t *c, const char *path, ftp_listing_t *out,
          char *resolved, size_t resolved_size) {
-  if(c->server.protocol == FTP_PROTO_SFTP) return sftp_list(c, path, out, resolved, resolved_size);
+  if(c->server.protocol == FTP_PROTO_SFTP) return sftpc_list(c, path, out, resolved, resolved_size);
   text_sink_t text;
   int mlsd;
 
@@ -802,8 +801,19 @@ ftp_list(ftp_conn_t *c, const char *path, ftp_listing_t *out,
 }
 
 int
-ftp_mkdir(ftp_conn_t *c, const char *path) {
-  if(c->server.protocol == FTP_PROTO_SFTP) return sftp_mkdir(c, path);
+ftp_homebrew_path(const char *path) {
+#if CHIRAL_HOMEBREW_777
+  const char *p = strstr(path, "/data/homebrew");
+  return p && (p[14] == 0 || p[14] == '/');
+#else
+  (void)path;
+  return 0;
+#endif
+}
+
+static int
+mkdir_only(ftp_conn_t *c, const char *path) {
+  if(c->server.protocol == FTP_PROTO_SFTP) return sftpc_mkdir(c, path);
   int code;
 
   if(bad_path(c, path)) return -1;
@@ -812,9 +822,20 @@ ftp_mkdir(ftp_conn_t *c, const char *path) {
   return ok2(code) ? 0 : fail_reply(c, "Failed to create directory");
 }
 
+/* A new folder, and then 0777 if it is a homebrew one. The chmod failing
+   doesn't fail the folder; a server that refuses (most Windows ones) isn't
+   asked again on this connection. */
+int
+ftp_mkdir(ftp_conn_t *c, const char *path) {
+  if(mkdir_only(c, path)) return -1;
+  if(ftp_homebrew_path(path) && !c->no_chmod && ftp_chmod(c, path, 0777) && ftp_is_open(c)) c->no_chmod = 1;
+  return 0;
+}
+
+
 int
 ftp_rmdir(ftp_conn_t *c, const char *path) {
-  if(c->server.protocol == FTP_PROTO_SFTP) return sftp_rmdir(c, path);
+  if(c->server.protocol == FTP_PROTO_SFTP) return sftpc_rmdir(c, path);
   int code;
 
   if(bad_path(c, path)) return -1;
@@ -824,7 +845,7 @@ ftp_rmdir(ftp_conn_t *c, const char *path) {
 
 int
 ftp_delete(ftp_conn_t *c, const char *path) {
-  if(c->server.protocol == FTP_PROTO_SFTP) return sftp_delete(c, path);
+  if(c->server.protocol == FTP_PROTO_SFTP) return sftpc_delete(c, path);
   int code;
 
   if(bad_path(c, path)) return -1;
@@ -834,7 +855,7 @@ ftp_delete(ftp_conn_t *c, const char *path) {
 
 int
 ftp_rename(ftp_conn_t *c, const char *from, const char *to) {
-  if(c->server.protocol == FTP_PROTO_SFTP) return sftp_rename(c, from, to);
+  if(c->server.protocol == FTP_PROTO_SFTP) return sftpc_rename(c, from, to);
   int code;
 
   if(bad_path(c, from) || bad_path(c, to)) return -1;
@@ -846,7 +867,7 @@ ftp_rename(ftp_conn_t *c, const char *from, const char *to) {
 
 int
 ftp_chmod(ftp_conn_t *c, const char *path, unsigned int mode) {
-  if(c->server.protocol == FTP_PROTO_SFTP) return sftp_chmod(c, path, mode);
+  if(c->server.protocol == FTP_PROTO_SFTP) return sftpc_chmod(c, path, mode);
   int code;
 
   if(bad_path(c, path)) return -1;
@@ -862,7 +883,7 @@ ftp_chmod(ftp_conn_t *c, const char *path, unsigned int mode) {
 
 int
 ftp_size(ftp_conn_t *c, const char *path, long long *size) {
-  if(c->server.protocol == FTP_PROTO_SFTP) return sftp_size(c, path, size);
+  if(c->server.protocol == FTP_PROTO_SFTP) return sftpc_size(c, path, size);
   int code;
 
   if(bad_path(c, path)) return -1;
@@ -880,7 +901,7 @@ ftp_size(ftp_conn_t *c, const char *path, long long *size) {
 
 int
 ftp_set_mtime(ftp_conn_t *c, const char *path, long long mtime) {
-  if(c->server.protocol == FTP_PROTO_SFTP) return sftp_set_mtime(c, path, mtime);
+  if(c->server.protocol == FTP_PROTO_SFTP) return sftpc_set_mtime(c, path, mtime);
   struct tm tm;
   time_t t = (time_t)mtime;
   char stamp[32];
@@ -896,7 +917,7 @@ ftp_set_mtime(ftp_conn_t *c, const char *path, long long mtime) {
 int
 ftp_retrieve(ftp_conn_t *c, const char *path, long long offset,
              ftp_sink_cb sink, void *ctx) {
-  if(c->server.protocol == FTP_PROTO_SFTP) return sftp_retrieve(c, path, offset, sink, ctx);
+  if(c->server.protocol == FTP_PROTO_SFTP) return sftpc_retrieve(c, path, offset, sink, ctx);
   int final_seen;
   int code;
   int dfd;
@@ -929,7 +950,7 @@ ftp_retrieve(ftp_conn_t *c, const char *path, long long offset,
 int
 ftp_store(ftp_conn_t *c, const char *path, long long offset,
           ftp_source_cb source, void *ctx) {
-  if(c->server.protocol == FTP_PROTO_SFTP) return sftp_store(c, path, offset, source, ctx);
+  if(c->server.protocol == FTP_PROTO_SFTP) return sftpc_store(c, path, offset, source, ctx);
   char cmd[1100];
   char *buf;
   int final_seen;
@@ -975,10 +996,28 @@ ftp_store(ftp_conn_t *c, const char *path, long long offset,
 }
 
 int
+ftp_ping(ftp_conn_t *c, int seconds) {
+  int alive;
+
+  if(!ftp_is_open(c)) return -1;
+  c->quiet = 1;
+  if(c->server.protocol == FTP_PROTO_SFTP) {
+    alive = !sftpc_ping(c, seconds * 1000);
+  } else {
+    sock_timeouts(c->fd, seconds);
+    alive = ftp_command(c, "NOOP") >= 0;  // even "500 unknown command" is an answer
+    if(c->fd >= 0) sock_timeouts(c->fd, CONTROL_TIMEOUT_S);
+  }
+  c->quiet = 0;
+  if(!alive) drop(c);
+  return alive ? 0 : -1;
+}
+
+int
 ftp_noop(ftp_conn_t *c) {
   int code;
 
-  if(c->server.protocol == FTP_PROTO_SFTP) return sftp_noop(c);
+  if(c->server.protocol == FTP_PROTO_SFTP) return sftpc_noop(c);
   code = ftp_command(c, "NOOP");
 
   return code >= 0 && code < 400 ? 0 : -1;

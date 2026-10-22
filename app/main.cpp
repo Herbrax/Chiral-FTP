@@ -28,12 +28,27 @@ extern "C" {
 #include "config.h"
 #include "ftpd.h"
 #include "log.h"
+#include "queue.h"
 #include "session.h"
 #include "fsjobs.h"
 #include "settings.h"
 #include "strbuf.h"
 #include "websrv.h"
+#include "discovery.h"
+#if CHIRAL_HAS_SFTPD
+#include "sftpd.h"
+#endif
 }
+
+/* The SFTP server, where the platform has one, stops alongside the FTP
+   server; elsewhere these are nothing. */
+#if CHIRAL_HAS_SFTPD
+#define SFTPD_STOP() sftpd_stop()
+#define SFTPD_RUNNING() sftpd_running()
+#else
+#define SFTPD_STOP() ((void)0)
+#define SFTPD_RUNNING() 0
+#endif
 
 namespace {
 
@@ -145,11 +160,11 @@ int main(int argc, char **argv) {
      the Switch, nothing at all on a computer. */
   {
     bool ok = false;
-    const char *detail = "";
+    const char *line = "", *detail = "";
     int status = 0;
-    if(backend::startup_notice(&ok, &detail, &status)) {
+    if(backend::startup_notice(&ok, &line, &detail, &status)) {
       startup_trace("Launch: %s (%s, status %d)", ok ? "ok" : "limited", detail, status);
-      ui::set_startup_notice(ok, detail, status);
+      ui::set_startup_notice(ok, line, detail, status);
     }
   }
 
@@ -193,15 +208,23 @@ int main(int argc, char **argv) {
      threads notice within a few hundred milliseconds. */
   startup_trace("Stopping the servers");
   ftpd_stop();
+  SFTPD_STOP();
   websrv_stop();
-  for(int waited = 0; waited < 4000 && (ftpd_running() || websrv_running()); waited += 50) {
+  discovery_stop();  // quick connect's thread, which owns a socket too
+  queue_stop();      // the client's transfer workers: mid-transfer, or idle for up to 30 s more
+  auto still_up = [] {
+    return ftpd_running() || SFTPD_RUNNING() || websrv_running() || discovery_running() || queue_workers();
+  };
+  /* By the clock: pump() comes back early for input, so counting its calls
+     would cut the wait short. */
+  for(const std::uint64_t until = backend::ticks_ms() + 4000; still_up() && backend::ticks_ms() < until;) {
     backend::pump(50);
   }
-  if(ftpd_running() || websrv_running()) {
+  if(still_up()) {
     /* Not worth hanging on a thread that will not come back: say so, and
        let the exit happen anyway. */
-    startup_trace("A server did not stop in time (ftp %d, web %d)",
-                  ftpd_running(), websrv_running());
+    startup_trace("A server did not stop in time (ftp %d, sftp %d, web %d, quick connect %d, transfers %d)",
+                  ftpd_running(), SFTPD_RUNNING(), websrv_running(), discovery_running(), queue_workers());
   }
   session_disconnect();
 
@@ -212,7 +235,8 @@ int main(int argc, char **argv) {
      ours still alive at that point is reading objects as they are being
      destroyed, which is why leaving the full app crashed while the UI-only
      build (no engine, no threads) exited cleanly. The queue's transfer
-     workers already retire themselves when idle; these three do not. */
+     workers were stopped and waited for above; these three have stops of
+     their own. */
   startup_trace("Stopping the background threads");
   ui::stop_workers();
   fsjob_stop();

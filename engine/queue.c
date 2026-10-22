@@ -68,11 +68,24 @@ static unsigned long g_next_id = 1;
 static int g_workers;
 static uint32_t g_slots;  /* bit n set: slot n+1 is taken */
 static int g_paused;
+static int g_stopping;  // queue_stop(): the app is on its way out
 /* Learned from "421 Too many connections"; 0 means no limit. */
 static int g_conn_cap;
 static server_ref_t *g_last_server;
 
 static void kick_locked(void);
+
+/* The mode an upload leaves on the server: 0777 inside a PS5 homebrew
+   folder (ftp_homebrew_path), else this build's own file mode. Folders keep
+   whatever the server gives them, outside one; ftp_mkdir sees to the new
+   ones inside, this to those already there. */
+static void
+set_remote_mode(ftp_conn_t *c, const char *remote, int is_dir) {
+  const int homebrew = ftp_homebrew_path(remote);
+  if(is_dir && !homebrew) return;
+  // A server that refuses once (most Windows ones) isn't asked again on this connection.
+  if(!c->no_chmod && ftp_chmod(c, remote, homebrew ? 0777 : CHIRAL_FILE_MODE) && ftp_is_open(c)) c->no_chmod = 1;
+}
 
 static double
 now_s(void) {
@@ -407,9 +420,7 @@ upload_file(ftp_conn_t *c, qitem_t *it, const settings_t *st) {
     return -1;
   }
   if(st->preserve_mtime) ftp_set_mtime(c, it->remote, it->mtime);
-  /* Every transferred file ends up 0777, on the server too when it lets us
-     (Windows servers usually don't; then we stop asking). */
-  if(!c->no_chmod && ftp_chmod(c, it->remote, CHIRAL_FILE_MODE) && ftp_is_open(c)) c->no_chmod = 1;
+  set_remote_mode(c, it->remote, 0);
   log_msg(c->log_id, LOG_STATUS, "File transfer successful, transferred %lld bytes",
           it->done - offset);
   return 0;
@@ -474,10 +485,13 @@ expand_upload(ftp_conn_t *c, qitem_t *it) {
     return -2;
   }
   /* An existing folder makes MKD fail; that's fine as long as we stay connected. */
-  if(ftp_mkdir(c, it->remote) && !ftp_is_open(c)) {
-    closedir(dir);
-    set_error(it, c->error);
-    return -1;
+  if(ftp_mkdir(c, it->remote)) {
+    if(!ftp_is_open(c)) {
+      closedir(dir);
+      set_error(it, c->error);
+      return -1;
+    }
+    set_remote_mode(c, it->remote, 1);  // already there
   }
   pthread_mutex_lock(&g_lock);
   while((ent = readdir(dir))) {
@@ -570,6 +584,7 @@ worker_main(void *arg) {
     qitem_t *it;
     int state;
 
+    if(g_stopping) break;
     if(slot > st.connections) break;
     if(g_conn_cap && g_workers > g_conn_cap) break;
     it = g_paused ? NULL : next_queued_locked();
@@ -596,7 +611,7 @@ worker_main(void *arg) {
     pthread_mutex_unlock(&g_lock);
 
     state = process(c, it, &st);
-    if(state == QS_QUEUED) sleep(1);
+    if(state == QS_QUEUED && !g_stopping) sleep(1);
 
     pthread_mutex_lock(&g_lock);
     if(state == QS_BACKOFF) {
@@ -618,7 +633,7 @@ worker_main(void *arg) {
         snprintf(it->error, sizeof(it->error), "%s", c->error);
       }
       pthread_mutex_unlock(&g_lock);
-      sleep(5);
+      if(!g_stopping) sleep(5);
       pthread_mutex_lock(&g_lock);
       continue;
     }
@@ -650,7 +665,7 @@ kick_locked(void) {
     if(pending >= st.connections) break;
   }
   if(!pending) g_conn_cap = 0;
-  want = g_paused ? 0 : (pending < st.connections ? pending : st.connections);
+  want = g_paused || g_stopping ? 0 : (pending < st.connections ? pending : st.connections);
   if(g_conn_cap && want > g_conn_cap) want = g_conn_cap;
   while(g_workers < want) {
     pthread_attr_t attr;
@@ -906,4 +921,24 @@ queue_set_paused(int paused) {
   g_paused = paused;
   kick_locked();
   pthread_mutex_unlock(&g_lock);
+}
+
+void
+queue_stop(void) {
+  pthread_mutex_lock(&g_lock);
+  g_stopping = 1;
+  for(qitem_t *it = g_head; it; it = it->next) {
+    if(it->state == QS_RUNNING) it->cancel = 1;  // the transfer notices within a read
+  }
+  pthread_cond_broadcast(&g_cond);  // the idle ones, out of their wait
+  pthread_mutex_unlock(&g_lock);
+}
+
+int
+queue_workers(void) {
+  int n;
+  pthread_mutex_lock(&g_lock);
+  n = g_workers;
+  pthread_mutex_unlock(&g_lock);
+  return n;
 }

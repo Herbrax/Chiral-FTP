@@ -12,6 +12,10 @@ int session_connect(const ftp_server_t *server, char *home, size_t home_size,
 void session_disconnect(void);
 /* Copies the current server; returns 0 when not connected. */
 int session_server(ftp_server_t *out);
+/* How many connections have been given up so far: the server stopped
+   answering and couldn't be reached again for 30 seconds. The UI watches
+   for it to change. */
+unsigned session_drops(void);
 
 typedef int (*session_fn)(ftp_conn_t *c, void *ctx);
 /* Runs fn on the browsing connection, reconnecting once if it was dropped.

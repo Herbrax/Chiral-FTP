@@ -11,7 +11,7 @@
     server: null,
     settings: { connections: 5, max_connections: 30, policy: 0, preserve_mtime: 1, retries: 2 },
     prefs: { show_hidden: true, save_pass: true },
-    platform: "switch",
+    platform: "switch",  // "host" on a computer: see dev()
     sites: [],
     history: [],
     logSeq: 0,
@@ -21,6 +21,16 @@
     activePane: null,
     currentSiteDirs: null
   };
+
+  /* On a computer (platform "host") the page names this machine "this
+     computer", not "the console": the console wording is the default in the
+     page, and each such element carries its computer version. */
+  function dev(onConsole, onThisComputer) { return state.platform === "host" ? onThisComputer : onConsole; }
+  function applyDevice() {
+    if (state.platform !== "host") return;
+    document.querySelectorAll("[data-computer]").forEach(function (el) { el.textContent = el.getAttribute("data-computer"); });
+    document.querySelectorAll("[data-computer-title]").forEach(function (el) { el.title = el.getAttribute("data-computer-title"); });
+  }
 
   /* ---------- helpers ---------- */
 
@@ -54,7 +64,7 @@
     try {
       data = await res.json();
     } catch (e) {
-      throw new Error("Bad response from the console (HTTP " + res.status + ")");
+      throw new Error(dev("Bad response from the console", "Bad response from chiral-ftp") + " (HTTP " + res.status + ")");
     }
     return data;
   }
@@ -260,7 +270,8 @@
       (local ? "" : '<th class="c-owner" data-sort="owner">Owner/Group</th>');
     this.el.innerHTML =
       '<div class="pane-head">' +
-        '<span class="title">' + (local ? "Console <small>local site</small>" : "Server <small>remote site</small>") + "</span>" +
+        '<span class="title">' + (local ? '<span data-computer="This computer">' + dev("Console", "This computer") + "</span> <small>local site</small>"
+                                           : "Server <small>remote site</small>") + "</span>" +
         (local ? '<select data-role="roots" title="Drives"></select>' : "") +
         '<form data-role="pathform"><input class="path" data-role="path" spellcheck="false" autocomplete="off"></form>' +
       "</div>" +
@@ -270,11 +281,12 @@
         '<button class="btn small" data-act="mkdir">New folder</button>' +
         '<button class="btn small" data-act="rename" title="F2">Rename</button>' +
         '<button class="btn small danger" data-act="delete" title="Delete">Delete</button>' +
-        '<button class="btn small" data-act="chmod">Permissions</button>' +
+        '<button class="btn small" data-act="chmod" title="Change permissions">Permissions</button>' +
+        '<button class="btn small" data-act="chmod-r" title="Change permissions recursively: folders and everything inside">Recursive</button>' +
         '<input class="filter" data-role="filter" placeholder="Filter" spellcheck="false">' +
         '<span class="spacer"></span>' +
         (local ? '<button class="btn small xfer up" data-act="transfer" title="Upload selection to the server">Upload &#8594;</button>'
-               : '<button class="btn small xfer down" data-act="transfer" title="Download selection to the console">&#8592; Download</button>') +
+               : '<button class="btn small xfer down" data-act="transfer" title="Download selection to ' + dev("the console", "this computer") + '">&#8592; Download</button>') +
       "</div>" +
       '<div class="list-wrap" data-role="wrap"><table class="ftable"><thead><tr>' + cols +
         '</tr></thead><tbody data-role="rows"></tbody></table></div>' +
@@ -542,7 +554,8 @@
     var self = this;
     this.el.querySelectorAll(".pane-tools [data-act]").forEach(function (b) {
       var act = b.getAttribute("data-act");
-      var need = { rename: n === 1, delete: n > 0, chmod: n > 0, transfer: n > 0 && state.connected };
+      var folders = self.selected().some(function (e) { return e.dir && !e.link; });
+      var need = { rename: n === 1, delete: n > 0, chmod: n > 0, "chmod-r": folders, transfer: n > 0 && state.connected };
       b.disabled = off || (act in need && !need[act]) || (act === "up" && self.path === "/");
     });
   };
@@ -647,7 +660,7 @@
         var what = items.length === 1 ? "\"" + items[0].name + "\"" : items.length + " items";
         var ok = await ask({
           title: "Delete", input: false, danger: true, ok: "Delete",
-          text: "Permanently delete " + what + (this.isLocal() ? " from the console" : " from the server") +
+          text: "Permanently delete " + what + (this.isLocal() ? dev(" from the console", " from this computer") : " from the server") +
             "? Folders are deleted with everything inside them."
         });
         if (!ok) return;
@@ -663,13 +676,26 @@
         }
         this.sel = {};
         await this.refresh();
-      } else if (act === "chmod") {
+      } else if (act === "chmod" || act === "chmod-r") {
+        // chmod-r: "Change permissions recursively" -- folders with everything in them.
         if (!items.length) return;
-        var mode = await ask({ title: "Change permissions", text: "Octal mode for " + items.length + " item(s), e.g. 755 or 644", value: permToOctal(items[0].perm), ok: "Apply" });
+        var recursive = act === "chmod-r";
+        var mode = await ask({
+          title: recursive ? "Change permissions recursively" : "Change permissions",
+          text: recursive ? "Octal mode for " + items.length + " item(s) and everything inside the folders, e.g. 755 or 644. Folders keep x wherever there is r."
+                          : "Octal mode for " + items.length + " item(s), e.g. 755 or 644",
+          value: permToOctal(items[0].perm), ok: "Apply"
+        });
         if (!mode) return;
         if (!/^[0-7]{3,4}$/.test(mode)) throw new Error("Use an octal mode like 755");
-        for (var i = 0; i < items.length; i++) {
-          await call(api + "chmod", { path: join(this.path, items[i].name), mode: mode });
+        if (recursive) this.setBusy(true);
+        try {
+          for (var i = 0; i < items.length; i++) {
+            var deep = recursive && items[i].dir && !items[i].link;
+            await call(api + "chmod", { path: join(this.path, items[i].name), mode: mode, recursive: deep ? 1 : 0 });
+          }
+        } finally {
+          if (recursive) this.setBusy(false);
         }
         await this.refresh();
       }
@@ -685,13 +711,15 @@
     var one = n === 1 ? this.selected()[0] : null;
     var off = !this.isLocal() && !state.connected;
     showMenu(x, y, [
-      { label: this.isLocal() ? "Upload to server" : "Download to the console", disabled: !n || !state.connected, run: function () { self.transfer(); } },
+      { label: this.isLocal() ? "Upload to server" : dev("Download to the console", "Download to this computer"), disabled: !n || !state.connected, run: function () { self.transfer(); } },
       { label: "Open", disabled: !(one && one.dir), run: function () { self.open(one); } },
       "-",
       { label: "Create folder", disabled: off, run: function () { self.action("mkdir"); } },
       { label: "Rename", disabled: off || !one, run: function () { self.action("rename"); } },
       { label: "Delete", disabled: off || !n, run: function () { self.action("delete"); } },
-      { label: "File permissions...", disabled: off || !n, run: function () { self.action("chmod"); } },
+      { label: "Change permissions...", disabled: off || !n, run: function () { self.action("chmod"); } },
+      { label: "Change permissions recursively...", disabled: off || !this.selected().some(function (e) { return e.dir && !e.link; }),
+        run: function () { self.action("chmod-r"); } },
       "-",
       { label: "Copy path", disabled: !one, run: function () { copyText(join(self.path, one.name)); } },
       { label: "Refresh", disabled: off, run: function () { self.refresh(); } }
@@ -767,6 +795,24 @@
       pasv_mode: s.pasv_mode || 0,
       show_hidden: state.prefs.show_hidden ? 1 : 0
     };
+  }
+
+  /* A connection the page didn't make itself -- quick connect, the app's
+     window, an earlier visit -- also fills the Quickconnect bar, so the top
+     line names it. Not the password: quick connect's is a one-time login. */
+  function fillQuickbar(server) {
+    if (!server) return;
+    $("q-proto").value = server.protocol || "ftp";
+    $("q-host").value = server.host || "";
+    $("q-user").value = server.user || "";
+    $("q-port").value = server.port || "";
+  }
+
+  /* The server already shown? By address and port only: the page keeps a
+     connection it made itself as typed (an empty user, say), so comparing
+     more would take it for a new one and send the listing back to "/". */
+  function sameServer(shown, now) {
+    return !!(state.connected && shown && now && shown.host === now.host && String(shown.port) === String(now.port));
   }
 
   function setConnected(on, server) {
@@ -1148,10 +1194,11 @@
     try { await call("/api/hostkeys/forget"); toast("Saved host keys forgotten"); } catch (e) { errToast(e); }
   });
   $("btn-exit").addEventListener("click", async function () {
-    var ok = await ask({ title: "Stop web server", text: "Stop the web server in chiral-ftp? Transfers keep running in the app on the console.", input: false, danger: true, ok: "Stop" });
+    var ok = await ask({ title: "Stop web server", text: "Stop the web server in chiral-ftp? Transfers keep running in the app" + dev(" on the console.", "."), input: false, danger: true, ok: "Stop" });
     if (!ok) return;
     try { await call("/api/exit"); } catch (e) { /* the server is going away */ }
-    document.body.innerHTML = '<div class="empty" style="padding-top:20vh">The web server has stopped. Start it again from chiral-ftp on the console.</div>';
+    document.body.innerHTML = '<div class="empty" style="padding-top:20vh">The web server has stopped. Start it again from chiral-ftp' +
+                              dev(" on the console.", ".") + "</div>";
   });
 
   /* ---------- message log ---------- */
@@ -1336,12 +1383,24 @@
       var data = await api("/api/poll", { log: state.logSeq, tab: state.queueTab }, "GET");
       if (offline) {
         offline = false;
-        toast("Reconnected to the console");
+        toast(dev("Reconnected to the console", "Reconnected to chiral-ftp"));
       }
       appendLog(data.log);
       state.logSeq = data.log_seq;
       renderQueue(data.queue);
-      if (state.connected && !data.connected) setConnected(false);
+      if (state.connected && !data.connected) {
+        var lost = state.drops !== undefined && data.drops !== state.drops, host = state.server ? state.server.host : "the server";
+        setConnected(false);
+        if (lost) toast("Lost the connection to " + host + ": it stopped answering", true);
+      } else if (data.connected && data.server && !connecting && !sameServer(state.server, data.server)) {
+        /* Connected from elsewhere -- quick connect opens this page while it
+           is still connecting -- or to another server than the one shown:
+           show it, top line and listing, without a reload. */
+        setConnected(true, data.server);
+        fillQuickbar(data.server);
+        remotePane.load("");
+      }
+      state.drops = data.drops;
       if (data.queue.running) delay = 600;
     } catch (e) {
       if (!offline) {
@@ -1394,9 +1453,11 @@
       var st = await call("/api/state", {}, "GET");
       state.settings = st.settings;
       state.platform = st.platform;
+      applyDevice();
       $("sb-version").textContent = st.app + " " + st.version;
       if (st.connected) {
         setConnected(true, st.server);
+        fillQuickbar(st.server);
       }
     } catch (e) {
       errToast(e);
@@ -1406,7 +1467,7 @@
     state.history = lists[1] || [];
     if (lists[2] && lists[2][0]) Object.assign(state.prefs, lists[2][0]);
     renderRecent();
-    if (state.history[0]) {
+    if (state.history[0] && !state.connected) {  // connected: the bar already names that server
       $("q-proto").value = state.history[0].protocol || "ftp";
       $("q-host").value = state.history[0].host;
       $("q-port").value = state.history[0].port;

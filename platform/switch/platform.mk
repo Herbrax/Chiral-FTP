@@ -33,7 +33,7 @@ else
 endif
 
 PLATFORM_CPP := platform/switch/backend.cpp
-PLATFORM_C   := platform/switch/system.c platform/switch/init.c platform/switch/net.c
+PLATFORM_C   := platform/switch/system.c platform/switch/init.c platform/switch/net.c platform/switch/usb_drives.c
 
 GENERATED := $(FONTS) $(WEB_GEN) $(GEN_I18N)
 
@@ -44,12 +44,18 @@ CFLAGS   := -g -Wall -O2 -ffunction-sections -D_GNU_SOURCE $(ARCH) $(DEFINES) $(
 CXXFLAGS := $(CFLAGS) -std=gnu++17 -fno-rtti
 ASFLAGS  := -g $(ARCH)
 LDFLAGS  := -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
-LIBS     := -lssh2 $(MHD_LIB) -lmbedtls -lmbedx509 -lmbedcrypto -lz -lnx
+# USB drives: libusbhsfs as Goldleaf builds it (tools/build-switch-usbhsfs.sh),
+# with the NTFS-3G and lwext4 portlibs (dkp-pacman -S switch-ntfs-3g switch-lwext4).
+USB_LIB  := -lusbhsfs -lntfs-3g -llwext4
+USB_DEP  := .deps/switch/lib/libusbhsfs.a
+LIBS     := -lssh2 $(MHD_LIB) $(USB_LIB) -lmbedtls -lmbedx509 -lmbedcrypto -lz -lnx
 LIBDIRS  := $(PORTLIBS) $(LIBNX) $(CURDIR)/.deps/switch
 
 .deps/switch/lib/libmicrohttpd.a:
 	./tools/build-switch-deps.sh
-deps: .deps/switch/lib/libmicrohttpd.a
+.deps/switch/lib/libusbhsfs.a:
+	./tools/build-switch-usbhsfs.sh
+deps: .deps/switch/lib/libmicrohttpd.a .deps/switch/lib/libusbhsfs.a
 
 ifneq ($(BUILD),$(notdir $(CURDIR)))
 
@@ -78,7 +84,7 @@ export NROFLAGS += --icon=$(APP_ICON) --nacp=$(CURDIR)/$(TARGET).nacp
 
 all: dist
 
-$(BUILD): $(GENERATED) $(MHD_DEP)
+$(BUILD): $(GENERATED) $(MHD_DEP) $(USB_DEP)
 	@mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile PLATFORM=switch
 

@@ -47,7 +47,7 @@ channel(ftp_conn_t *c) {
 }
 
 void
-sftp_drop(ftp_conn_t *c) {
+sftpc_drop(ftp_conn_t *c) {
   if(c->ssh) {
     /* The link may be dead; don't wait for replies while tearing down. */
     libssh2_session_set_blocking(session(c), 0);
@@ -60,7 +60,7 @@ sftp_drop(ftp_conn_t *c) {
 
 static void
 kill_conn(ftp_conn_t *c) {
-  sftp_drop(c);
+  sftpc_drop(c);
   if(c->fd >= 0) {
     close(c->fd);
     c->fd = -1;
@@ -296,7 +296,7 @@ authenticate(ftp_conn_t *c) {
 }
 
 int
-sftp_open(ftp_conn_t *c) {
+sftpc_open(ftp_conn_t *c) {
   LIBSSH2_SESSION *s;
   const char *banner;
   char home[1024];
@@ -348,7 +348,7 @@ sftp_open(ftp_conn_t *c) {
 }
 
 void
-sftp_close(ftp_conn_t *c) {
+sftpc_close(ftp_conn_t *c) {
   if(!c->ssh) return;
   libssh2_session_set_timeout(session(c), 2000);
   if(c->sftp) libssh2_sftp_shutdown(channel(c));
@@ -364,7 +364,7 @@ sftp_close(ftp_conn_t *c) {
 }
 
 int
-sftp_pwd(ftp_conn_t *c, char *out, size_t size) {
+sftpc_pwd(ftp_conn_t *c, char *out, size_t size) {
   snprintf(out, size, "%s", c->cwd[0] ? c->cwd : "/");
   return 0;
 }
@@ -387,7 +387,7 @@ resolve_dir(ftp_conn_t *c, const char *path, char *out, size_t size) {
 }
 
 int
-sftp_cwd(ftp_conn_t *c, const char *path) {
+sftpc_cwd(ftp_conn_t *c, const char *path) {
   char resolved[1024];
 
   if(!c->sftp) return fail(c, "Failed to change directory");
@@ -407,7 +407,7 @@ fill_entry(ftp_entry_t *e, const LIBSSH2_SFTP_ATTRIBUTES *a) {
 }
 
 int
-sftp_list(ftp_conn_t *c, const char *path, ftp_listing_t *out,
+sftpc_list(ftp_conn_t *c, const char *path, ftp_listing_t *out,
           char *resolved, size_t resolved_size) {
   LIBSSH2_SFTP_HANDLE *dir;
   char name[1024];
@@ -477,7 +477,7 @@ sftp_list(ftp_conn_t *c, const char *path, ftp_listing_t *out,
 }
 
 int
-sftp_mkdir(ftp_conn_t *c, const char *path) {
+sftpc_mkdir(ftp_conn_t *c, const char *path) {
   char abs[1024];
 
   abspath(c, path, abs, sizeof(abs));
@@ -487,7 +487,7 @@ sftp_mkdir(ftp_conn_t *c, const char *path) {
 }
 
 int
-sftp_rmdir(ftp_conn_t *c, const char *path) {
+sftpc_rmdir(ftp_conn_t *c, const char *path) {
   char abs[1024];
 
   abspath(c, path, abs, sizeof(abs));
@@ -497,7 +497,7 @@ sftp_rmdir(ftp_conn_t *c, const char *path) {
 }
 
 int
-sftp_delete(ftp_conn_t *c, const char *path) {
+sftpc_delete(ftp_conn_t *c, const char *path) {
   char abs[1024];
 
   abspath(c, path, abs, sizeof(abs));
@@ -507,7 +507,7 @@ sftp_delete(ftp_conn_t *c, const char *path) {
 }
 
 int
-sftp_rename(ftp_conn_t *c, const char *from, const char *to) {
+sftpc_rename(ftp_conn_t *c, const char *from, const char *to) {
   char a[1024];
   char b[1024];
 
@@ -519,7 +519,7 @@ sftp_rename(ftp_conn_t *c, const char *from, const char *to) {
 }
 
 int
-sftp_chmod(ftp_conn_t *c, const char *path, unsigned int mode) {
+sftpc_chmod(ftp_conn_t *c, const char *path, unsigned int mode) {
   LIBSSH2_SFTP_ATTRIBUTES attrs;
   char abs[1024];
 
@@ -535,7 +535,7 @@ sftp_chmod(ftp_conn_t *c, const char *path, unsigned int mode) {
 }
 
 int
-sftp_size(ftp_conn_t *c, const char *path, long long *size) {
+sftpc_size(ftp_conn_t *c, const char *path, long long *size) {
   LIBSSH2_SFTP_ATTRIBUTES attrs;
   char abs[1024];
 
@@ -555,7 +555,7 @@ sftp_size(ftp_conn_t *c, const char *path, long long *size) {
 }
 
 int
-sftp_set_mtime(ftp_conn_t *c, const char *path, long long mtime) {
+sftpc_set_mtime(ftp_conn_t *c, const char *path, long long mtime) {
   LIBSSH2_SFTP_ATTRIBUTES attrs;
   char abs[1024];
 
@@ -577,7 +577,7 @@ abort_transfer(ftp_conn_t *c, LIBSSH2_SFTP_HANDLE *h, const char *reason) {
 }
 
 int
-sftp_retrieve(ftp_conn_t *c, const char *path, long long offset,
+sftpc_retrieve(ftp_conn_t *c, const char *path, long long offset,
               ftp_sink_cb sink, void *ctx) {
   LIBSSH2_SFTP_HANDLE *h;
   char abs[1024];
@@ -617,7 +617,7 @@ sftp_retrieve(ftp_conn_t *c, const char *path, long long offset,
 }
 
 int
-sftp_store(ftp_conn_t *c, const char *path, long long offset,
+sftpc_store(ftp_conn_t *c, const char *path, long long offset,
            ftp_source_cb source, void *ctx) {
   LIBSSH2_SFTP_HANDLE *h;
   unsigned long flags = LIBSSH2_FXF_WRITE | LIBSSH2_FXF_CREAT;
@@ -666,8 +666,26 @@ sftp_store(ftp_conn_t *c, const char *path, long long offset,
   return 0;
 }
 
+/* A request the server has to answer (unlike a keepalive, which only goes
+   out), with its own timeout. A refusal is still an answer. */
 int
-sftp_noop(ftp_conn_t *c) {
+sftpc_ping(ftp_conn_t *c, int timeout_ms) {
+  char out[1024];
+  int n;
+
+  if(!c->ssh || !c->sftp) return -1;
+  libssh2_session_set_timeout(session(c), timeout_ms);
+  n = libssh2_sftp_realpath(channel(c), ".", out, sizeof(out));
+  libssh2_session_set_timeout(session(c), SSH_TIMEOUT_MS);
+  if(n > 0 || n == LIBSSH2_ERROR_SFTP_PROTOCOL) {
+    c->last_activity = time(NULL);
+    return 0;
+  }
+  return fail(c, "The server stopped answering");
+}
+
+int
+sftpc_noop(ftp_conn_t *c) {
   int next;
 
   if(!c->ssh) return -1;

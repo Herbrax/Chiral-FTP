@@ -21,5 +21,21 @@
 /* An ordinary hosted malloc; nothing to work around. */
 #define CHIRAL_BIG_ALLOC_VIA_MMAP 0
 
-/* The bottom bar draws the Switch-style A/B/X/Y glyphs (platform_common.cpp). */
+/* The bottom bar draws the keys backend.cpp maps -- Enter, Esc, Space, T,
+   Q/E, PgUp/PgDn, M, G and the arrows -- not a console's buttons
+   (platform_common.cpp). */
 #define CHIRAL_BUTTONS_PLAYSTATION 0
+#define CHIRAL_BUTTONS_KEYBOARD 1
+
+/* The text calls this machine "this computer", not "the console" (ui.cpp). */
+#define CHIRAL_DEVICE_COMPUTER 1
+
+/* The server screen offers SFTP as well as FTP (engine/sftpd.c, on libssh,
+   which only this build links). */
+#define CHIRAL_HAS_SFTPD 1
+
+/* The computer interface -- a sidebar of pages with switches, fields and
+   buttons, mouse first (app/ui_desktop.inc) -- on every computer: macOS,
+   Windows and Linux alike. (The console layout is the consoles'; Android
+   will have a third, its own.) */
+#define CHIRAL_UI_DESKTOP 1

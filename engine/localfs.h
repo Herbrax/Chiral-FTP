@@ -34,7 +34,8 @@ int localfs_roots(localfs_root_t *out, int max);
 void localfs_realpath(const char *in, char *out, size_t size);
 
 int localfs_mkdir_p(const char *path);
-/* mkdir, then chmod to CHIRAL_FILE_MODE (0777) whatever the umask. */
+/* mkdir, then chmod to the folder mode (CHIRAL_FILE_MODE plus x wherever it
+   has r: 0777 on a console, 0755 on a computer) whatever the umask. */
 int localfs_mkdir(const char *path);
 
 /* File changes that get past a folder whose permissions are in the way:
@@ -54,3 +55,17 @@ int localfs_open_up_parent(const char *path);
 /* dir/name, or "name (2).ext", "name (3).ext"... when that's taken. */
 int localfs_free_name(char *out, size_t size, const char *dir, const char *name);
 int localfs_delete(const char *path);
+/* True for the app's own data folder (data_dir) and anything in it, on a
+   computer (CHIRAL_DEVICE_COMPUTER): saved sites with their passwords, the
+   server login, the SFTP server's private key. The servers never hand it
+   out, whatever folder they share. Links are followed; a name that doesn't
+   exist yet is judged by its folder. Always 0 on a console, whose servers
+   behave as they always have. */
+int localfs_private(const char *path);
+/* chmod a file, or a folder and everything in it. Folders get mode plus x
+   wherever it has r, so they stay openable (644 makes them 755, like
+   chmod -R a+rX); links are left alone. Keeps going past failures and
+   returns -1 with the first error in errno. */
+int localfs_chmod_tree(const char *path, unsigned int mode);
+// The mode a folder gets when mode is applied recursively.
+unsigned int localfs_dir_mode(unsigned int mode);

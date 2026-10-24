@@ -9,7 +9,10 @@ connect**.
 
 ### New: Quick connect
 
-![Quick connect on a Mac: the devices nearby](docs/screenshots/quick-connect-devices.png)
+| On the PS5 | On a Mac |
+|---|---|
+| ![Quick connect on the PS5: the Mac and the Switch nearby](docs/screenshots/ps5-quick-connect.png) | ![Quick connect on a Mac: the Switch and the PS5 nearby](docs/screenshots/computer-quick-connect.png) |
+| ![The PS5 asks the Mac to share, with a 4-digit code](docs/screenshots/ps5-quick-connect-asking.png) | ![The Mac shows the PS5's request with the same code: Allow or Deny](docs/screenshots/computer-quick-connect-request.png) |
 
 - **Every copy of chiral-ftp on your network shows up**, whatever it is
   doing: no server has to be running, and nothing has to be set up.
@@ -25,6 +28,10 @@ connect**.
 - The list stays current even on Wi-Fi that drops broadcasts.
 
 ### New: Windows, Mac and Linux
+
+| The app on a computer | The web app, in your browser |
+|---|---|
+| ![The computer interface: a sidebar of pages, here the SFTP server running](docs/screenshots/computer-server.png) | ![The web app's FTP / SFTP client, connected to a PS5](docs/screenshots/web-client.png) |
 
 - **Windows**: one `.exe` (x64; it runs on Windows on ARM too), nothing to
   install. **Mac**: `chiral-ftp.app`. Double-click it, or drag it to
@@ -54,6 +61,10 @@ connect**.
 
 ### New on the Switch: USB drives
 
+| The drive list | The SD card and a USB drive, side by side |
+|---|---|
+| ![The Switch's drive list with a USB drive](docs/screenshots/switch-file-manager-drives.png) | ![The file manager: /switch on the SD card, /usb0 on the USB drive](docs/screenshots/switch-file-manager.png) |
+
 - **USB drives show up in the drive list** as soon as they're plugged in:
   FAT32, exFAT, NTFS and ext2/3/4. Browse, copy and move between them and
   the SD card in the file manager, and reach them over the FTP server
@@ -68,6 +79,10 @@ connect**.
   jailbreak's resident service, or the Lapy helper), or why it didn't.
 
 ### Everywhere
+
+| File manager menu (PS5) | Client menu (Switch) |
+|---|---|
+| ![The PS5 file manager's menu, with Change permissions recursively](docs/screenshots/ps5-file-manager-menu.png) | ![The Switch client's menu: rename, permissions and Delete for the item under the cursor](docs/screenshots/switch-client-menu.png) |
 
 - **Change permissions recursively**: a folder and everything inside it,
   as its own entry next to Change permissions (client, file manager and web

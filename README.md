@@ -45,10 +45,13 @@ When it opens, you choose what to do:
 The servers keep running while you use another mode. Closing chiral-ftp
 stops them.
 
-| | |
+| On the PS5 | On the Nintendo Switch |
 |---|---|
-| ![Start screen](docs/screenshots/start.png) | ![FTP server](docs/screenshots/ftp-server.png) |
-| ![Web app](docs/screenshots/web-app.png) | ![About](docs/screenshots/about.png) |
+| ![The start screen on the PS5](docs/screenshots/ps5-start.png) | ![The start screen on the Switch](docs/screenshots/switch-start.png) |
+| **On a computer** (Windows, Mac and Linux) | **The web app**, in any browser |
+| ![The computer interface: the SFTP server page](docs/screenshots/computer-server.png) | ![The web app's FTP / SFTP client](docs/screenshots/web-client.png) |
+
+Every screen, on every platform: [Screenshots](#screenshots).
 
 What's new in each version is in [CHANGELOG.md](CHANGELOG.md).
 
@@ -189,19 +192,25 @@ and nothing has to be set up.
    On a computer: **Quick connect** in the sidebar (**⌘K** on a Mac). The
    devices nearby are listed, with their names and addresses.
 
-   ![The devices nearby](docs/screenshots/quick-connect-devices.png)
+   | On a console (PS5) | On a computer (Mac) |
+   |---|---|
+   | ![Quick connect on the PS5: the Mac and the Switch nearby](docs/screenshots/ps5-quick-connect.png) | ![Quick connect on a Mac: the Switch and the PS5 nearby](docs/screenshots/computer-quick-connect.png) |
 
-2. **Pick one and press Connect.** Your screen shows a 4-digit code while it
-   waits.
+2. **Pick one and press Connect** (Cross on the PS5, A on the Switch). Your
+   screen shows a 4-digit code while it waits.
 
-   ![Asking: the code to compare](docs/screenshots/quick-connect-asking.png)
+   | The PS5 asks the Mac | The Mac asks the Switch |
+   |---|---|
+   | ![The PS5 asking the Mac, code 3810](docs/screenshots/ps5-quick-connect-asking.png) | ![The Mac asking the Switch, code 2425](docs/screenshots/computer-quick-connect-asking.png) |
 
 3. **On the other device, check the code and press Allow.** It starts its
    server and hands your device a login of its own. You're connected and
    browsing its files: in the client on a console, in the web app on a
    computer.
 
-   ![The other side: allow or deny, with the same code](docs/screenshots/quick-connect-allow.png)
+   | The Mac, asked by the PS5 | The Switch, asked by the Mac |
+   |---|---|
+   | ![The Mac shows the PS5's request with the same code, 3810](docs/screenshots/computer-quick-connect-request.png) | ![The Switch shows the Mac's request with the same code, 2425](docs/screenshots/switch-quick-connect-request.png) |
 
 The login it hands out works **only from the device that asked**, and only
 while that server runs. **Deny**, or let the request run out (30 seconds),
@@ -239,6 +248,52 @@ On a Mac, the menu bar has the server (⌘1), the web app (⌘2), Quick connect
 FTP server's login is shown on its screen: change it from the default. The
 web app has no login: anyone on your network can use it while it runs, so
 stop it when you're done. Both can change anything on the console's storage.
+
+## Screenshots
+
+### On the consoles
+
+The PS5 and the Switch share one layout, made for the TV and a controller.
+What changes is the buttons shown at the bottom, the drives, and what the
+start screen and About say about the console.
+
+| PS5 | Nintendo Switch |
+|---|---|
+| **Start screen**<br>![The PS5 start screen](docs/screenshots/ps5-start.png) | **Start screen**<br>![The Switch start screen](docs/screenshots/switch-start.png) |
+| **Its menu** (OPTIONS): Settings, message log, About<br>![The PS5 start screen's menu](docs/screenshots/ps5-menu.png) | **Its menu** (Plus): Settings, message log, About, Exit<br>![The Switch start screen's menu](docs/screenshots/switch-menu.png) |
+| **FTP server**<br>![The PS5 FTP server, running](docs/screenshots/ps5-ftp-server.png) | **FTP server**<br>![The Switch FTP server, running](docs/screenshots/switch-ftp-server.png) |
+| **Web app**<br>![The PS5 web app screen, running](docs/screenshots/ps5-web-app.png) | **Web app**<br>![The Switch web app screen, running](docs/screenshots/switch-web-app.png) |
+| **File manager: the drives**<br>![The PS5 drives: internal storage, Homebrew, USB, extended storage](docs/screenshots/ps5-file-manager-drives.png) | **File manager: the drives**<br>![The Switch drives: SD card, Homebrew, Nintendo, a USB drive](docs/screenshots/switch-file-manager-drives.png) |
+| **File manager: two folders side by side**<br>![The PS5 file manager: /data/homebrew and a USB drive](docs/screenshots/ps5-file-manager.png) | **File manager: two folders side by side**<br>![The Switch file manager: /switch and a USB drive](docs/screenshots/switch-file-manager.png) |
+| **File manager menu**<br>![The PS5 file manager's menu](docs/screenshots/ps5-file-manager-menu.png) | **File manager menu**<br>![The Switch file manager's menu](docs/screenshots/switch-file-manager-menu.png) |
+| **FTP / SFTP client: saved servers**<br>![The PS5 client's server list](docs/screenshots/ps5-client-servers.png) | **FTP / SFTP client: saved servers**<br>![The Switch client's server list](docs/screenshots/switch-client-servers.png) |
+| **Client, connected to a Mac**<br>![The PS5 client browsing a Mac](docs/screenshots/ps5-client.png) | **Client, connected to a Mac**<br>![The Switch client browsing a Mac](docs/screenshots/switch-client.png) |
+| **Client menu**<br>![The PS5 client's menu](docs/screenshots/ps5-client-menu.png) | **Client menu**<br>![The Switch client's menu](docs/screenshots/switch-client-menu.png) |
+| **Transfers** (Touchpad)<br>![The PS5 transfer queue, a download running](docs/screenshots/ps5-transfers.png) | **Transfers** (Minus)<br>![The Switch transfer queue, a download running](docs/screenshots/switch-transfers.png) |
+| **Quick connect**<br>![Quick connect on the PS5](docs/screenshots/ps5-quick-connect.png) | **Quick connect**<br>![Quick connect on the Switch](docs/screenshots/switch-quick-connect.png) |
+| **Quick connect: asking**<br>![The PS5 asking the Mac](docs/screenshots/ps5-quick-connect-asking.png) | **Quick connect: asking**<br>![The Switch asking the Mac](docs/screenshots/switch-quick-connect-asking.png) |
+| **Quick connect: being asked**<br>![The PS5 asked by the Mac](docs/screenshots/ps5-quick-connect-request.png) | **Quick connect: being asked**<br>![The Switch asked by the Mac](docs/screenshots/switch-quick-connect-request.png) |
+| **Settings**<br>![The PS5 settings](docs/screenshots/ps5-settings.png) | **Settings**<br>![The Switch settings](docs/screenshots/switch-settings.png) |
+| **About**<br>![About chiral-ftp on the PS5](docs/screenshots/ps5-about.png) | **About**<br>![About chiral-ftp on the Switch](docs/screenshots/switch-about.png) |
+
+### On a computer (Windows, Mac and Linux)
+
+One window with a sidebar; the same on all three. The file manager and the
+client are in the web app, in your browser.
+
+| | |
+|---|---|
+| **FTP / SFTP server**<br>![The server page, SFTP running](docs/screenshots/computer-server.png) | **Web app**<br>![The web app page, running](docs/screenshots/computer-web-app.png) |
+| **Quick connect**<br>![The Quick connect page](docs/screenshots/computer-quick-connect.png) | **Settings**<br>![The Settings page](docs/screenshots/computer-settings.png) |
+| **Quick connect: asking**<br>![The Mac asking the Switch](docs/screenshots/computer-quick-connect-asking.png) | **Quick connect: being asked**<br>![The Mac asked by the PS5](docs/screenshots/computer-quick-connect-request.png) |
+
+### The web app, in a browser
+
+The same pages whichever device serves them: a computer, a PS5 or a Switch.
+
+| | |
+|---|---|
+| **FTP / SFTP client** (here on a Mac, connected to a PS5)<br>![The web app's client](docs/screenshots/web-client.png) | **Files** (here served by a PS5: its drives)<br>![The web app's file manager on a PS5](docs/screenshots/web-files.png) |
 
 ## Known gaps
 

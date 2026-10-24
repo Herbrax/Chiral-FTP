@@ -103,6 +103,7 @@ test: tests/test_listparse check
 # nothing noticed until a link failed.
 check:
 	$(PYTHON) tools/check-platforms.py
+	$(PYTHON) tools/content-version.py --check $(VERSION) platform/ps5/sce_sys/param.json
 
 clean:
 	rm -rf .build gen dist release chiral-ftp chiral-ftp.exe tests/test_listparse data \

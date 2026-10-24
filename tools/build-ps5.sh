@@ -144,10 +144,16 @@ mkdir -p "$out/sce_sys" "$out/sce_module"
 "$tool" self --sign --in "$obj/eboot.elf" --out "$out/eboot.bin" --magic 0x1D3D154F
 (cd "$bp/runtime" && sha256sum --check --strict libc.prx.sha256 >/dev/null)
 cp "$bp/runtime/libc.prx" "$out/sce_module/libc.prx"
-python3 - "$root/platform/ps5/sce_sys/param.json" "$out/sce_sys/param.json" "$title" "$app_name" <<'PY'
+# contentVersion follows VERSION (tools/content-version.py), in the package
+# and in the committed param.json, which is where the homebrew catalog
+# reads it at the release's tag.
+content_version="$(python3 "$root/tools/content-version.py" "$version")"
+[[ "$variant" != app ]] || python3 "$root/tools/content-version.py" --sync "$version" "$root/platform/ps5/sce_sys/param.json"
+python3 - "$root/platform/ps5/sce_sys/param.json" "$out/sce_sys/param.json" "$title" "$app_name" "$content_version" <<'PY'
 import json, sys
 p = json.load(open(sys.argv[1]))
 title, name = sys.argv[3], sys.argv[4]
+p["contentVersion"] = sys.argv[5]
 p["titleId"] = title
 p["conceptId"] = title[4:]
 p["contentId"] = "UP9000-%s_00-%s" % (title, (name.upper().replace(" ", "").replace("-", "") + "0" * 16)[:16])

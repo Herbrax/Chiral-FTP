@@ -798,6 +798,13 @@ the banner, which exists because it is the one thing the user can change.
   app zipped with `ditto` (keeps the bundle's signature), `SHA256SUMS`, and
   `RELEASE_NOTES.md` from the version's CHANGELOG section (pictures get
   absolute raw.githubusercontent.com addresses).
+- **The PS5's `contentVersion` follows `VERSION`** (`tools/content-version.py`:
+  1.1 → `01.001.000`, 1.1.2 → `01.001.002`): consoles and the PS5 homebrew
+  catalog find updates by it, not by the tag. `make PLATFORM=ps5` writes it
+  into the package and into the committed `platform/ps5/sce_sys/param.json`
+  (the copy the catalog reads at the release's tag), and `make check` fails
+  while that file is behind. Commit it before tagging. VERSION must be
+  MAJOR.MINOR or MAJOR.MINOR.PATCH.
 - **Linux** builds only on Linux: `tools/make-appimage.sh` (linuxdeploy), run
   by `.github/workflows/linux-appimage.yml` on Ubuntu 22.04 for a `v*` tag or
   by hand; then `tools/make-release.sh linux` adds it to `release/`. An

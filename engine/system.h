@@ -59,6 +59,14 @@ typedef struct system_net {
 } system_net_t;
 int system_networks(system_net_t *out, int max);
 
+/* The broadcast address of each of those networks ("192.168.18.255"), where
+   quick connect says hello besides 255.255.255.255. That one leaves by a
+   single network, the one the system ranks first, which on a computer with
+   a virtual network in it (Hyper-V's, a VPN's) need not be the one the
+   other devices are on. Writes at most max and returns how many; 0 where
+   the platform can't tell, and 255.255.255.255 is all there is. */
+int system_broadcasts(char (*out)[16], int max);
+
 /* How this machine shows up on the others' Quick connect list (discovery.h):
    a name people recognise, and its kind -- "ps5", "switch", "mac",
    "windows" or "linux" -- for the badge next to it. A console's own

@@ -145,6 +145,14 @@ system_networks(system_net_t *out, int max) {
   return 0;
 }
 
+int
+system_broadcasts(char (*out)[16], int max) {
+  /* 255.255.255.255 alone: the one network has no rival to take it. */
+  (void)out;
+  (void)max;
+  return 0;
+}
+
 void
 system_notify(const char *message) {
   notify_request_t req;

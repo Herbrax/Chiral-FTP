@@ -21,7 +21,7 @@ BACKEND = ['init', 'shutdown', 'pump', 'present', 'frame_begin', 'frame_end',
 SYSTEM = ['system_data_dir_candidates', 'system_storage_roots',
           'system_free_space', 'system_local_ip', 'system_notify',
           'system_timegm', 'system_language', 'system_renderable_languages',
-          'system_script_fonts', 'system_ftpd_default_root', 'system_ftpd_full_root', 'system_networks',
+          'system_script_fonts', 'system_ftpd_default_root', 'system_ftpd_full_root', 'system_networks', 'system_broadcasts',
           'system_device_name', 'system_device_kind']
 TRAITS = ['CHIRAL_FILE_MODE', 'CHIRAL_RENDER_W', 'CHIRAL_RENDER_H',
           'CHIRAL_WEB_MHD_OWNS_LISTENER', 'CHIRAL_WEB_MHD_NEEDS_SOCKETPAIR',

@@ -321,9 +321,20 @@ system_device_kind(void) {
 #endif
 }
 
+/* Each network's broadcast address, from its address and prefix length;
+   0 for a /31 or /32, which has none. */
+static unsigned
+broadcast_of(unsigned host, unsigned prefix) {
+  if(prefix >= 31) return 0;
+  return host | (prefix ? ~(0xFFFFFFFFu << (32 - prefix)) : 0xFFFFFFFFu);
+}
+
+/* The networks this machine is on, for system_networks(), and when bcast
+   is given, each one's broadcast address (host order) beside it, for
+   system_broadcasts(). */
 #ifdef _WIN32
-int
-system_networks(system_net_t *out, int max) {
+static int
+list_networks(system_net_t *out, unsigned *bcast, int max) {
   /* Named as in Settings > Network: "Wi-Fi", "Ethernet 2". */
   ULONG size = 16 * 1024;
   IP_ADAPTER_ADDRESSES *list = NULL;
@@ -353,6 +364,7 @@ system_networks(system_net_t *out, int max) {
       WideCharToMultiByte(CP_UTF8, 0, a->FriendlyName, -1, out[n].label, sizeof(out[n].label), NULL, NULL);
       snprintf(out[n].name, sizeof(out[n].name), "%s", out[n].label);
       inet_ntop(AF_INET, &in->sin_addr, out[n].addr, sizeof(out[n].addr));
+      if(bcast) bcast[n] = broadcast_of(host, u->OnLinkPrefixLength);
       n++;
     }
   }
@@ -360,8 +372,8 @@ system_networks(system_net_t *out, int max) {
   return n;
 }
 #else
-int
-system_networks(system_net_t *out, int max) {
+static int
+list_networks(system_net_t *out, unsigned *bcast, int max) {
   struct ifaddrs *list, *i;
   int n = 0;
 
@@ -378,12 +390,41 @@ system_networks(system_net_t *out, int max) {
     snprintf(out[n].name, sizeof(out[n].name), "%s", i->ifa_name);
     inet_ntop(AF_INET, &a->sin_addr, out[n].addr, sizeof(out[n].addr));
     interface_label(i->ifa_name, out[n].label, sizeof(out[n].label));
+    if(bcast) {
+      const struct sockaddr_in *m = (const struct sockaddr_in *)i->ifa_netmask;
+      const unsigned mask = m && m->sin_family == AF_INET ? ntohl(m->sin_addr.s_addr) : 0;
+      unsigned prefix = 0;
+      while(prefix < 32 && (mask & (0x80000000u >> prefix))) prefix++;
+      bcast[n] = (i->ifa_flags & IFF_BROADCAST) && mask ? broadcast_of(host, prefix) : 0;
+    }
     n++;
   }
   freeifaddrs(list);
   return n;
 }
 #endif
+
+int
+system_networks(system_net_t *out, int max) {
+  return list_networks(out, NULL, max);
+}
+
+int
+system_broadcasts(char (*out)[16], int max) {
+  system_net_t nets[16];
+  unsigned bcast[16];
+  int n = list_networks(nets, bcast, 16), count = 0;
+
+  for(int i = 0; i < n && count < max; i++) {
+    struct in_addr a;
+
+    if(!bcast[i]) continue;
+    a.s_addr = htonl(bcast[i]);
+    inet_ntop(AF_INET, &a, out[count], 16);
+    count++;
+  }
+  return count;
+}
 
 void
 system_notify(const char *message) {

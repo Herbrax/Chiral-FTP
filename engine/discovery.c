@@ -44,6 +44,7 @@
 
 #include "config.h"
 #include "log.h"
+#include "system.h"
 
 #define MSG_MAX 512
 #define HELLO_EVERY_MS 3000
@@ -210,17 +211,35 @@ probe(char *msg) {
 
 /* ---------- the network thread ---------- */
 
-// 0, or -1 when the datagram couldn't be sent.
+// One datagram to one address. 0, or -1 when it couldn't be sent.
 static int
-send_to(int fd, const char *msg, const char *ip, unsigned short port) {
+send_one(int fd, const char *msg, const char *ip, unsigned short port) {
   struct sockaddr_in to;
 
   memset(&to, 0, sizeof(to));
   to.sin_family = AF_INET;
   to.sin_port = htons(port ? port : DISCOVERY_PORT);
-  if(!ip || !*ip) to.sin_addr.s_addr = htonl(0xFFFFFFFFu);  // everyone on this network
-  else if(inet_pton(AF_INET, ip, &to.sin_addr) != 1) return 0;
+  if(inet_pton(AF_INET, ip, &to.sin_addr) != 1) return 0;
   return sendto(fd, msg, strlen(msg), 0, (struct sockaddr *)&to, sizeof(to)) < 0 ? -1 : 0;
+}
+
+/* 0, or -1 when the datagram couldn't be sent. No ip: everyone on this
+   network -- 255.255.255.255, and each network's own broadcast address as
+   well (system_broadcasts), since the first leaves by one network only and
+   a computer with Hyper-V or a VPN can pick the wrong one. Sent when any of
+   them went out. */
+static int
+send_to(int fd, const char *msg, const char *ip, unsigned short port) {
+  char nets[8][16];
+  int n, sent;
+
+  if(ip && *ip) return send_one(fd, msg, ip, port);
+  sent = !send_one(fd, msg, "255.255.255.255", port);
+  n = system_broadcasts(nets, 8);
+  for(int i = 0; i < n; i++) {
+    if(!send_one(fd, msg, nets[i], port)) sent = 1;
+  }
+  return sent ? 0 : -1;
 }
 
 static void

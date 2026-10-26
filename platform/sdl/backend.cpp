@@ -269,6 +269,12 @@ bool open_url(const char *url) {
   return SDL_OpenURL(url) == 0;
 }
 
+bool open_file(const char *path, int how) {
+  (void)path;  // not on a computer (yet): the file manager lives in the web app there
+  (void)how;
+  return false;
+}
+
 void pointer_hand(bool on) {
   if(!g_cursors[on ? 1 : 0]) return;
   const SDL_SystemCursor want = on ? SDL_SYSTEM_CURSOR_HAND : SDL_SYSTEM_CURSOR_ARROW;

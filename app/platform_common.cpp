@@ -218,7 +218,9 @@ const float TV_W = 1920, TV_H = 1080;
 const float UNITS_PER_POINT = 1.5f;
 /* The least room the layout fits in. A window smaller than this, in units,
    gets fewer units per point instead of a layout that overlaps itself. */
+#if !CHIRAL_UI_MOBILE
 const float MIN_W = 1600, MIN_H = 1000;
+#endif
 float W = TV_W, H = TV_H;
 float g_zoom = 1.0f;
 float g_units_per_point = UNITS_PER_POINT;
@@ -517,7 +519,9 @@ void begin_frame() {
   float density = 1.0f;
   if(g_windowed) {
     float upp = UNITS_PER_POINT / g_zoom;
+#if !CHIRAL_UI_MOBILE
     upp = std::max(upp, std::max(MIN_W / (float)pw, MIN_H / (float)ph));
+#endif  // a phone's window is the layout at any size: the mobile shell fits itself to it
     g_units_per_point = upp;
     W = (float)pw * upp;
     H = (float)ph * upp;
@@ -545,6 +549,10 @@ void begin_frame() {
 
 float view_width() {
   return W;
+}
+
+bool windowed() {
+  return g_windowed;
 }
 
 float view_height() {
@@ -652,6 +660,10 @@ void pointer_hand(bool on) {
 
 bool open_url(const char *url) {
   return backend::open_url(url);
+}
+
+bool open_file(const char *path, OpenHow how) {
+  return backend::open_file(path, (int)how);
 }
 
 bool in_foreground() {
@@ -823,6 +835,11 @@ void frame(float x, float y, float w, float h, ImU32 col, float rounding, float 
 }
 
 float button(float x, float y, float s, Action a) {
+#if CHIRAL_UI_MOBILE
+  /* A phone or tablet has no buttons to draw: a hint is its word alone,
+     tapped like a button. (A TV, from the same build, keeps its glyphs.) */
+  if(platform::windowed()) return 0;
+#endif
   ImDrawList *d = dl();
   float r = s / 2;
   ImVec2 c(x + r, y + r);

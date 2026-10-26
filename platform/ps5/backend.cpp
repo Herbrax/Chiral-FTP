@@ -568,6 +568,12 @@ bool open_url(const char *url) {
   return false;
 }
 
+bool open_file(const char *path, int how) {
+  (void)path;  // no other apps to hand a file to
+  (void)how;
+  return false;
+}
+
 /* Not known: telling would take sceSystemServiceGetStatus, a call this
    title has never made (AGENT-NOTES §3.3: a symbol that links is not one a
    title may call). Until it is tried on the console, always in front. */

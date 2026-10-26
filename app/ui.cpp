@@ -64,6 +64,30 @@ const float FS = 28, FS_SMALL = 23, FS_TITLE = 34;
    the note under its heading. On a TV across a room, FS_SMALL is small. */
 const float FS_READ = 27, FS_CARD = 32;
 
+/* A dialog's width. On a phone the window can be narrower than the dialog
+   was drawn for (a folded phone is about 600 units across), so it shrinks
+   to fit there; everywhere else it is the width it was given. */
+inline float dialog_w(float w) {
+#if CHIRAL_UI_MOBILE
+  return std::min(w, W - 24);
+#else
+  return w;
+#endif
+}
+
+#if CHIRAL_UI_DESKTOP
+/* The computer interface's sidebar and pages, or the console layout. A
+   phone or tablet has the former, arranged by the mobile shell; a TV, from
+   the same build, the latter: its window isn't the layout. */
+inline bool desktop_ui() {
+#if CHIRAL_UI_MOBILE
+  return platform::windowed();
+#else
+  return true;
+#endif
+}
+#endif
+
 /* Text that names the machine. A console's says "the console", and a
    computer's (CHIRAL_DEVICE_COMPUTER) says "this computer" -- and leaves out
    what only a console has, the SD card or the TV. Both are marked N_() at
@@ -933,7 +957,7 @@ struct TextEntry : Overlay {
   }
 
   void draw() override {
-    float w = 1100, h = 250, x = (W - w) / 2, y = (H - h) / 2;
+    float w = dialog_w(1100), h = 250, x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 150));
     draw::rect(x, y, w, h, draw::PANEL, 18);
     hit_add(HIT_OVERLAY_BODY, x, y, w, h);
@@ -992,7 +1016,7 @@ struct Menu : Overlay {
   }
 
   void draw() override {
-    float row = 62, w = 760;
+    float row = 62, w = dialog_w(760);
     float h = 120 + row * items.size() + (subtitle.empty() ? 0 : 36);
     float x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 140));
@@ -1036,7 +1060,7 @@ struct Confirm : Overlay {
   }
 
   void draw() override {
-    float w = 980, h = 300, x = (W - w) / 2, y = (H - h) / 2;
+    float w = dialog_w(980), h = 300, x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 150));
     draw::rect(x, y, w, h, draw::PANEL, 18);
     hit_add(HIT_OVERLAY_BODY, x, y, w, h);
@@ -1224,7 +1248,7 @@ struct Form : Overlay {
 
   void draw() override {
     std::vector<int> f = fields();
-    float row = 60, w = 1240;
+    float row = 60, w = dialog_w(1240);
     int text_rows = (int)f.size() - 3;
     float h = 130 + row * text_rows + 110;
     float x = (W - w) / 2, y = (H - h) / 2;
@@ -1496,7 +1520,7 @@ struct About : Overlay {
   }
 
   void draw() override {
-    float w = 1400, h = 900, x = (W - w) / 2, y = (H - h) / 2;
+    float w = dialog_w(1400), h = 900, x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 160));
     draw::rect(x, y, w, h, draw::PANEL, 18);
     hit_add(HIT_OVERLAY_BODY, x, y, w, h);
@@ -2366,7 +2390,7 @@ ServerPrefs g_srv;
 
 void save_server_prefs();  // further down
 
-#if CHIRAL_DEVICE_COMPUTER
+#if CHIRAL_DEVICE_COMPUTER || CHIRAL_UI_MOBILE  // the desktop pages' server page, on a phone too
 /* Shares what the server screen was told to: a folder, or the whole
    computer (system_ftpd_full_root). */
 void set_shared_root(const std::string &v) {
@@ -2635,7 +2659,7 @@ void go_mode(Mode m) {
   g_row_cursor = 0;
 }
 
-#if CHIRAL_DEVICE_COMPUTER
+#if CHIRAL_DEVICE_COMPUTER || CHIRAL_UI_MOBILE
 /* A folder as the server screen shows it: the home folder as "~". */
 std::string short_path(const std::string &path) {
   const char *home = getenv("HOME");
@@ -2994,8 +3018,12 @@ struct QuickPrompt : Overlay {
     discovery_request_t now;
     if(discovery_pending(&now) && !strcmp(now.nonce, req.nonce)) req.seconds_left = now.seconds_left;
 #if CHIRAL_UI_DESKTOP
-    draw_quick_prompt_desktop(req);
-#else
+    if(desktop_ui()) {
+      draw_quick_prompt_desktop(req);
+      return;
+    }
+#endif
+#if !CHIRAL_UI_DESKTOP || CHIRAL_UI_MOBILE  // a TV, from the Android build, draws the console's
     const float w = 960, h = 560, x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 160));
     draw::rect(x, y, w, h, draw::PANEL, 18);
@@ -3552,6 +3580,9 @@ bool handle_home(Action a) {
 #if CHIRAL_UI_DESKTOP
 #include "ui_desktop.inc"
 #endif
+#if CHIRAL_UI_MOBILE
+#include "ui_mobile.inc"
+#endif
 
 }  // namespace
 
@@ -3706,7 +3737,7 @@ void handle_pointer() {
   platform::Pointer p = platform::take_pointer();
   if(!p.moved && !p.clicked && !p.right_clicked && p.wheel == 0) return;
 #if CHIRAL_UI_DESKTOP
-  if(desk::pointer(p)) return;  // the desktop interface's own controls
+  if(desktop_ui() && desk::pointer(p)) return;  // the desktop interface's own controls
 #endif
   if(g_hits.empty()) g_touch_dirty = true;  // no rectangles yet: draw some
   const int top = (int)g.overlays.size();
@@ -3908,6 +3939,12 @@ void handle(Action a) {
     g.quit = true;
     return;
   }
+#if CHIRAL_UI_MOBILE
+  if(a == ACT_NAV_LEFT || a == ACT_NAV_RIGHT) {
+    if(desktop_ui()) mob::show_nav(a == ACT_NAV_RIGHT, 5);
+    return;
+  }
+#endif
   /* The menu bar: straight there, from whatever is open. A text entry left
      open underneath would keep the keyboard for itself, so everything open
      closes first. */
@@ -3919,7 +3956,7 @@ void handle(Action a) {
     return;
   }
 #if CHIRAL_UI_DESKTOP
-  if(a >= ACT_CMD_HOME && desk::command(a)) return;  // pages, on the desktop
+  if(a >= ACT_CMD_HOME && desktop_ui() && desk::command(a)) return;  // pages, on the desktop
 #endif
   if(a >= ACT_CMD_HOME) {
     g.overlays.clear();
@@ -3956,7 +3993,9 @@ void handle(Action a) {
     if(!keep) g.overlays.erase(g.overlays.begin() + (depth - 1));
     return;
   }
-#if CHIRAL_UI_DESKTOP
+#if CHIRAL_UI_MOBILE
+  if(desktop_ui() && mob::key(a)) return;  // the mobile shell, which hands the pages' keys on to them
+#elif CHIRAL_UI_DESKTOP
   if(desk::key(a)) return;  // the desktop pages; the file manager and client take their own
 #endif
   switch(g.mode) {
@@ -4071,7 +4110,15 @@ void render() {
   platform::set_command_shown(ACT_CMD_CONNECT, mode_shown(MODE_CLIENT));
   g_hits.clear();
   g_hit_layer = 0;
-#if CHIRAL_UI_DESKTOP
+#if CHIRAL_UI_MOBILE
+  /* A phone or tablet: the mobile shell, fitted to the window (ui_mobile.inc).
+     A TV goes on to the console layout below. */
+  if(desktop_ui()) {
+    mob::render();
+    draw_overlays();
+    return;
+  }
+#elif CHIRAL_UI_DESKTOP
   /* A sidebar and pages instead of the start screen (ui_desktop.inc); the
      dialogs are the same ones, over it. */
   desk::render();
@@ -4144,6 +4191,9 @@ bool busy() {
   }
 #if CHIRAL_UI_DESKTOP
   if(desk::editing()) return true;  // the caret blinks
+#endif
+#if CHIRAL_UI_MOBILE
+  if(desktop_ui() && mob::busy()) return true;  // a list still settling after a scroll
 #endif
   ftpd_stats_t st;
   server_stats(&st);

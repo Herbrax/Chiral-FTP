@@ -1,0 +1,34 @@
+// chiral-ftp for Android. Gradle only packages: the native library for each
+// ABI is built by tools/build-android.sh with ndk-build into app/libs
+// (the Android Gradle plugin's own ndk-build step fails on sources outside
+// the project, which all of chiral-ftp's are).
+apply plugin: 'com.android.application'
+
+android {
+    namespace "io.github.herbrax.chiralftp"
+    compileSdk 35
+    buildToolsVersion "35.0.1"
+    defaultConfig {
+        applicationId "io.github.herbrax.chiralftp"
+        minSdk 26
+        targetSdk 35
+        versionCode project.hasProperty('chiralVersionCode') ? project.chiralVersionCode.toInteger() : 1
+        versionName project.hasProperty('chiralVersion') ? project.chiralVersion : "dev"
+    }
+    sourceSets.main {
+        jniLibs.srcDir 'libs'
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true  // extracted at install: the privileged helper will need it (roadmap 5.4)
+        }
+    }
+    lint {
+        abortOnError false
+    }
+}

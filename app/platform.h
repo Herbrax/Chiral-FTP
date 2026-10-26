@@ -49,6 +49,10 @@ enum Action {
   ACT_CMD_ZOOM_IN,
   ACT_CMD_ZOOM_OUT,
   ACT_CMD_ZOOM_RESET,
+  /* Android: a finger swiped in from the left or right edge, which brings
+     the tabs in when the phone is sideways (app/ui_mobile.inc). */
+  ACT_NAV_LEFT,
+  ACT_NAV_RIGHT,
 };
 
 enum TextKind { TEXT_DEFAULT, TEXT_URL, TEXT_NUMBER, TEXT_PASSWORD };
@@ -100,6 +104,9 @@ Pointer take_pointer();
 void pointer_hand(bool on);
 // The system browser (backend.h); false on a console.
 bool open_url(const char *url);
+// A file, to the system's other apps (backend.h): Android only so far.
+enum OpenHow { OPEN_VIEW, OPEN_CHOOSE, OPEN_SHARE };
+bool open_file(const char *path, OpenHow how);
 // In front and being drawn (backend.h): what quick connect runs during.
 bool in_foreground();
 // The clipboard and the system's folder chooser (backend.h).
@@ -121,6 +128,9 @@ void end_frame();
    zoom 1, so the layout's 28-unit body text is 14 pt and a bigger window
    simply has more room. */
 float view_width();
+/* True when the layout is the window (a computer, a phone), false for the
+   fixed 1920x1080 of a console or a TV. Known once begin_frame() has run. */
+bool windowed();
 float view_height();
 // The window's zoom (computer only): 1 is the default, View > Zoom In/Out.
 float zoom();

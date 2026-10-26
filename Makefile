@@ -25,7 +25,7 @@ CHIRAL_ROOT ?= $(CURDIR)
 export CHIRAL_ROOT
 PYTHON ?= python3
 
-VALID_PLATFORMS := ps5 switch sdl
+VALID_PLATFORMS := ps5 switch sdl android
 ifeq ($(filter $(PLATFORM),$(VALID_PLATFORMS)),)
 $(error PLATFORM must be one of: $(VALID_PLATFORMS) (got "$(PLATFORM)"))
 endif
@@ -55,7 +55,7 @@ FONTS      := gen/font_regular.c gen/font_bold.c gen/font_mono.c
 # Every tr()/trf()/N_() string in these must have an entry in
 # i18n/translations.json, in every language, or the build stops.
 I18N_SOURCES := $(APP) $(wildcard platform/*/*.cpp) $(wildcard platform/*/*.mm) \
-                engine/ftpd.c engine/sftpd.c engine/fsjobs.c app/ui_desktop.inc
+                engine/ftpd.c engine/sftpd.c engine/fsjobs.c app/ui_desktop.inc app/ui_mobile.inc
 GEN_I18N   := gen/i18n_table.c
 
 include $(CHIRAL_ROOT)/platform/$(PLATFORM)/platform.mk

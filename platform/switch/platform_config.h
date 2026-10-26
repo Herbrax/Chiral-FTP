@@ -50,3 +50,5 @@
 
 /* The console layout, for a TV and a pad (app/ui.cpp). */
 #define CHIRAL_UI_DESKTOP 0
+/* Not the mobile shell (Android only: app/ui_mobile.inc). */
+#define CHIRAL_UI_MOBILE 0

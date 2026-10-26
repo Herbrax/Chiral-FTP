@@ -39,3 +39,5 @@
    Windows and Linux alike. (The console layout is the consoles'; Android
    will have a third, its own.) */
 #define CHIRAL_UI_DESKTOP 1
+/* Not the mobile shell (Android only: app/ui_mobile.inc). */
+#define CHIRAL_UI_MOBILE 0

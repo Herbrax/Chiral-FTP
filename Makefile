@@ -25,6 +25,12 @@ CHIRAL_ROOT ?= $(CURDIR)
 export CHIRAL_ROOT
 PYTHON ?= python3
 
+# gen/version holds VERSION and is rewritten only when VERSION changes: make
+# sees files change, not variables, so what has the version compiled in
+# depends on this file to be rebuilt on a version bump.
+VERSION_STAMP := $(CHIRAL_ROOT)/gen/version
+$(shell mkdir -p $(CHIRAL_ROOT)/gen && [ "`cat $(VERSION_STAMP) 2>/dev/null`" = "$(VERSION)" ] || echo $(VERSION) > $(VERSION_STAMP))
+
 VALID_PLATFORMS := ps5 switch sdl android
 ifeq ($(filter $(PLATFORM),$(VALID_PLATFORMS)),)
 $(error PLATFORM must be one of: $(VALID_PLATFORMS) (got "$(PLATFORM)"))

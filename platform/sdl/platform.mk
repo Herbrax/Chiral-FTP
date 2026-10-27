@@ -79,7 +79,8 @@ endif
 SRC_C   := $(ENGINE) $(WEB_SRCS) $(PLATFORM_C) $(GENERATED)
 SRC_CPP := $(APP) $(IMGUI) $(PLATFORM_CPP) vendor/imgui/misc/freetype/imgui_freetype.cpp
 OBJS    := $(addprefix $(BUILD)/,$(SRC_CPP:.cpp=.o) $(SRC_C:.c=.o) $(PLATFORM_MM:.mm=.o)) $(WIN_RES)
-HEADERS := $(wildcard app/*.h app/*.inc engine/*.h web/*.h platform/sdl/*.h platform/sdl/win32/*.h)
+HEADERS := $(wildcard app/*.h app/*.inc engine/*.h web/*.h platform/sdl/*.h platform/sdl/win32/*.h) \
+           $(VERSION_STAMP)
 
 $(BUILD)/%.o: %.cpp $(HEADERS) | $(GENERATED)
 	@mkdir -p $(dir $@)
@@ -95,7 +96,8 @@ $(BUILD)/%.o: %.mm $(HEADERS) | $(GENERATED)
 # its manifest (win32/chiral-ftp.manifest).
 gen/chiral-ftp.ico: assets/brand/icon-256.png tools/make-ico.py | gen
 	$(PYTHON) tools/make-ico.py $< $@
-$(BUILD)/chiral-ftp.res.o: platform/sdl/win32/chiral-ftp.rc platform/sdl/win32/chiral-ftp.manifest gen/chiral-ftp.ico
+$(BUILD)/chiral-ftp.res.o: platform/sdl/win32/chiral-ftp.rc platform/sdl/win32/chiral-ftp.manifest gen/chiral-ftp.ico \
+                           $(VERSION_STAMP)
 	@mkdir -p $(dir $@)
 	windres -I. -DVERSION_STR=$(VERSION) -DVERSION_NUM=$(WIN_VERNUM) -o $@ $<
 

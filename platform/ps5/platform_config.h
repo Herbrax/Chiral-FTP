@@ -31,6 +31,7 @@
    Triangle, L1/R1/L2/R2, OPTIONS and TOUCHPAD (platform_common.cpp). */
 #define CHIRAL_BUTTONS_PLAYSTATION 1
 #define CHIRAL_BUTTONS_KEYBOARD 0
+#define CHIRAL_BUTTONS_REMOTE 0  /* a TV remote: Android only */
 
 /* The text calls this machine "the console" (ui.cpp). */
 #define CHIRAL_DEVICE_COMPUTER 0

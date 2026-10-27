@@ -26,6 +26,7 @@
    (platform_common.cpp). */
 #define CHIRAL_BUTTONS_PLAYSTATION 0
 #define CHIRAL_BUTTONS_KEYBOARD 1
+#define CHIRAL_BUTTONS_REMOTE 0  /* a TV remote: Android only */
 
 /* The text calls this machine "this computer", not "the console" (ui.cpp). */
 #define CHIRAL_DEVICE_COMPUTER 1

@@ -20,6 +20,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Open on an .apk: without this the system installer won't start from
+         here (Android then asks once to allow installs from chiral-ftp). -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Open: which apps open which kinds of file (package visibility, Android 11+). -->
     <queries>

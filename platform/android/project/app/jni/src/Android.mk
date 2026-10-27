@@ -1,8 +1,8 @@
 # chiral-ftp's native library, libmain.so: the shared engine, UI and web
 # app straight from the tree (CHIRAL_ROOT, passed in by
 # tools/build-android.sh), Android's platform layer, and the libraries
-# tools/build-android-deps.sh and tools/build-android-mhd.sh built for
-# each ABI.
+# tools/build-android-deps.sh, tools/build-android-libssh.sh and
+# tools/build-android-mhd.sh built for each ABI.
 LOCAL_PATH := $(call my-dir)
 
 DEPS := $(CHIRAL_ROOT)/.deps/android/$(TARGET_ARCH_ABI)
@@ -10,6 +10,10 @@ DEPS := $(CHIRAL_ROOT)/.deps/android/$(TARGET_ARCH_ABI)
 include $(CLEAR_VARS)
 LOCAL_MODULE := ssh2
 LOCAL_SRC_FILES := $(DEPS)/lib/libssh2.a
+include $(PREBUILT_STATIC_LIBRARY)
+include $(CLEAR_VARS)
+LOCAL_MODULE := ssh
+LOCAL_SRC_FILES := $(DEPS)/lib/libssh.a
 include $(PREBUILT_STATIC_LIBRARY)
 include $(CLEAR_VARS)
 LOCAL_MODULE := mbedtls
@@ -42,7 +46,7 @@ LOCAL_MODULE := main
 
 WEB_PAGES := index.html app.css app.js files.html files.css files.js mark.svg mark-light.svg plexmono.ttf
 
-ENGINE := ftp listparse session queue localfs settings log strbuf form notify sftp remote_ops ftpd fsjobs discovery
+ENGINE := ftp listparse session queue localfs settings log strbuf form notify sftp remote_ops ftpd sftpd fsjobs discovery
 LOCAL_SRC_FILES := \
   $(foreach f,$(ENGINE),$(CHIRAL_ROOT)/engine/$(f).c) \
   $(CHIRAL_ROOT)/web/websrv.c $(CHIRAL_ROOT)/web/api.c $(CHIRAL_ROOT)/web/asset.c \
@@ -60,7 +64,7 @@ LOCAL_C_INCLUDES := $(LOCAL_PATH)/../SDL/include $(CHIRAL_ROOT)/platform/android
 LOCAL_CFLAGS := -O2 -Wall -D_GNU_SOURCE -DVERSION_TAG=\"$(CHIRAL_VERSION)\" -DIMGUI_USER_CONFIG=\"imgui_config.h\"
 LOCAL_CPPFLAGS := -std=gnu++17 -fno-rtti
 LOCAL_SHARED_LIBRARIES := SDL2
-LOCAL_STATIC_LIBRARIES := microhttpd ssh2 mbedtls mbedx509 mbedcrypto everest p256m
+LOCAL_STATIC_LIBRARIES := microhttpd ssh ssh2 mbedtls mbedx509 mbedcrypto everest p256m
 LOCAL_LDLIBS := -lGLESv1_CM -lGLESv2 -llog -landroid
 LOCAL_SHORT_COMMANDS := true
 

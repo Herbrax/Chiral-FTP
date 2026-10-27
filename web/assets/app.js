@@ -25,8 +25,20 @@
   /* On a computer (platform "host") the page names this machine "this
      computer", not "the console": the console wording is the default in the
      page, and each such element carries its computer version. */
-  function dev(onConsole, onThisComputer) { return state.platform === "host" ? onThisComputer : onConsole; }
+  /* On Android the console wording, with "phone" (or "TV") for "console". */
+  function phone(s) {
+    return state.kind === "androidtv" ? s.replace(/console/g, "TV").replace(/Console/g, "TV")
+                                      : s.replace(/console/g, "phone").replace(/Console/g, "Phone");
+  }
+  function dev(onConsole, onThisComputer) {
+    return state.platform === "host" ? onThisComputer : state.platform === "android" ? phone(onConsole) : onConsole;
+  }
   function applyDevice() {
+    if (state.platform === "android") {
+      document.querySelectorAll("[data-computer]").forEach(function (el) { el.textContent = phone(el.textContent); });
+      document.querySelectorAll("[data-computer-title]").forEach(function (el) { el.title = phone(el.title); });
+      return;
+    }
     if (state.platform !== "host") return;
     document.querySelectorAll("[data-computer]").forEach(function (el) { el.textContent = el.getAttribute("data-computer"); });
     document.querySelectorAll("[data-computer-title]").forEach(function (el) { el.title = el.getAttribute("data-computer-title"); });
@@ -1453,6 +1465,7 @@
       var st = await call("/api/state", {}, "GET");
       state.settings = st.settings;
       state.platform = st.platform;
+      state.kind = st.kind;
       applyDevice();
       $("sb-version").textContent = st.app + " " + st.version;
       if (st.connected) {

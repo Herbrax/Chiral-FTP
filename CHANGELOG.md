@@ -1,5 +1,82 @@
 # Changelog
 
+## 1.2
+
+chiral-ftp now runs on **Android**: phones, tablets, foldables and
+**Android TV**, from one APK. That makes six platforms: Windows, Mac, Linux,
+Android, Nintendo Switch and PS5. All of them find each other with Quick
+connect.
+
+### New: Android phones, tablets and foldables
+
+| Files | Client | Quick connect |
+|---|---|---|
+| ![The file manager on a phone](docs/screenshots/android-files.png) | ![The phone and a NAS, both in Movies](docs/screenshots/android-client.png) | ![A TV, a Switch and a PS5 nearby, and the download QR code](docs/screenshots/android-quick-connect.png) |
+
+- **Everything the other versions do**: the **SFTP or FTP server**, the
+  **web app**, the **file manager** and the **FTP / SFTP client** with
+  saved sites, resume and up to 30 transfers at once.
+- **Made for a touch screen**: tabs for Files, Client, Server, Quick
+  connect, Transfers and Settings. Tap to open, long-press to mark, drag
+  to scroll.
+- **Fits any screen and follows it as it changes.** A phone shows one pane
+  at a time. An unfolded foldable or a tablet shows two side by side. A
+  cover screen gets a compact layout. Sideways, the tabs slide in from the
+  edge. Folding, unfolding or turning the phone keeps your folders, marks
+  and scroll positions.
+- **File manager**: cut, copy and paste, rename, delete, new folder,
+  mark all, and copy to the other side.
+- **Open files in other apps**: Open, Open with… and Share hand a file to
+  the app that opens it. An APK opens in the system installer.
+- **Sort by** name (A–Z or Z–A), date (newest or oldest first), size
+  (largest or smallest first) or type, in the file manager and the client.
+  The choice is remembered.
+- **SFTP server** (encrypted) or FTP, on the same screen, with the server's
+  key fingerprint so you can check it when you connect.
+- **Back** goes up a folder. On the first screen it goes to the home
+  screen, and the servers keep running.
+- chiral-ftp asks for **All files access** so it can manage and share your
+  whole storage. Without it, it still works, with only what Android lets
+  any app see.
+- Android 8.0 or later, on ARM (64- and 32-bit) and x86_64.
+
+### New: Android TV
+
+| The start screen | The file manager, with the remote's buttons |
+|---|---|
+| ![chiral-ftp's start screen on Android TV](docs/screenshots/androidtv-start.png) | ![Two folders side by side, one file marked](docs/screenshots/androidtv-file-manager.png) |
+
+- **The TV interface**, the same one the PS5 and the Switch have, at
+  1920x1080, used with the remote.
+- **The remote's buttons**: the D-pad moves, **OK** opens, **Back** goes
+  back, **hold OK** opens the menu (settings, the message log, About), and
+  **Play/Pause** marks. The bottom bar shows the remote's buttons, or a
+  gamepad's (A, B, X, Y) as soon as you use one.
+- Everything says "TV", not "console", in the app and in the web app.
+- Back on the start screen goes to the TV's home screen; the servers keep
+  running.
+
+### Everywhere
+
+| On the PS5 | On a computer |
+|---|---|
+| ![Quick connect on the PS5, with the download QR code](docs/screenshots/ps5-quick-connect.png) | ![Quick connect on a computer, with the download QR code](docs/screenshots/computer-quick-connect.png) |
+
+- **Quick connect shows where to get chiral-ftp** for your other devices: a
+  QR code to scan with a phone, and the download pages
+  (chiral-ftp.com/download and the GitHub releases).
+- **Android phones and TVs show up in Quick connect** with a phone or a TV
+  icon, as "Android" and "Android TV".
+- **About** lists every platform chiral-ftp runs on, with links to
+  chiral-ftp.com and the GitHub repository.
+
+### Downloads
+
+- `chiral-ftp-1.2-android.apk`: phones, tablets, foldables and Android TV.
+  Open it on the device to install it (allow your browser or file manager
+  to install apps when Android asks). To update, install the new one over
+  it; your settings are kept.
+
 ## 1.1
 
 chiral-ftp now has downloads for **Windows**, **Mac** and **Linux**, next to

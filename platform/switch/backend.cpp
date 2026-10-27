@@ -320,6 +320,10 @@ bool open_file(const char *path, int how) {
   return false;
 }
 
+bool to_background() {
+  return false;  // no home screen to step behind: the Home button does that
+}
+
 /* What appletMainLoop() (called from pump) last heard from the system: in
    focus, or out of it -- the HOME menu, an overlay, the app suspended. A
    read of libnx's own state, not a call to the system. */

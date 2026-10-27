@@ -35,12 +35,35 @@ public class ChiralActivity extends SDLActivity {
         return "main";
     }
 
+    /* main() runs once per process, as on every other platform: its
+       statics (the UI, the queues, a Quit still queued from the last run)
+       aren't made to start over, and the last run's threads may still be
+       winding down. Android, though, can create the activity again in a
+       process that has already run it -- after the old one was destroyed,
+       or while it is being replaced -- and SDL would run main() a second
+       time there, which quit at once and crashed. So a second activity in
+       one process starts the app over in a new one instead. */
+    private static boolean mainStarted = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (mainStarted) {
+            startActivity(Intent.makeRestartActivityTask(getComponentName()));
+            Runtime.getRuntime().exit(0);
+            return;
+        }
+        mainStarted = true;
         askForStorage();
         final View root = getWindow().getDecorView();
         root.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> claimSideEdges(v));
+    }
+
+    /* Called from the native side (platform/android/backend.cpp,
+       to_background): Back on the first screen. The task goes behind the
+       home screen rather than ending, so the servers keep running. */
+    public void toBackground() {
+        runOnUiThread(() -> moveTaskToBack(true));
     }
 
     /* Called from the native side (platform/android/backend.cpp,

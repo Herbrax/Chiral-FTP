@@ -72,6 +72,15 @@ mkdir -p "$src"
 tar -xjf "$work/$mbedtls_tar" -C "$src"
 tar -xzf "$work/libssh2-$LIBSSH2_VER.tar.gz" -C "$src"
 
+# Thread-safe mbedTLS: the SFTP server (libssh, tools/build-android-libssh.sh)
+# serves each connection on its own thread off one shared random generator,
+# and libssh refuses to initialise its crypto on an mbedTLS without threads.
+PYTHON="${PYTHON:-$(command -v python3 || command -v python)}"
+for opt in MBEDTLS_THREADING_C MBEDTLS_THREADING_PTHREAD; do
+  "$PYTHON" "$src/mbedtls-$MBEDTLS_VER/scripts/config.py" \
+    -f "$src/mbedtls-$MBEDTLS_VER/include/mbedtls/mbedtls_config.h" set "$opt"
+done
+
 for abi in "${ABIS[@]}"; do
   prefix="$here/.deps/android/$abi"
   build="$here/.deps/build-android/$abi"

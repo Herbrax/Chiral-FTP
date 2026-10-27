@@ -791,6 +791,38 @@ void page_server(float x, float y, float w) {
   g_content_h = std::max(ly, ay) + P(28);
 }
 
+/* Where to get chiral-ftp for the other devices, under Quick connect's
+   list: the download page as a QR code, and the two pages as links that
+   open in the browser. qs is the code's size; returns the card's height.
+   The phone's page has it too. */
+float download_card(float x, float y, float w, float qs) {
+  const float pad = P(16), tx = x + pad + qs + P(20), tw = x + w - pad - tx;
+  const std::vector<std::string> lines =
+      wrap_text(tr("Free for Windows, Mac, Linux, Android, Nintendo Switch and PS5. Scan the code, or go to:"), F(13), tw);
+  const float lh = P(20), text_h = P(26) + lines.size() * lh + P(6) + 2 * P(24);
+  const float ch = std::max(qs, text_h) + 2 * pad;
+  card(x, y, w, ch);
+  download_qr(x + pad, y + (ch - qs) / 2, qs);
+  float ty = y + pad;
+  text(tx, ty, F(15), TEXT, fit_end(tr("chiral-ftp on your other devices"), F(15), tw - P(8)).c_str(), true);
+  ty += P(26);
+  for(const std::string &l : lines) {
+    text(tx, ty, F(13), MUTED, l.c_str());
+    ty += lh;
+  }
+  ty += P(6);
+  for(const char *page : {kDownloadPage, kReleasesPage}) {
+    const std::string shown = fit_end(page, F(13), tw);
+    const float lw = text_w(F(13), shown.c_str());
+    const Ctl c = control(tx, ty, lw, P(20));
+    text(tx, ty, F(13), c.hot ? GOLD_LIGHT : GOLD, shown.c_str());
+    if(c.hot || c.focus) hline(tx, ty + F(13) + P(1), lw, GOLD);
+    if(c.hit) platform::open_url((std::string("https://") + page).c_str());
+    ty += P(24);
+  }
+  return ch;
+}
+
 /* Quick connect: the devices nearby, each with Connect; then the wait for
    its answer, with the code to compare. */
 void page_quick(float x, float y, float w) {
@@ -852,7 +884,8 @@ void page_quick(float x, float y, float w) {
   char me[64];
   system_device_name(me, sizeof(me));
   text(x + P(4), y + P(8), F(13), MUTED, trf("This computer shows up on the others as \"{0}\".", {me}).c_str());
-  g_content_h = y + P(60);
+  y += P(44);
+  g_content_h = y + download_card(x, y, w, P(132)) + P(48);
 }
 
 void page_log(float x, float y, float w) {

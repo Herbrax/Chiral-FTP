@@ -19,6 +19,10 @@ BUILD_TOOLS=35.0.1
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
 version="${CHIRAL_VERSION:-$(sed -n 's/^VERSION := //p' "$here/Makefile")}"
+# Android installs an APK over another only when its versionCode is no lower,
+# so it follows VERSION the way the PS5's contentVersion does:
+# 1.2 -> 1002000, 1.2.1 -> 1002001.
+version_code="$(echo "$version" | awk -F. '{print $1 * 1000000 + $2 * 1000 + ($3 == "" ? 0 : $3)}')"
 windows=0
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) windows=1 ;; esac
 native() { if [[ $windows == 1 ]]; then cygpath -m "$1"; else echo "$1"; fi; }
@@ -50,6 +54,12 @@ sha256() {
 for abi in arm64-v8a armeabi-v7a x86_64; do
   if [[ ! -f "$here/.deps/android/$abi/lib/libssh2.a" ]]; then
     "$here/tools/build-android-deps.sh"
+    break
+  fi
+done
+for abi in arm64-v8a armeabi-v7a x86_64; do
+  if [[ ! -f "$here/.deps/android/$abi/lib/libssh.a" ]]; then
+    "$here/tools/build-android-libssh.sh"
     break
   fi
 done
@@ -110,7 +120,7 @@ ndk_build="$ndk/ndk-build"
     CHIRAL_ROOT="$(native "$here")" CHIRAL_VERSION="$version" -j8 )
 
 # 6. The APK.
-( cd "$proj" && sh ./gradlew assembleDebug --console=plain -q -PchiralVersion="$version" )
+( cd "$proj" && sh ./gradlew assembleDebug --console=plain -q -PchiralVersion="$version" -PchiralVersionCode="$version_code" )
 mkdir -p "$here/dist"
 apk="$here/dist/chiral-ftp-$version-android.apk"
 cp "$proj/app/build/outputs/apk/debug/app-debug.apk" "$apk"

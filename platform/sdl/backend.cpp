@@ -275,6 +275,10 @@ bool open_file(const char *path, int how) {
   return false;
 }
 
+bool to_background() {
+  return false;  // a window is minimised by its own title bar
+}
+
 void pointer_hand(bool on) {
   if(!g_cursors[on ? 1 : 0]) return;
   const SDL_SystemCursor want = on ? SDL_SYSTEM_CURSOR_HAND : SDL_SYSTEM_CURSOR_ARROW;

@@ -574,6 +574,10 @@ bool open_file(const char *path, int how) {
   return false;
 }
 
+bool to_background() {
+  return false;  // no home screen to step behind: the PS button does that
+}
+
 /* Not known: telling would take sceSystemServiceGetStatus, a call this
    title has never made (AGENT-NOTES §3.3: a symbol that links is not one a
    title may call). Until it is tried on the console, always in front. */

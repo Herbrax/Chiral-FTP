@@ -25,18 +25,19 @@
 /* The C library's malloc draws on the whole heap. */
 #define CHIRAL_BIG_ALLOC_VIA_MMAP 0
 
-/* A TV's bottom bar: the remote's own glyphs are still to come (roadmap,
-   section 14 item 9); until then the Switch's lettered buttons. A phone or
-   tablet has no bottom bar of buttons at all. */
+/* A TV's bottom bar draws the remote's buttons -- OK, Back, the d-pad --
+   or, once a gamepad is used, that pad's A, B, X and Y (platform_common.cpp,
+   draw::button). A phone or tablet has no bottom bar of buttons at all. */
 #define CHIRAL_BUTTONS_PLAYSTATION 0
 #define CHIRAL_BUTTONS_KEYBOARD 0
+#define CHIRAL_BUTTONS_REMOTE 1
 
 /* The text calls this machine "the console" for now (item 10 brings "this
    phone" and "the TV"). */
 #define CHIRAL_DEVICE_COMPUTER 0
 
-/* FTP only until libssh is built for Android (roadmap D7). */
-#define CHIRAL_HAS_SFTPD 0
+/* The SFTP server too: libssh on mbedTLS (tools/build-android-libssh.sh). */
+#define CHIRAL_HAS_SFTPD 1
 
 /* A phone or tablet gets the computer interface's controls and pages,
    arranged by the mobile shell (app/ui_mobile.inc) to fit whatever window

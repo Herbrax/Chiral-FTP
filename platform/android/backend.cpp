@@ -10,6 +10,7 @@
 
 #include "backend.h"
 #include "i18n.h"
+#include "platform.h"
 #include "platform_config.h"
 
 #include <SDL.h>
@@ -56,6 +57,10 @@ struct Finger {
   bool swiped = false;             // it was: nothing else of this touch counts
 };
 Finger g_finger;
+/* The remote's OK, held: the Menu (most remotes have no Menu button any
+   more). So OK counts when it comes up, as Back does in platform_common. */
+Uint64 g_ok_since = 0;
+bool g_ok_long_sent = false;
 float g_fling = 0;          // dp per second still to scroll after letting go
 Uint64 g_fling_ms = 0;
 Uint64 g_leave_at = 0;      // when a tap's hover should go away
@@ -103,7 +108,7 @@ Action key_action(SDL_Keycode k) {
   case SDLK_RIGHT: return ACT_RIGHT;
   case SDLK_RETURN: case SDLK_KP_ENTER: case SDLK_SELECT: return ACT_CROSS;  // SELECT: the remote's OK
   case SDLK_ESCAPE: case SDLK_AC_BACK: return ACT_CIRCLE;
-  case SDLK_SPACE: return ACT_SQUARE;
+  case SDLK_SPACE: case SDLK_AUDIOPLAY: return ACT_SQUARE;  // AUDIOPLAY: a remote's Play/Pause
   case SDLK_MENU: return ACT_OPTIONS;
   case SDLK_PAGEUP: case SDLK_AUDIOREWIND: return ACT_L2;
   case SDLK_PAGEDOWN: case SDLK_AUDIOFASTFORWARD: return ACT_R2;
@@ -212,6 +217,11 @@ void tick() {
     g_finger.long_done = true;
     click(true);
   }
+  if(g_ok_since && !g_ok_long_sent && t - g_ok_since >= LONG_PRESS_MS) {
+    g_ok_long_sent = true;
+    platform::detail::press(ACT_OPTIONS);
+    platform::detail::release(ACT_OPTIONS);
+  }
   if(g_fling != 0) {
     const float dt = (float)(t - g_fling_ms) / 1000.0f;
     g_fling_ms = t;
@@ -229,7 +239,8 @@ void tick() {
 }
 
 bool animating() {
-  return g_fling != 0 || g_leave_at || (g_finger.down && !g_finger.moved && !g_finger.long_done);
+  return g_fling != 0 || g_leave_at || (g_finger.down && !g_finger.moved && !g_finger.long_done) ||
+         (g_ok_since && !g_ok_long_sent);
 }
 
 void handle(const SDL_Event &e) {
@@ -243,11 +254,27 @@ void handle(const SDL_Event &e) {
       if(e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_KP_ENTER) key_enter();
       if(e.key.keysym.sym == SDLK_AC_BACK || e.key.keysym.sym == SDLK_ESCAPE) key_escape();
     } else if(!e.key.repeat) {
-      press(key_action(e.key.keysym.sym));
+      const SDL_Keycode k = e.key.keysym.sym;
+      // Back and Escape leave the glyphs alone: a gamepad's Back can arrive as a key.
+      if(k != SDLK_AC_BACK && k != SDLK_ESCAPE && key_action(k) != ACT_NONE) input_from_pad(false);
+      if(k == SDLK_SELECT) {
+        g_ok_since = SDL_GetTicks64();
+        g_ok_long_sent = false;
+      } else {
+        press(key_action(k));
+      }
     }
     break;
   case SDL_KEYUP:
-    if(!g_text_input) release(key_action(e.key.keysym.sym));
+    if(e.key.keysym.sym == SDLK_SELECT) {
+      if(g_ok_since && !g_ok_long_sent && !g_text_input) {
+        press(ACT_CROSS);
+        release(ACT_CROSS);
+      }
+      g_ok_since = 0;
+    } else if(!g_text_input) {
+      release(key_action(e.key.keysym.sym));
+    }
     break;
   case SDL_FINGERDOWN: finger_down(e.tfinger); break;
   case SDL_FINGERMOTION: finger_motion(e.tfinger); break;
@@ -263,7 +290,10 @@ void handle(const SDL_Event &e) {
     break;
   case SDL_MOUSEWHEEL: pointer_wheel(e.wheel.preciseY); break;
   case SDL_CONTROLLERDEVICEADDED: SDL_GameControllerOpen(e.cdevice.which); break;
-  case SDL_CONTROLLERBUTTONDOWN: press(pad_button(e.cbutton.button)); break;
+  case SDL_CONTROLLERBUTTONDOWN:
+    input_from_pad(true);
+    press(pad_button(e.cbutton.button));
+    break;
   case SDL_CONTROLLERBUTTONUP: release(pad_button(e.cbutton.button)); break;
   default: break;
   }
@@ -396,6 +426,23 @@ bool open_file(const char *path, int how) {
   return ok;
 }
 
+/* ChiralActivity.toBackground(): Back on the first screen, as on any
+   Android app -- the app goes behind the home screen and keeps running
+   (SDL_HINT_ANDROID_BLOCK_ON_PAUSE is off), servers and all. */
+bool to_background() {
+  JNIEnv *env = (JNIEnv *)SDL_AndroidGetJNIEnv();
+  jobject activity = (jobject)SDL_AndroidGetActivity();
+  if(!env || !activity) return false;
+  jclass cls = env->GetObjectClass(activity);
+  jmethodID m = env->GetMethodID(cls, "toBackground", "()V");
+  if(m) env->CallVoidMethod(activity, m);
+  const bool ok = m && !env->ExceptionCheck();
+  if(env->ExceptionCheck()) env->ExceptionClear();
+  env->DeleteLocalRef(cls);
+  env->DeleteLocalRef(activity);
+  return ok;
+}
+
 bool open_url(const char *url) {
   return SDL_OpenURL(url) == 0;
 }
@@ -452,12 +499,15 @@ void set_text_input(bool on) {
 }
 
 const char *about_file_manager() {
-  return N_("  File manager: copy, move and delete files on this phone.");
+  // Only the TV's layout shows the About this goes in; the phone's has its own.
+  return platform::windowed() ? N_("  File manager: copy, move and delete files on this phone.")
+                              : N_("  File manager: copy, move and delete files on the TV.");
 }
 
 int about_thanks(const char *const **lines) {
   static const char *const kThanks[] = {
-      "websrv and ftpsrv (John T\xc3\xb6rnblom), SDL2, libssh2, Mbed TLS, Dear ImGui, Noto Sans, IBM Plex Mono.",
+      "websrv and ftpsrv (John T\xc3\xb6rnblom), SDL2, libssh2, libssh, Mbed TLS, GNU libmicrohttpd,",
+      "Dear ImGui, Noto Sans, IBM Plex Mono.",
   };
   *lines = kThanks;
   return (int)(sizeof(kThanks) / sizeof(kThanks[0]));

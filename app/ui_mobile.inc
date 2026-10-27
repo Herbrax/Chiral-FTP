@@ -442,10 +442,59 @@ void up(Pane &p) {
   go_up(p);
 }
 
+/* The orders Sort by offers, each a field and a direction. */
+struct SortChoice {
+  const char *label;
+  int by;
+  bool desc;
+};
+const SortChoice kSortChoices[] = {
+    {N_("Name (A to Z)"), SORT_NAME, false}, {N_("Name (Z to A)"), SORT_NAME, true},
+    {N_("Newest first"), SORT_DATE, true},   {N_("Oldest first"), SORT_DATE, false},
+    {N_("Largest first"), SORT_SIZE, true},  {N_("Smallest first"), SORT_SIZE, false},
+    {N_("Type"), SORT_TYPE, false},
+};
+
+const char *sort_label() {
+  for(const SortChoice &c : kSortChoices) {
+    if(c.by == g_sort_by && c.desc == g_sort_desc) return tr(c.label);
+  }
+  return tr("Name (A to Z)");
+}
+
+/* Every open folder, put in the new order at once; what was marked stays
+   marked, and the cursor stays on the same file. */
+void resort_all() {
+  for(Pane *p : {&g.fm[0], &g.fm[1], &g.panes[0], &g.panes[1]}) {
+    if(p->path.empty()) continue;  // drives, or servers: in their own order
+    const std::string at = p->cursor < (int)p->entries.size() ? p->entries[p->cursor].name : "";
+    sort_entries(p->entries);
+    for(int i = 0; i < (int)p->entries.size(); i++) {
+      if(p->entries[i].name == at) p->cursor = i;
+    }
+  }
+}
+
+void sort_menu() {
+  std::vector<SheetItem> items;
+  for(const SortChoice &c : kSortChoices) {
+    const int by = c.by;
+    const bool desc = c.desc;
+    items.push_back({tr(c.label), [by, desc] {
+      g_sort_by = by;
+      g_sort_desc = desc;
+      save_prefs();
+      resort_all();
+    }});
+  }
+  sheet_open(tr("Sort by"), trf("Now: {0}", {sort_label()}), std::move(items));
+}
+
 void pane_menu(Pane &p) {
   Pane *pp = &p;
   std::vector<SheetItem> items;
   if(!p.path.empty()) {
+    items.push_back({trf("Sort: {0}", {sort_label()}), [] { sort_menu(); }});
     items.push_back({tr("New folder"), [pp] { make_folder(*pp); }});
     items.push_back({tr("Mark all"), [pp] { for(auto &e : pp->entries) if(!e.drive) pp->marked.insert(e.name); }});
     items.push_back({tr("Refresh"), [pp] { refresh(*pp); }});
@@ -861,20 +910,58 @@ void address_card(float x, float &y, float w, const std::string &addr, bool live
 }
 
 float page_server_m(float x, float y, float w) {
-  const bool running = server_running();
-  if(page_title(x, y, w, tr("FTP server"), running ? 1 : 0)) {
+  const bool running = server_running(), sftp = server_is_sftp();
+  if(page_title(x, y, w, CHIRAL_HAS_SFTPD ? tr("FTP / SFTP server") : tr("FTP server"), running ? 1 : 0)) {
     if(running) stop_server();
     else start_server();
   }
-  y += para(x, y, w, F(13), MUTED, tr("Other devices connect to this phone with FileZilla, a file manager or any FTP app.")) + P(16);
-  const std::string login = g_srv.ftp.anonymous ? std::string() : trf("Login: {0} / {1}", {g_srv.ftp.user, g_srv.ftp.pass});
+  y += para(x, y, w, F(13), MUTED,
+            CHIRAL_HAS_SFTPD ? tr("Other devices connect to this phone with FileZilla, Cyberduck, a file manager or any SFTP or FTP app.")
+                             : tr("Other devices connect to this phone with FileZilla, a file manager or any FTP app.")) + P(16);
+  const float pad = P(16), iw = w - 2 * pad;
+#if CHIRAL_HAS_SFTPD
+  // Which server: SFTP (encrypted) or FTP, chosen while it's off.
+  {
+    const char *protos[2] = {"SFTP", "FTP"};
+    const int pick = segmented(x, y, protos, 2, sftp ? 0 : 1, !running);
+    if(pick != (sftp ? 0 : 1)) {
+      g_srv.sftp = pick == 0;
+      save_server_prefs();
+    }
+    const char *note = running ? tr("Turn the server off to change it.")
+                       : sftp  ? tr("Encrypted: for most apps.")
+                               : tr("Not encrypted: for apps that only speak FTP.");
+    y += P(38) + P(8);
+    y += para(x, y, w, F(12), MUTED, note) + P(12);
+  }
+#endif
+  const std::string login = g_srv.ftp.anonymous && !sftp ? std::string() : trf("Login: {0} / {1}", {g_srv.ftp.user, g_srv.ftp.pass});
   address_card(x, y, w, server_address(), running, login.empty() ? nullptr : login.c_str(), false);
+#if CHIRAL_HAS_SFTPD
+  // The server's key, for checking the fingerprint a client shows the first time.
+  if(sftp) {
+    char fp[128] = "";
+    sftpd_fingerprint(fp, sizeof(fp));
+    const float kh = P(44);
+    rect(x, y, w, kh, CARD, P(10));
+    icon(IC_KEY, x + pad, y + (kh - P(16)) / 2, P(16), GOLD);
+    if(fp[0]) {
+      const char *label = tr("Key");
+      text(x + pad + P(26), y + (kh - F(12)) / 2, F(12), MUTED, label);
+      const float kx = x + pad + P(26) + text_w(F(12), label) + P(8);
+      mono(kx, y + (kh - F(12)) / 2, F(12), TEXT, fit(fp, F(12), x + w - pad - kx, true).c_str());
+    } else {
+      text(x + pad + P(26), y + (kh - F(12)) / 2, F(12), MUTED,
+           fit(tr("The key shows here once the server has started."), F(12), iw - P(26), false).c_str());
+    }
+    y += kh + P(16);
+  }
+#endif
 
   // Login, folder and port.
-  const float pad = P(16), iw = w - 2 * pad;
   float yy = y;
   const float fh = P(64);
-  float h = fh * 2 + P(56) + P(118) + P(64) + P(8);
+  float h = fh * 2 + (sftp ? 0 : P(56)) + P(118) + P(64) + P(8);
   card(x, y, w, h);
   yy += P(10);
   text(x + pad, yy, F(12), MUTED, tr("Username"));
@@ -897,13 +984,15 @@ float page_server_m(float x, float y, float w) {
     }
   }
   yy += fh;
-  hline(x + pad, yy, iw);
-  text(x + pad, yy + (P(56) - F(14)) / 2, F(14), TEXT, tr("Anonymous login"));
-  if(toggle(x + w - pad - P(52), yy + (P(56) - P(30)) / 2, g_srv.ftp.anonymous)) {
-    g_srv.ftp.anonymous = !g_srv.ftp.anonymous;
-    save_server_prefs();
+  if(!sftp) {  // SFTP always asks for the login
+    hline(x + pad, yy, iw);
+    text(x + pad, yy + (P(56) - F(14)) / 2, F(14), TEXT, tr("Anonymous login"));
+    if(toggle(x + w - pad - P(52), yy + (P(56) - P(30)) / 2, g_srv.ftp.anonymous)) {
+      g_srv.ftp.anonymous = !g_srv.ftp.anonymous;
+      save_server_prefs();
+    }
+    yy += P(56);
   }
-  yy += P(56);
   hline(x + pad, yy, iw);
   text(x + pad, yy + P(12), F(14), TEXT, tr("Shared folder"));
   icon(IC_FOLDER, x + pad, yy + P(40), P(16), GOLD);
@@ -928,11 +1017,15 @@ float page_server_m(float x, float y, float w) {
   hline(x + pad, yy, iw);
   text(x + pad, yy + (P(64) - F(14)) / 2, F(14), running ? MUTED : TEXT, tr("Port"));
   std::string port = std::to_string(server_port());
-  if(field("srv-ftp-port", x + w - pad - P(96), yy + (P(64) - P(36)) / 2, P(96), port, !running, false, true, true)) {
+  if(field(sftp ? "srv-sftp-port" : "srv-ftp-port", x + w - pad - P(96), yy + (P(64) - P(36)) / 2, P(96), port, !running, false, true, true)) {
     const int p = atoi(port.c_str());
     if(p < 1 || p > 65535) show_toast(tr("A port is a number from 1 to 65535"), true);
     else {
-      g_srv.ftp.port = (unsigned short)p;
+#if CHIRAL_HAS_SFTPD
+      if(sftp) g_srv.sftp_port = p;
+      else
+#endif
+        g_srv.ftp.port = (unsigned short)p;
       save_server_prefs();
     }
   }
@@ -1063,6 +1156,7 @@ float page_quick_m(float x, float y, float w) {
   char me[64];
   system_device_name(me, sizeof(me));
   y += para(x + P(4), y + P(6), w - P(8), F(12), MUTED, trf("This phone shows up on the others as \"{0}\".", {me}).c_str()) + P(20);
+  y += download_card(x, y, w, std::min(P(112), w * 0.32f)) + P(20);
   return y;
 }
 
@@ -1250,11 +1344,12 @@ float page_settings_m(float x, float y, float w) {
                               N_("  File manager: copy, move and delete files on this phone."),
                               N_("  FTP / SFTP client: up to 30 transfers at once with your laptop, PC or NAS.")};
     for(const char *f : features) ay += para(x + pad, ay, iw, F(12), MUTED, tr(f)) + P(2);
-    ay += para(x + pad, ay + P(6), iw, F(12), TEXT, tr("chiral-ftp runs on PS5, Nintendo Switch, PC, Mac and Android.")) + P(16);
+    ay += para(x + pad, ay + P(6), iw, F(12), TEXT, tr("chiral-ftp runs on Windows, Mac, Linux, Android, Nintendo Switch and PS5. Get it at:")) + P(8);
+    ay += para(x + pad, ay, iw, F(12), GOLD, "chiral-ftp.com") + P(16);
     ay += para(x + pad, ay, iw, F(14), GOLD, tr("Made by Herbrax (Simo Hakim)"), true) + P(4);
     ay += para(x + pad, ay, iw, F(12), MUTED, "simohakim.com  \xc2\xb7  linkedin.com/in/simo-hakim") + P(8);
     ay += para(x + pad, ay, iw, F(12), TEXT, tr("Found a bug? Please report it on GitHub. Pull requests are welcome.")) + P(2);
-    ay += para(x + pad, ay, iw, F(12), GOLD, "github.com/Herbrax/chiral-ftp") + P(14);
+    ay += para(x + pad, ay, iw, F(12), GOLD, "github.com/Herbrax/Chiral-FTP") + P(14);
     ay += para(x + pad, ay, iw, F(12), TEXT, tr("Built with open-source work by others, thank you:"), true) + P(2);
     const char *const *thanks = nullptr;
     for(int i = 0, n = platform::about_thanks(&thanks); i < n; i++) ay += para(x + pad, ay, iw, F(12), MUTED, thanks[i]);
@@ -1358,7 +1453,7 @@ void page_view(float x, float y, float w, float h) {
   float bottom = top;
   float py = top;
   if(g_tab == TAB_SHARE) {
-    const char *views[2] = {tr("FTP server"), tr("Web app")};
+    const char *views[2] = {CHIRAL_HAS_SFTPD ? tr("Server") : tr("FTP server"), tr("Web app")};
     const float sw = std::min(w, segmented_w(views, 2));
     (void)sw;
     g_share_view = segmented(x, py, views, 2, g_share_view);
@@ -1647,6 +1742,7 @@ bool key(Action a) {
       if(!p.marked.empty()) p.marked.clear();
       else if(a == ACT_CIRCLE && !p.path.empty() && !(p.remote && p.path == "/")) up(p);
       else if(g_tab == TAB_CLIENT) go_tab(TAB_FILES);
+      else if(a == ACT_CIRCLE && p.path.empty()) platform::to_background();  // the first screen: as any app, behind the home screen
     } else {
       go_tab(TAB_FILES);
     }

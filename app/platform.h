@@ -107,6 +107,8 @@ bool open_url(const char *url);
 // A file, to the system's other apps (backend.h): Android only so far.
 enum OpenHow { OPEN_VIEW, OPEN_CHOOSE, OPEN_SHARE };
 bool open_file(const char *path, OpenHow how);
+// Behind the home screen, still running (backend.h): Android only.
+bool to_background();
 // In front and being drawn (backend.h): what quick connect runs during.
 bool in_foreground();
 // The clipboard and the system's folder chooser (backend.h).

@@ -194,7 +194,7 @@ and nothing has to be set up.
 
    | On a console (PS5) | On a computer (Mac) |
    |---|---|
-   | ![Quick connect on the PS5: the Mac, the Switch and an Android phone nearby](docs/screenshots/ps5-quick-connect.png) | ![Quick connect on a Mac: the Switch, the PS5 and an Android phone nearby](docs/screenshots/computer-quick-connect.png) |
+   | ![Quick connect on the PS5: the Mac, the Switch and an Android device nearby](docs/screenshots/ps5-quick-connect.png) | ![Quick connect on a Mac: the Switch, the PS5 and an Android device nearby](docs/screenshots/computer-quick-connect.png) |
 
 2. **Pick one and press Connect** (Cross on the PS5, A on the Switch). Your
    screen shows a 4-digit code while it waits.
@@ -287,7 +287,7 @@ client are in the web app, in your browser.
 | **Quick connect**<br>![The Quick connect page](docs/screenshots/computer-quick-connect.png) | **Settings**<br>![The Settings page](docs/screenshots/computer-settings.png) |
 | **Quick connect: asking**<br>![The Mac asking the Switch](docs/screenshots/computer-quick-connect-asking.png) | **Quick connect: being asked**<br>![The Mac asked by the PS5](docs/screenshots/computer-quick-connect-request.png) |
 
-### On an Android phone
+### On an Android device
 
 Tabs at the bottom for the file manager, the client, the server and Quick
 connect. A foldable or a tablet shows two panes side by side, and an
@@ -295,8 +295,8 @@ Android TV gets the consoles' layout, used with the remote.
 
 | | | |
 |---|---|---|
-| **Files**<br>![The file manager in a Download folder](docs/screenshots/android-files.png) | **A file's menu** (long-press)<br>![Open, Open with, Share, Select, Cut, Copy, Rename, Delete](docs/screenshots/android-file-menu.png) | **FTP / SFTP client**<br>![The phone above, a NAS below, both in Movies](docs/screenshots/android-client.png) |
-| **FTP / SFTP server**<br>![The SFTP server running, with its address and key](docs/screenshots/android-server.png) | **Quick connect**<br>![A TV, a Switch and a PS5 nearby, and the download QR code](docs/screenshots/android-quick-connect.png) | **Quick connect: asking**<br>![The phone asking the PS5, code 5043](docs/screenshots/android-quick-connect-asking.png) |
+| **Files**<br>![The file manager in a Download folder](docs/screenshots/android-files.png) | **A file's menu** (long-press)<br>![Open, Open with, Share, Select, Cut, Copy, Rename, Delete](docs/screenshots/android-file-menu.png) | **FTP / SFTP client**<br>![This device above, a NAS below, both in Movies](docs/screenshots/android-client.png) |
+| **FTP / SFTP server**<br>![The SFTP server running, with its address and key](docs/screenshots/android-server.png) | **Quick connect**<br>![A TV, a Switch and a PS5 nearby, and the download QR code](docs/screenshots/android-quick-connect.png) | **Quick connect: asking**<br>![The Android device asking the PS5, code 5043](docs/screenshots/android-quick-connect-asking.png) |
 
 ### The web app, in a browser
 

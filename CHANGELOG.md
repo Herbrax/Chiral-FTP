@@ -11,7 +11,7 @@ connect.
 
 | Files | Client | Quick connect |
 |---|---|---|
-| ![The file manager on a phone](docs/screenshots/android-files.png) | ![The phone and a NAS, both in Movies](docs/screenshots/android-client.png) | ![A TV, a Switch and a PS5 nearby, and the download QR code](docs/screenshots/android-quick-connect.png) |
+| ![The file manager on an Android device](docs/screenshots/android-files.png) | ![An Android device and a NAS, both in Movies](docs/screenshots/android-client.png) | ![A TV, a Switch and a PS5 nearby, and the download QR code](docs/screenshots/android-quick-connect.png) |
 
 - **Everything the other versions do**: the **SFTP or FTP server**, the
   **web app**, the **file manager** and the **FTP / SFTP client** with
@@ -65,7 +65,7 @@ connect.
 - **Quick connect shows where to get chiral-ftp** for your other devices: a
   QR code to scan with a phone, and the download pages
   (chiral-ftp.com/download and the GitHub releases).
-- **Android phones and TVs show up in Quick connect** with a phone or a TV
+- **Android devices show up in Quick connect** with a phone or a TV
   icon, as "Android" and "Android TV".
 - **About** lists every platform chiral-ftp runs on, with links to
   chiral-ftp.com and the GitHub repository.

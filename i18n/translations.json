@@ -5444,6 +5444,17 @@
    "zh": "chiral-ftp 可在 Windows、Mac、Linux、Android、Nintendo Switch 和 PS5 上运行。下载地址：",
    "ru": "chiral-ftp работает на Windows, Mac, Linux, Android, Nintendo Switch и PS5. Скачать:",
    "ar": "يعمل chiral-ftp على Windows وMac وLinux وAndroid وNintendo Switch وPS5. نزّله من:"
+  },
+  {
+   "en": "This device shows up on the others as \"{0}\".",
+   "es": "Este dispositivo aparece en los demás como «{0}».",
+   "fr": "Cet appareil apparaît sur les autres sous le nom « {0} ».",
+   "it": "Questo dispositivo appare sugli altri come \"{0}\".",
+   "ja": "このデバイスは他のデバイスに「{0}」と表示されます。",
+   "ko": "이 기기는 다른 기기에 \"{0}\"(으)로 표시됩니다.",
+   "zh": "本设备在其他设备上显示为“{0}”。",
+   "ru": "Другие устройства видят это устройство как «{0}».",
+   "ar": "يظهر هذا الجهاز على الأجهزة الأخرى باسم \"{0}\"."
   }
  ]
 }

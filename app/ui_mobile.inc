@@ -1155,7 +1155,7 @@ float page_quick_m(float x, float y, float w) {
   }
   char me[64];
   system_device_name(me, sizeof(me));
-  y += para(x + P(4), y + P(6), w - P(8), F(12), MUTED, trf("This phone shows up on the others as \"{0}\".", {me}).c_str()) + P(20);
+  y += para(x + P(4), y + P(6), w - P(8), F(12), MUTED, trf("This device shows up on the others as \"{0}\".", {me}).c_str()) + P(20);
   y += download_card(x, y, w, std::min(P(112), w * 0.32f)) + P(20);
   return y;
 }

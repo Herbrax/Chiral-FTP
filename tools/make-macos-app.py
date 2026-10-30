@@ -44,6 +44,34 @@ def minos(path):
     return (int(m.group(1)), int(m.group(2))) if m else (11, 0)
 
 
+def rpaths(path):
+    """The folders a Mach-O file searches for an @rpath library."""
+    return re.findall(r'cmd LC_RPATH\s+cmdsize \d+\s+path (.+?) \(offset', run('otool', '-l', path))
+
+
+def resolve(dep, loader):
+    """The real path of dep, as loader (a file outside the bundle) names it;
+    None when it can't be found. Some Homebrew libraries name each other
+    relatively: @rpath/libbrotlicommon.1.dylib."""
+    if not dep.startswith('@'):
+        return os.path.realpath(dep)
+    here = os.path.dirname(os.path.realpath(loader))
+    if dep.startswith('@loader_path/'):
+        candidates = [os.path.join(here, dep[len('@loader_path/'):])]
+    elif dep.startswith('@rpath/'):
+        name = dep[len('@rpath/'):]
+        # Beside the library last: not on its search path, but where Homebrew
+        # keeps a formula's own libraries if it was built without one.
+        candidates = [os.path.join(p.replace('@loader_path', here), name) for p in rpaths(loader)]
+        candidates.append(os.path.join(here, name))
+    else:
+        return None
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            return os.path.realpath(candidate)
+    return None
+
+
 def collect(binary, extra):
     """Every non-system dylib reachable from the binary (and from extra),
     keyed by real path, each with the file name it will have in the bundle."""
@@ -52,23 +80,26 @@ def collect(binary, extra):
     for real, name in ((os.path.realpath(p), n) for n, p in extra.items()):
         found[real] = name
     while todo:
-        for dep in linked(todo.pop()):
+        loader = todo.pop()
+        for dep in linked(loader):
             if dep.startswith(SYSTEM_PREFIXES):
                 continue
-            if dep.startswith('@'):
-                sys.exit('unexpected relative load path %s; bundle it by hand' % dep)
-            real = os.path.realpath(dep)
+            real = resolve(dep, loader)
+            if not real:
+                sys.exit('%s loads %s, which was not found; bundle it by hand' % (loader, dep))
             if real not in found:
                 found[real] = os.path.basename(dep)
                 todo.append(real)
     return found
 
 
-def relink(path, found, prefix):
-    """Points each bundled dependency of path at its copy in Frameworks."""
+def relink(path, found, prefix, source):
+    """Points each bundled dependency of path, a copy of source, at its copy
+    in Frameworks. Relative names are looked up from source: beside the copy,
+    the other libraries may not have arrived yet."""
     args = []
     for dep in linked(path):
-        real = os.path.realpath(dep) if not dep.startswith('@') else None
+        real = None if dep.startswith(SYSTEM_PREFIXES) else resolve(dep, source)
         if real in found:
             args += ['-change', dep, prefix + found[real]]
     if args:
@@ -161,10 +192,10 @@ def main():
         shutil.copy2(real, dst)
         os.chmod(dst, 0o755)
         run('install_name_tool', '-id', '@rpath/' + name, dst)
-        relink(dst, found, '@loader_path/')
+        relink(dst, found, '@loader_path/', real)
         minimum = max(minimum, minos(real))
         print('  bundled %s' % name)
-    relink(exe, found, '@executable_path/../Frameworks/')
+    relink(exe, found, '@executable_path/../Frameworks/', binary)
 
     make_icon(os.path.join(resources, 'chiral-ftp.icns'))
     with open(os.path.join(contents, 'Info.plist'), 'wb') as f:

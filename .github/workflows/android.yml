@@ -56,8 +56,11 @@ jobs:
             .deps/android
             .deps/src
           key: android-${{ hashFiles('tools/build-android-deps.sh', 'tools/build-android-libssh.sh', 'tools/build-android-mhd.sh') }}
+      # chmod: a commit made on Windows can lose the scripts' executable bit.
       - name: Build
-        run: ./tools/build-android.sh
+        run: |
+          chmod +x tools/*.sh
+          ./tools/build-android.sh
       - uses: actions/upload-artifact@v4
         with:
           name: chiral-ftp-${{ env.VERSION }}-android

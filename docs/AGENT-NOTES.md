@@ -151,6 +151,13 @@ sits under every SD access too, so test the SD card after touching it.
   `.deps/src`; the pinned commit and a clean tree for
   `ps5/.deps/lapy/PS5-Lapy-JB-Daemon-*`), so copying them from another
   checkout is safe.
+- **The Lapy commit has no home of its own (2026-10-30):** the boilerplate
+  fetched it from `blackbearreloaded/PS5-Lapy-JB-Daemon`, which is no longer
+  public, so a clean build failed asking for a GitHub login.
+  `ps5/tools/build-lapy-helper.py` now fetches the same pinned commit
+  (`57fcc19`) from `mpereiraesaa`'s fork. That fork's default branch doesn't
+  contain it (it is 5 commits ahead of it), so GitHub appears to serve it from
+  the storage forks share, which may not last. Keep a copy.
 
 ### 2.2 On Windows, with no admin rights and no virtualization
 

@@ -1,6 +1,6 @@
 # The Android APK (phones, tablets, foldables and TVs), on Linux. Runs on a
-# push to dev, on a version tag and by hand; the APK is attached to the run,
-# and to the release when the run comes from a tag.
+# push to dev and by hand, with the APK attached to the run; New Release
+# (new-release.yml) runs it to make a release.
 #
 # The APK is debug-signed (tools/build-android.sh). Android only installs an
 # update signed with the same key, and a fresh runner invents a new key every
@@ -13,15 +13,26 @@ on:
       version:
         description: "Version to build, such as 1.2.1 (empty: the Makefile's)"
         type: string
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: ""
   push:
     branches: [dev]
-    tags: ["v*"]
-    paths-ignore: ["**.md", "docs/**", "tools/latest-version.py", ".github/workflows/latest-version.yml"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "tools/latest-version.py"
+      - "tools/release-notes.py"
+      - ".github/workflows/latest-version.yml"
+      - ".github/workflows/new-release.yml"
+# A newer push replaces this build; a release or a run by hand is never replaced.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  group: android-${{ github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 permissions:
-  contents: write
+  contents: read
 jobs:
   android:
     runs-on: ubuntu-24.04
@@ -35,7 +46,12 @@ jobs:
         run: |
           sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$sdkmanager" --licenses > /dev/null || true
-          "$sdkmanager" "ndk;28.2.13676358" "cmake;3.31.6" "platforms;android-35" "build-tools;35.0.1" > /dev/null
+          for attempt in 1 2 3; do
+            "$sdkmanager" "ndk;28.2.13676358" "cmake;3.31.6" "platforms;android-35" "build-tools;35.0.1" && exit 0
+            echo "sdkmanager failed (attempt $attempt)"
+            sleep 20
+          done
+          exit 1
       - name: Version
         env:
           INPUT_VERSION: ${{ inputs.version }}
@@ -66,9 +82,3 @@ jobs:
           name: chiral-ftp-${{ env.VERSION }}-android
           path: dist/chiral-ftp-*-android.apk
           if-no-files-found: error
-      - name: Attach to the release
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: bash tools/ci-attach-release.sh dist/chiral-ftp-*-android.apk

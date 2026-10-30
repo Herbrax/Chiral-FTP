@@ -806,12 +806,21 @@ the banner, which exists because it is the one thing the user can change.
   `RELEASE_NOTES.md` from the version's CHANGELOG section (pictures get
   absolute raw.githubusercontent.com addresses).
 - **GitHub builds every platform** (`.github/workflows/`: `ps5`, `switch`,
-  `mac`, `windows`, `linux-appimage`, `android`) on a push to `dev`, on a `v*`
-  tag and by hand. A tag's files go to a release that the first platform to
-  finish creates as a **prerelease** (`tools/ci-attach-release.sh`); nothing
-  counts as released until a person checks all the files, sets the notes
-  (`RELEASE_NOTES.md`) and turns it into a full release. The tag must match
-  `VERSION`.
+  `mac`, `windows`, `linux-appimage`, `android`) on a push to `dev` and by
+  hand; the files stay on the run. Pushing a tag builds nothing.
+- **Releases come from the New Release workflow** (`new-release.yml`): a
+  version, a tick per platform, and optionally "publish straight away"
+  (otherwise a draft). It builds the ticked platforms with the workflows above,
+  and only if all succeed makes the tag and one release with every file, notes
+  (`tools/release-notes.py`, from the version's CHANGELOG section) and checksums.
+  The tag is on a commit made for it that sets `VERSION` (and `contentVersion`
+  if the release has a PS5 file); the branch itself isn't touched, so it keeps
+  its old `VERSION` until someone moves it on. A release for only some platforms
+  must not be GitHub's "latest": the download page and the PS5 homebrew catalog
+  would find the rest missing. Published straight away it isn't; publishing a
+  draft by hand, that box has to be unticked (the run's summary says so). It
+  refuses a version whose tag exists; to add a file to an existing release,
+  build it by hand and upload it on the release's page.
 - **A build can be given a version by hand:** Run workflow, type `1.2.1`.
   `tools/ci-version.sh` rewrites the `VERSION` line in that run's checkout, so
   everything follows it; nothing is committed. Everything must keep reading

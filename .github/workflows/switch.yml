@@ -1,7 +1,6 @@
-# The Switch .nro, in devkitPro's own container. Runs on a push to dev, on a
-# version tag and by hand; the .nro is attached to the run, and to the release
-# when the run comes from a tag. Attaching is a job of its own, outside the
-# container, because that is where gh is.
+# The Switch .nro, in devkitPro's own container. Runs on a push to dev and by
+# hand, with the .nro attached to the run; New Release (new-release.yml) runs it
+# to make a release.
 name: Switch
 on:
   workflow_dispatch:
@@ -9,15 +8,26 @@ on:
       version:
         description: "Version to build, such as 1.2.1 (empty: the Makefile's)"
         type: string
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: ""
   push:
     branches: [dev]
-    tags: ["v*"]
-    paths-ignore: ["**.md", "docs/**", "tools/latest-version.py", ".github/workflows/latest-version.yml"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "tools/latest-version.py"
+      - "tools/release-notes.py"
+      - ".github/workflows/latest-version.yml"
+      - ".github/workflows/new-release.yml"
+# A newer push replaces this build; a release or a run by hand is never replaced.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  group: switch-${{ github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 permissions:
-  contents: write
+  contents: read
 jobs:
   switch:
     runs-on: ubuntu-24.04
@@ -34,7 +44,6 @@ jobs:
             dkp-toolchain-vars switch-ntfs-3g switch-lwext4
       - uses: actions/checkout@v4
       - name: Version
-        id: version
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: bash tools/ci-version.sh
@@ -51,23 +60,3 @@ jobs:
           name: chiral-ftp-${{ env.VERSION }}-switch
           path: dist/chiral-ftp/chiral-ftp.nro
           if-no-files-found: error
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-  attach:
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: switch
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - name: Version
-        env:
-          INPUT_VERSION: ${{ inputs.version }}
-        run: bash tools/ci-version.sh
-      - uses: actions/download-artifact@v4
-        with:
-          name: chiral-ftp-${{ needs.switch.outputs.version }}-switch
-      - name: Attach to the release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: bash tools/ci-attach-release.sh chiral-ftp.nro

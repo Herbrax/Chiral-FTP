@@ -4,18 +4,18 @@
 # On its own branch so that main's history stays free of it (.gitignore keeps
 # local copies out); a commit only happens when the file really changes.
 #
-# Runs when a release changes and when a platform's build ends, since files
-# arrive after the release exists. A few hours' schedule catches anything else,
-# such as a file uploaded by hand. GitHub only honours the schedule and the
-# workflow_run from main; until this is merged, a push to dev that touches it
-# (or the script) is what runs it.
+# Runs when a release changes and when New Release ends: GitHub doesn't report a
+# release a workflow made to other workflows, so that needs saying separately. A
+# few hours' schedule catches anything else, such as a file uploaded by hand.
+# GitHub only honours the schedule and the workflow_run from main; until this is
+# merged, a push to dev that touches it (or the script) is what runs it.
 name: Latest version
 on:
   workflow_dispatch:
   release:
     types: [published, released, edited, unpublished, deleted]
   workflow_run:
-    workflows: [PS5, Switch, Mac, Windows, Linux AppImage, Android]
+    workflows: [New Release]
     types: [completed]
   schedule:
     - cron: "17 */6 * * *"

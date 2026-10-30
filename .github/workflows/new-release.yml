@@ -1,0 +1,198 @@
+# Makes a release: Actions > New Release > Run workflow, with the version and a
+# tick for each platform it is for.
+#
+# The request is checked first, then the ticked platforms are built with their
+# own workflows. Only if all of them succeed is anything created: the tag, then
+# one release holding every file, its notes from CHANGELOG.md and its checksums.
+# A failed build leaves nothing behind; fix it and run this again.
+#
+# The tag points at a commit made for it on top of the branch being released,
+# which sets VERSION to this version (and the PS5's contentVersion, for a release
+# with a PS5 file). That commit is on the tag only: the branch isn't touched, so
+# a branch still being worked on can't conflict. Move its VERSION on when you like.
+#
+# A release for some of the platforms is not marked as GitHub's "latest":
+# whatever reads that (download links, the PS5 homebrew catalog) would find the
+# other platforms' files missing. latest_version.json takes each platform's
+# newest file from any published release, so it lists these anyway.
+name: New Release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version, such as 1.3 or 1.3.1"
+        required: true
+        type: string
+      ps5:
+        description: PS5
+        type: boolean
+        default: false
+      switch:
+        description: Switch
+        type: boolean
+        default: false
+      mac:
+        description: Mac
+        type: boolean
+        default: false
+      windows:
+        description: Windows
+        type: boolean
+        default: false
+      linux:
+        description: Linux (x86_64 and ARM)
+        type: boolean
+        default: false
+      android:
+        description: Android
+        type: boolean
+        default: false
+      publish:
+        description: Publish straight away (otherwise a draft, to read first)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the request
+        id: check
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          ANY_PLATFORM: ${{ inputs.ps5 || inputs.switch || inputs.mac || inputs.windows || inputs.linux || inputs.android }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          version="${INPUT_VERSION#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Version '$INPUT_VERSION' isn't usable: write MAJOR.MINOR or MAJOR.MINOR.PATCH, such as 1.3.1"
+            exit 1
+          fi
+          if [[ "$ANY_PLATFORM" != true ]]; then
+            echo "::error::Tick at least one platform."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "::error::v$version already exists. Pick another version, or delete that release and its tag first."
+            exit 1
+          fi
+          if ! grep -qxF "## $version" CHANGELOG.md; then
+            if [[ "$PUBLISH" == true ]]; then
+              echo "::error::CHANGELOG.md has no '## $version' section, so there are no notes to publish. Add one, or make a draft."
+              exit 1
+            fi
+            echo "::warning::CHANGELOG.md has no '## $version' section: the draft's notes need writing by hand."
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+  ps5:
+    needs: prepare
+    if: inputs.ps5
+    uses: ./.github/workflows/ps5.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+  switch:
+    needs: prepare
+    if: inputs.switch
+    uses: ./.github/workflows/switch.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+  mac:
+    needs: prepare
+    if: inputs.mac
+    uses: ./.github/workflows/mac.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+  windows:
+    needs: prepare
+    if: inputs.windows
+    uses: ./.github/workflows/windows.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+  linux:
+    needs: prepare
+    if: inputs.linux
+    uses: ./.github/workflows/linux-appimage.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+  android:
+    needs: prepare
+    if: inputs.android
+    uses: ./.github/workflows/android.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+    secrets: inherit
+  release:
+    needs: [prepare, ps5, switch, mac, windows, linux, android]
+    # Platforms not ticked are "skipped", which would otherwise skip this too.
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      WITH_PS5: ${{ inputs.ps5 }}
+      EVERY_PLATFORM: ${{ inputs.ps5 && inputs.switch && inputs.mac && inputs.windows && inputs.linux && inputs.android }}
+      PUBLISH: ${{ inputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: chiral-ftp-*
+          path: release-files
+          merge-multiple: true
+      - name: The tag, on a commit with this version in it
+        env:
+          INPUT_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          # Already there when this job is being run again.
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" > /dev/null; then
+            echo "v$VERSION is already tagged."
+            exit 0
+          fi
+          bash tools/ci-version.sh
+          # Left alone without a PS5 file: the homebrew catalog reads this at
+          # the tag, and must not be told of an update it can't download.
+          if [[ "$WITH_PS5" == true ]]; then
+            python3 tools/content-version.py --sync "$VERSION" platform/ps5/sce_sys/param.json
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Makefile platform/ps5/sce_sys/param.json
+          git diff --cached --quiet || git commit -m "Release $VERSION"
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+      - name: Checksums and notes
+        working-directory: release-files
+        run: |
+          sha256sum -- * > ../SHA256SUMS
+          mv ../SHA256SUMS .
+          python3 ../tools/release-notes.py --allow-missing ../CHANGELOG.md "$VERSION" RELEASE_NOTES.md SHA256SUMS
+          ls -l
+      - name: The release
+        run: |
+          args=(--verify-tag --title "Chiral-FTP $VERSION" --notes-file release-files/RELEASE_NOTES.md)
+          if [[ "$PUBLISH" != true ]]; then
+            args+=(--draft)
+          elif [[ "$EVERY_PLATFORM" == true ]]; then
+            args+=(--latest)
+          else
+            args+=(--latest=false)
+          fi
+          gh release create "v$VERSION" "${args[@]}" release-files/*
+          {
+            echo "## Chiral-FTP $VERSION"
+            if [[ "$PUBLISH" == true ]]; then
+              echo "Published."
+            elif [[ "$EVERY_PLATFORM" == true ]]; then
+              echo "A draft is waiting on the Releases page. It has every platform: when you publish it, leave **Set as the latest release** ticked."
+            else
+              echo "A draft is waiting on the Releases page. It doesn't have every platform: when you publish it, **untick Set as the latest release**, or the download links and the PS5 catalog will find files missing."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

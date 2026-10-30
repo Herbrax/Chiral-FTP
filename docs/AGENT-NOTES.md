@@ -798,6 +798,25 @@ the banner, which exists because it is the one thing the user can change.
   app zipped with `ditto` (keeps the bundle's signature), `SHA256SUMS`, and
   `RELEASE_NOTES.md` from the version's CHANGELOG section (pictures get
   absolute raw.githubusercontent.com addresses).
+- **GitHub builds every platform** (`.github/workflows/`: `ps5`, `switch`,
+  `mac`, `windows`, `linux-appimage`, `android`) on a push to `dev`, on a `v*`
+  tag and by hand. A tag's files go to a release that the first platform to
+  finish creates as a **prerelease** (`tools/ci-attach-release.sh`); nothing
+  counts as released until a person checks all the files, sets the notes
+  (`RELEASE_NOTES.md`) and turns it into a full release. The tag must match
+  `VERSION`.
+- **A build can be given a version by hand:** Run workflow, type `1.2.1`.
+  `tools/ci-version.sh` rewrites the `VERSION` line in that run's checkout, so
+  everything follows it; nothing is committed. Everything must keep reading
+  `VERSION` for this to hold. GitHub only lists "Run workflow" for a workflow
+  that is also on `main`.
+- **`latest_version.json`** (`tools/latest-version.py`) is the website's list
+  of the newest download per platform. `latest-version.yml` commits it to the
+  `release-data` branch, never to `main`. It skips prereleases. The schedule
+  and the "when a build ends" trigger only work once the workflow is on `main`.
+- **The CI APK's signature:** without the `ANDROID_DEBUG_KEYSTORE` secret
+  (a keystore, base64) every run signs with a new key, and Android refuses to
+  update an earlier install with it.
 - **The PS5's `contentVersion` follows `VERSION`** (`tools/content-version.py`:
   1.1 → `01.001.000`, 1.1.2 → `01.001.002`): consoles and the PS5 homebrew
   catalog find updates by it, not by the tag. `make PLATFORM=ps5` writes it

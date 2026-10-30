@@ -1,0 +1,56 @@
+# Keeps latest_version.json up to date on the release-data branch, for the
+# website:
+#   https://raw.githubusercontent.com/Herbrax/Chiral-FTP/release-data/latest_version.json
+# On its own branch so that main's history stays free of it (.gitignore keeps
+# local copies out); a commit only happens when the file really changes.
+#
+# Runs when a release changes and when a platform's build ends, since files
+# arrive after the release exists. A few hours' schedule catches anything else,
+# such as a file uploaded by hand. GitHub only honours the schedule and the
+# workflow_run from main; until this is merged, a push to dev that touches it
+# (or the script) is what runs it.
+name: Latest version
+on:
+  workflow_dispatch:
+  release:
+    types: [published, released, edited, unpublished, deleted]
+  workflow_run:
+    workflows: [PS5, Switch, Mac, Windows, Linux AppImage, Android]
+    types: [completed]
+  schedule:
+    - cron: "17 */6 * * *"
+  push:
+    branches: [dev]
+    paths: ["tools/latest-version.py", ".github/workflows/latest-version.yml"]
+concurrency:
+  group: latest-version
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: The release-data branch, created the first time
+        run: |
+          if git fetch --depth=1 origin release-data; then
+            git worktree add -B release-data .release-data FETCH_HEAD
+          else
+            git worktree add --orphan -b release-data .release-data
+          fi
+      - name: Write the file
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/latest-version.py .release-data/latest_version.json
+      - name: Commit it if it changed
+        working-directory: .release-data
+        run: |
+          git add latest_version.json
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "latest_version.json: $(python3 -c "import json; print(json.load(open('latest_version.json'))['latest_version'])")"
+          git push origin release-data

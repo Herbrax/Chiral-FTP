@@ -10,6 +10,8 @@ chiral-ftp.nacp
 chiral-ftp.elf
 chiral-ftp.map
 chiral-ftp.lst
+latest_version.json
+.release-data/
 data/
 tests/test_listparse
 ps5/.deps/

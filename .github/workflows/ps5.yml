@@ -1,0 +1,64 @@
+# The PS5 zip, with the toolchain of ps5-native-app-boilerplate (ps5/), on
+# Linux. Runs on a push to dev, on a version tag and by hand; the zip is
+# attached to the run, and to the release when the run comes from a tag.
+name: PS5
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, such as 1.2.1 (empty: the Makefile's)"
+        type: string
+  push:
+    branches: [dev]
+    tags: ["v*"]
+    paths-ignore: ["**.md", "docs/**", "tools/latest-version.py", ".github/workflows/latest-version.yml"]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+permissions:
+  contents: write
+jobs:
+  ps5:
+    runs-on: ubuntu-24.04
+    env:
+      USE_CCACHE: 0  # the boilerplate's own tools: nothing to gain on a fresh machine
+    steps:
+      - uses: actions/checkout@v4
+      - name: Packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 lld-18 llvm-18 ninja-build cmake make curl wget unzip python3
+          # Unversioned names (clang, llvm-ar, ld.lld), which the scripts also look for.
+          echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
+      - name: Version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: bash tools/ci-version.sh
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ps5/.deps
+            .deps/ps5
+            .deps/build-ps5
+            .deps/src
+          key: ps5-${{ hashFiles('tools/build-ps5-deps.sh', 'ps5/tools/setup-native-dependencies.sh') }}
+      - name: The boilerplate's SDK, tools and libc.prx
+        working-directory: ps5
+        run: |
+          bash tools/setup-native-dependencies.sh
+          make libc
+      - name: Build
+        run: make PLATFORM=ps5 VERSION="$VERSION"
+      - name: Name the zip
+        run: cp "dist/chiral-ftp-$VERSION.zip" "dist/chiral-ftp-ps5-$VERSION.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chiral-ftp-${{ env.VERSION }}-ps5
+          path: dist/chiral-ftp-ps5-*.zip
+          if-no-files-found: error
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash tools/ci-attach-release.sh dist/chiral-ftp-ps5-*.zip

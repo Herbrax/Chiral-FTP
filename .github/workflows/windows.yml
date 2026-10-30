@@ -1,0 +1,72 @@
+# The Windows .exe (x64), in MSYS2's UCRT64 environment. Runs on a push to dev,
+# on a version tag and by hand; the .exe is attached to the run, and to the
+# release when the run comes from a tag.
+name: Windows
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, such as 1.2.1 (empty: the Makefile's)"
+        type: string
+  push:
+    branches: [dev]
+    tags: ["v*"]
+    paths-ignore: ["**.md", "docs/**", "tools/latest-version.py", ".github/workflows/latest-version.yml"]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+permissions:
+  contents: write
+jobs:
+  windows:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      # Before the checkout: scripts with CRLF line endings don't run in bash.
+      - name: LF line endings
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make
+            curl
+            bzip2
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-libmicrohttpd
+            mingw-w64-ucrt-x86_64-libssh
+            mingw-w64-ucrt-x86_64-freetype
+      - name: Version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: bash tools/ci-version.sh
+      - name: libssh2 and Mbed TLS for the SFTP client
+        env:
+          CMAKE_GENERATOR: Ninja
+        run: ./tools/build-sftp-deps.sh host
+      - name: Build
+        run: make PLATFORM=sdl VERSION="$VERSION" -j"$(nproc)" dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chiral-ftp-${{ env.VERSION }}-windows-x64
+          path: dist/chiral-ftp-*-windows-x64.exe
+          if-no-files-found: error
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash tools/ci-attach-release.sh dist/chiral-ftp-*-windows-x64.exe

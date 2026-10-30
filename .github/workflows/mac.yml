@@ -1,0 +1,51 @@
+# The Mac app, on Apple silicon (there is no Intel build). Runs on a push to
+# dev, on a version tag and by hand; chiral-ftp.app.zip is attached to the run,
+# and to the release when the run comes from a tag. Zipped with ditto, which
+# keeps the bundle's symlinks and ad hoc signature.
+name: Mac
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, such as 1.2.1 (empty: the Makefile's)"
+        type: string
+  push:
+    branches: [dev]
+    tags: ["v*"]
+    paths-ignore: ["**.md", "docs/**", "tools/latest-version.py", ".github/workflows/latest-version.yml"]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+permissions:
+  contents: write
+jobs:
+  mac:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Packages
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: brew install cmake pkg-config sdl2 libmicrohttpd libssh freetype
+      - name: Version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: bash tools/ci-version.sh
+      - name: libssh2 and Mbed TLS for the SFTP client
+        run: ./tools/build-sftp-deps.sh host
+      - name: Build
+        run: make PLATFORM=sdl VERSION="$VERSION" -j"$(sysctl -n hw.ncpu)" app
+      - name: Zip
+        run: ditto -c -k --keepParent dist/chiral-ftp.app dist/chiral-ftp.app.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chiral-ftp-${{ env.VERSION }}-mac
+          path: dist/chiral-ftp.app.zip
+          if-no-files-found: error
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash tools/ci-attach-release.sh dist/chiral-ftp.app.zip

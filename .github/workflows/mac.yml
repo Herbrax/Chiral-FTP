@@ -14,6 +14,9 @@ on:
       version:
         type: string
         default: ""
+      ref:  # what to build, when it isn't what the run started from
+        type: string
+        default: ""
   push:
     branches: [dev]
     paths-ignore:
@@ -34,6 +37,8 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       - name: Packages
         env:
           HOMEBREW_NO_AUTO_UPDATE: 1

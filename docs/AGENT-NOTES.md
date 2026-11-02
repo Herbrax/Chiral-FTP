@@ -800,6 +800,60 @@ the banner, which exists because it is the one thing the user can change.
 
 ## 5b2. Releasing (1.1 onwards)
 
+### Making a release on GitHub, step by step
+
+Once, before the first one:
+
+1. The workflows on `main`. GitHub only shows "Run workflow" for a workflow
+   that is on the default branch; it then runs the copy on the branch picked
+   in its list. Without merging `dev`:
+   `git checkout main && git pull && git checkout dev -- .github/workflows tools/latest-version.py && git commit -m "Build workflows" && git push && git checkout dev`.
+2. The secret `ANDROID_DEBUG_KEYSTORE` (Settings > Secrets and variables >
+   Actions): the debug keystore in base64, in PowerShell
+   `[Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\.android\debug.keystore")) | Set-Clipboard`.
+   Without it each APK has a new signature and can't update an earlier install.
+
+For each release (say 1.3):
+
+1. **The notes:** a `## 1.3` section in `CHANGELOG.md` on `dev`, saying
+   what's new. It becomes the top of the release page; the install steps and
+   checksums are added after it, for the files the release has
+   (`tools/release-notes.py`). Without it New Release makes a draft with a
+   line to replace, and refuses to publish straight away.
+2. **Push `dev` and wait for the six builds to pass on that commit** (the
+   Actions tab). New Release builds the same way, so a red one here will be red
+   there.
+3. **Actions > New Release > Run workflow:** branch `dev`, version `1.3`,
+   tick the platforms, leave "Publish straight away" unticked for a draft to
+   read first. `VERSION` in the Makefile doesn't need to say 1.3: the tag gets
+   a commit of its own that sets it.
+4. **It checks, builds, and only if every ticked build succeeds makes the tag
+   `v1.3` and the release.** A failure leaves nothing behind: fix it, push,
+   run it again with the same version.
+5. **Releases page: read the draft.** Edit the text above `### Install` as
+   you like; later runs keep it.
+6. **Publish.** Tick "Set as the latest release" only if it has all six
+   platforms; the run's summary says which. A partial release as "latest"
+   would leave the download page and the PS5 homebrew catalog without the
+   rest.
+7. **Afterwards:** `latest_version.json` updates by itself (when New Release
+   ends, when a release changes, and every 6 hours). On `dev`, move `VERSION`
+   on when ready, with `platform/ps5/sce_sys/param.json` to match
+   (`python3 tools/content-version.py --sync <version> platform/ps5/sce_sys/param.json`),
+   or `make check` fails.
+
+**More platforms for the same version later:** run New Release again with
+`1.3` and tick them. They build from the `v1.3` tag, so they match the rest,
+and are added to its release; anything fixed on `dev` since then needs `1.3.1`.
+
+**Starting a version over:** delete the release **and** the tag `v1.3`. A tag
+left behind makes the next run with `1.3` add to it instead.
+
+**A first trial:** a draft at `0.0.1` with one quick platform (Switch), run
+again with another to see it add, then delete both draft and tag.
+
+### Details
+
 - `make PLATFORM=ps5 release && make PLATFORM=switch release && make
   PLATFORM=sdl release` fills `release/`: the PS5 zip, the `.nro`, the Mac
   app zipped with `ditto` (keeps the bundle's signature), `SHA256SUMS`, and
@@ -811,16 +865,21 @@ the banner, which exists because it is the one thing the user can change.
 - **Releases come from the New Release workflow** (`new-release.yml`): a
   version, a tick per platform, and optionally "publish straight away"
   (otherwise a draft). It builds the ticked platforms with the workflows above,
-  and only if all succeed makes the tag and one release with every file, notes
-  (`tools/release-notes.py`, from the version's CHANGELOG section) and checksums.
-  The tag is on a commit made for it that sets `VERSION` (and `contentVersion`
-  if the release has a PS5 file); the branch itself isn't touched, so it keeps
-  its old `VERSION` until someone moves it on. A release for only some platforms
-  must not be GitHub's "latest": the download page and the PS5 homebrew catalog
-  would find the rest missing. Published straight away it isn't; publishing a
-  draft by hand, that box has to be unticked (the run's summary says so). It
-  refuses a version whose tag exists; to add a file to an existing release,
-  build it by hand and upload it on the release's page.
+  and only if all succeed `tools/ci-release.sh` makes the tag and one release
+  with every file, notes (`tools/release-notes.py`, from the version's CHANGELOG
+  section) and checksums. The tag is on a commit made for it that sets `VERSION`
+  (and `contentVersion` if the release has a PS5 file); the branch itself isn't
+  touched, so it keeps its old `VERSION` until someone moves it on.
+- **Running it again with the same version adds to that release:** the ticked
+  platforms build from the tag, so they are the same code, and fixes made since
+  need a new version. Files of the same name are replaced, notes keep what is
+  above `### Install`, and install steps and checksums are rewritten. A PS5 file
+  added this way moves the tag by one commit that only changes `contentVersion`.
+  Tags from before New Release (v1.1 and older) can't be built from here.
+- **"Latest":** only a release with every platform, and no newer one, becomes
+  GitHub's latest, because the download page and the PS5 homebrew catalog would
+  find the rest missing. It happens by itself when published; publishing a draft
+  by hand, that box is the person's to set (the run's summary says which way).
 - **A build can be given a version by hand:** Run workflow, type `1.2.1`.
   `tools/ci-version.sh` rewrites the `VERSION` line in that run's checkout, so
   everything follows it; nothing is committed. Everything must keep reading
@@ -838,11 +897,12 @@ the banner, which exists because it is the one thing the user can change.
   catalog find updates by it, not by the tag. `make PLATFORM=ps5` writes it
   into the package and into the committed `platform/ps5/sce_sys/param.json`
   (the copy the catalog reads at the release's tag), and `make check` fails
-  while that file is behind. Commit it before tagging. VERSION must be
-  MAJOR.MINOR or MAJOR.MINOR.PATCH.
+  while that file is behind. New Release writes it on the tag's own commit
+  (only for a release with a PS5 file); a release made locally needs it
+  committed before tagging. VERSION must be MAJOR.MINOR or MAJOR.MINOR.PATCH.
 - **Linux** builds only on Linux: `tools/make-appimage.sh` (linuxdeploy), run
-  by `.github/workflows/linux-appimage.yml` on Ubuntu 22.04 for a `v*` tag or
-  by hand; then `tools/make-release.sh linux` adds it to `release/`. An
+  by `.github/workflows/linux-appimage.yml` on Ubuntu 22.04; locally,
+  `tools/make-release.sh linux` then adds it to `release/`. An
   AppImage keeps its settings in `$XDG_DATA_HOME/chiral-ftp`
   (`~/.local/share/chiral-ftp`; its parents are made, a new account may lack
   them). Linux links libstdc++ and libm, macOS libc++ (`CXX_LIB` in
@@ -856,10 +916,13 @@ the banner, which exists because it is the one thing the user can change.
   copy of linuxdeploy. The AppImage leaves out, on purpose, what every
   desktop has (X11/Wayland, FreeType, ALSA): a bare server can't start it,
   a desktop can. Tested: both start headless, render, and exit cleanly.
-- **The Mac app requires macOS 27 on Apple silicon**: its Homebrew libraries
-  were built for the build Mac. Building them with a lower
-  `MACOSX_DEPLOYMENT_TARGET` would widen that. It is ad-hoc signed, not
-  notarized: users choose "Open Anyway".
+- **The Mac app requires macOS 27 on Apple silicon** when built on the
+  maintainer's Mac: its Homebrew libraries were built for the build Mac. The
+  GitHub build runs on macOS 15, which may lower that (its `Info.plist` says,
+  from `minos`); not yet tried on an older Mac. Building them with a lower
+  `MACOSX_DEPLOYMENT_TARGET` would widen it too. It is ad-hoc signed, not
+  notarized: users choose "Open Anyway". `tools/make-macos-app.py` follows
+  `@rpath` and `@loader_path` names, which Homebrew's brotli uses.
 
 ## 5c. Probe first
 

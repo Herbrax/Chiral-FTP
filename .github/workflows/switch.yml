@@ -13,6 +13,9 @@ on:
       version:
         type: string
         default: ""
+      ref:  # what to build, when it isn't what the run started from
+        type: string
+        default: ""
   push:
     branches: [dev]
     paths-ignore:
@@ -43,6 +46,8 @@ jobs:
           dkp-pacman -Sy --noconfirm --needed switch-dev switch-libssh2 switch-mbedtls switch-zlib \
             dkp-toolchain-vars switch-ntfs-3g switch-lwext4
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       - name: Version
         env:
           INPUT_VERSION: ${{ inputs.version }}

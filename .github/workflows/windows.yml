@@ -13,6 +13,9 @@ on:
       version:
         type: string
         default: ""
+      ref:  # what to build, when it isn't what the run started from
+        type: string
+        default: ""
   push:
     branches: [dev]
     paths-ignore:
@@ -42,6 +45,8 @@ jobs:
           git config --global core.autocrlf false
           git config --global core.eol lf
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
       - uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64

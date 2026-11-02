@@ -119,8 +119,8 @@ ndk_build="$ndk/ndk-build"
     NDK_APPLICATION_MK=jni/Application.mk NDK_OUT="$(native "$proj/obj")" NDK_LIBS_OUT="$(native "$proj/app/libs")" \
     CHIRAL_ROOT="$(native "$here")" CHIRAL_VERSION="$version" -j8 )
 
-# 6. The APK.
-( cd "$proj" && sh ./gradlew assembleDebug --console=plain -q -PchiralVersion="$version" -PchiralVersionCode="$version_code" )
+# 6. The APK. Through bash, not sh: SDL's gradlew needs it, and Linux's sh isn't.
+( cd "$proj" && bash ./gradlew assembleDebug --console=plain -q -PchiralVersion="$version" -PchiralVersionCode="$version_code" )
 mkdir -p "$here/dist"
 apk="$here/dist/chiral-ftp-$version-android.apk"
 cp "$proj/app/build/outputs/apk/debug/app-debug.apk" "$apk"

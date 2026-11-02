@@ -3,10 +3,13 @@
 the release has, and their checksums. For tools/make-release.sh and the New
 Release workflow.
 
-    release-notes.py [--allow-missing] <CHANGELOG.md> <version> <out.md> <SHA256SUMS>
+    release-notes.py [--allow-missing | --intro FILE] <CHANGELOG.md> <version> <out.md> <SHA256SUMS>
 
 --allow-missing: a version the changelog doesn't have yet gets a line to replace
 instead of stopping, for a draft that a person will read before publishing.
+
+--intro FILE: for adding to a release, FILE being its notes as they are. What is
+above "### Install" stays, edits and all, in place of the changelog's section.
 """
 import re, sys
 
@@ -14,19 +17,24 @@ args = sys.argv[1:]
 allow_missing = "--allow-missing" in args
 if allow_missing:
     args.remove("--allow-missing")
+intro = None
+if "--intro" in args:
+    at = args.index("--intro")
+    intro = open(args[at + 1], encoding="utf-8").read().replace("\r\n", "\n")
+    del args[at:at + 2]
 if len(args) != 4:
     sys.exit(__doc__)
 changelog, version, out, sums = args
 text = open(changelog, encoding="utf-8").read()
 m = re.search(r"^## " + re.escape(version) + r"\n(.*?)(?=^## |\Z)", text, re.S | re.M)
-if not m and not allow_missing:
+if not m and not allow_missing and intro is None:
     sys.exit("CHANGELOG.md has no section for " + version)
 digests = open(sums, encoding="utf-8").read().strip()
 present = digests.split()
 # Pictures in the changelog point into the repository; a release page needs the full address.
 body = (m.group(1).strip().replace("](docs/", "](https://raw.githubusercontent.com/Herbrax/chiral-ftp/main/docs/")
         if m else "_What's new in this version: write it here before publishing._")
-notes = body + "\n\n### Install\n"
+notes = "### Install\n"
 if f"chiral-ftp-ps5-{version}.zip" in present:
     notes += f"""
 **PS5**
@@ -129,4 +137,8 @@ badges = (f"[![Downloads](https://img.shields.io/github/downloads/{repo}/v{versi
           f"(https://github.com/{repo}/releases/tag/v{version}) "
           f"[![Stars](https://img.shields.io/github/stars/{repo}?color=D9B65E&label=stars)]"
           f"(https://github.com/{repo}/stargazers)")
-open(out, "w", encoding="utf-8").write(f"# chiral-ftp {version}\n\n{badges}\n\n" + notes)
+if intro is not None:
+    top = intro.split("### Install")[0].rstrip()
+else:
+    top = f"# chiral-ftp {version}\n\n{badges}\n\n{body}"
+open(out, "w", encoding="utf-8").write(top + "\n\n" + notes)

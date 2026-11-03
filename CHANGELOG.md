@@ -56,6 +56,21 @@ connect.
 - Back on the start screen goes to the TV's home screen; the servers keep
   running.
 
+### Windows, Mac and Linux: updates
+
+- **chiral-ftp tells you when there's a new version.** At startup it asks
+  chiral-ftp.com, and when there's a newer one it offers **Update**, **Not
+  now** (asks again in 7 days) or **Skip this version**.
+- **Update replaces this copy and restarts**, wherever it is: the `.exe`,
+  the `.app` (in Applications or anywhere else) or the AppImage. A file
+  named for its version takes the new version's name. Where it can't (a
+  folder this account can't change, or a Mac app still running from
+  Downloads), you get the download page instead.
+- **Settings > Check for updates** turns the startup check off, and **Check
+  now** asks straight away. The check sends the platform, the version and a
+  random ID made on first start, to count devices; nothing else. Test
+  builds (`-beta`, `-alpha`, `-dev`) never check.
+
 ### Everywhere
 
 | On the PS5 | On a computer |

@@ -23,4 +23,10 @@ void settings_json(strbuf_t *b);
 int store_read(const char *name, strbuf_t *out);
 int store_write(const char *name, const char *data, size_t size);
 
+/* A file of the app's own in the data folder, by name ("update.json"), which
+   the web app can't reach the way it reaches the stores. Written the same
+   way, through a temporary file. */
+int data_file_read(const char *name, strbuf_t *out);
+int data_file_write(const char *name, const char *data, size_t size);
+
 int ensure_data_dir(void);

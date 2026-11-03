@@ -734,6 +734,14 @@ the banner, which exists because it is the one thing the user can change.
   a `\b(Switch|PS5)\b` substitution turned "Switch side" — meaning *swap the
   panes* — into "console side". Mechanical neutralisation needs reading
   afterwards, and roughly twenty strings still want a native speaker's eye.
+- **On Windows, C++ that includes `<cstdio>` loses `rename()` and
+  `fopen()` from win32/posix.h.** libstdc++'s `<cstdio>` `#undef`s them, so
+  calls go to the C library's own. That `rename()` refuses to replace a file
+  and neither one reads `/c/...` paths: the updater's first `update.json`
+  saved, and every later one failed with EEXIST. Read and write files through
+  the engine (`store_*`, `data_file_*`) or call Win32 directly.
+  `unlink()`, `stat()` and the rest survive, since `<cstdio>` doesn't
+  declare them.
 - **`app/ui.cpp`'s background work uses raw pthreads, not `std::thread`.**
   `std::thread`'s destructor calls `std::terminate` on a joinable thread,
   which is a bad way to find out your teardown order is wrong — and the
@@ -923,6 +931,78 @@ again with another to see it add, then delete both draft and tag.
   `MACOSX_DEPLOYMENT_TARGET` would widen it too. It is ad-hoc signed, not
   notarized: users choose "Open Anyway". `tools/make-macos-app.py` follows
   `@rpath` and `@loader_path` names, which Homebrew's brotli uses.
+
+## 5b3. Updates (app/update.cpp, the computers only so far)
+
+At startup the app asks the maintainer's worker whether there's something
+newer, and offers it. Where it can, it replaces itself. Only where
+`CHIRAL_HAS_UPDATER` is 1 (platform_config.h): sdl, so Windows, Mac and
+Linux. Everywhere else `app/update.cpp` compiles to stubs, and the UI calls
+it without asking.
+
+- **The question:** `POST https://chiral-ftp.com/api/v1/check` with
+  `{"platform","version","device"}`, on a thread of its own, once per
+  launch, 8 s at most. The platform keys are the ones in
+  `latest_version.json` (`windows-x64`, `windows-arm64`, `mac`,
+  `linux-x86_64`, `linux-aarch64`; `os::platform_key()`). The device ID is
+  16 random bytes in hex, made on first start. Anything but 200 with
+  `"update":true` shows nothing, unless the user pressed **Check now**.
+- **The answer is checked, not trusted:** it must be newer by the numbers
+  (1.10 > 1.9; letters ignored), the URL must start with
+  `https://github.com/Herbrax/Chiral-FTP/releases/download/`, the file
+  name must be plain, and the download must be the size the answer gave.
+  No checksum yet (the maintainer's call).
+- **What the user chose** goes in `update.json` in the data folder, written
+  through `data_file_write()` so the web app's store API can't reach it.
+  It holds the device ID, the Settings switch, `skip` (the version "Skip
+  this version" was pressed for) and `snooze_until` ("Not now": 7 days).
+  Check now ignores both.
+- **Test builds never ask:** a version with `-dev`, `-beta` or `-alpha`
+  in it (`update::test_build()`). `tools/ci-version.sh` accepts such
+  versions; the PS5's contentVersion, Android's versionCode, Windows' version
+  resource and the Mac's `CFBundleVersion` leave the suffix out. New Release
+  still refuses them.
+- **Putting it in place** (`platform/sdl/update.cpp`). The download goes
+  beside the copy, so the last step is a rename on the same drive.
+  - **Windows:** the running `.exe` can't be overwritten, but it can be
+    renamed. It becomes `<name>.old` and the new one takes its place. At
+    exit the new version starts with `--updated-from <old>`, and deletes the
+    `.old` once it can. Only a `.exe.old` in its own folder is deleted.
+  - **Mac:** the bundle is `[NSBundle mainBundle]`, wherever it is. The
+    `.app.zip` is unpacked with `ditto` beside it and the bundles are
+    swapped. The old bundle is deleted at exit, and `open -n` starts the
+    new one. A bundle under `/AppTranslocation/` (opened from Downloads
+    without being moved) can't update; the user is told to move it to
+    Applications.
+  - **Linux:** `$APPIMAGE` is replaced in one rename. HTTPS goes through
+    the system's `curl`, or `wget` without it, and nothing is linked.
+  - A file named for its version (`chiral-ftp-1.2-windows-x64.exe`) takes
+    the new file's name. Anything else keeps its name, and with it any
+    shortcut.
+  - Not writable, not the released file (a dev build, no `$APPIMAGE`), or
+    translocated: `os::target()` says why, and the dialog's main button
+    becomes the download page.
+- **The restart:** `RESTARTING` sets `g.quit`. Main stops everything as
+  usual, and `update::finish()` starts the new copy after
+  `platform::shutdown()`, so the two never hold the servers' ports at once.
+- **Threads:** raw pthreads, as in the rest of the app (§5). A check still
+  waiting on the network at exit is detached rather than waited for, so
+  what it touches is allocated once and never destroyed.
+- **Testing it:** build an old version (`make VERSION=0.9`) and run it.
+  The worker offers the real latest release. A headless run
+  (`--headless --script "wait=7000 CROSS ..."`) goes through the
+  download and the swap. The copy it restarts inherits
+  `SDL_VIDEODRIVER=dummy`, though, and says "Could not start the
+  display". Run without `--headless`, keeping `--script`, to see the
+  restart work. Each check counts a device in the worker's stats; for the
+  HTTP code alone, an unknown platform name gets `{"update":false}`.
+- **Later:** Switch (download `.new.nro`, rename the old one `.old`, then
+  the new one into place), PS5 (search `/data/homebrew` and each drive's
+  root two levels down for `PPSA96024`; with two copies say "Duplicate
+  copies found, update impossible"; download into `PPSA96024-2` and
+  rename; ask for a restart) and Android (PackageInstaller). Each one is
+  its platform's `update::os`, with `CHIRAL_HAS_UPDATER` set to 1 and a
+  console drawing for `UpdateDialog`, which only draws the desktop's.
 
 ## 5c. Probe first
 

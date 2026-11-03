@@ -19,6 +19,9 @@ using Object = std::map<std::string, Value>;
 
 // Returns false on malformed input; nested values are skipped.
 bool parse_array(const std::string &text, std::vector<Object> &out);
+// One object, such as a server's reply. The objects inside it go to children
+// by key, one level deep; without children they are skipped.
+bool parse_object(const std::string &text, Object &out, std::map<std::string, Object> *children = nullptr);
 std::string dump_array(const std::vector<Object> &items);
 
 std::string get_str(const Object &o, const char *key, const char *def = "");

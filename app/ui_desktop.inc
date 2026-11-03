@@ -930,7 +930,7 @@ void page_settings(float x, float y, float w) {
   // General
   system_net_t nets[16];
   const int nn = system_networks(nets, 16);
-  group(tr("GENERAL"), nn > 0 ? 2 : 1);
+  group(tr("GENERAL"), 1 + (nn > 0) + update::available());
   float yy = y;
   row_label(x, yy, rh, tr("Language"), "");
   if(chooser(rx - cw, yy + (rh - P(36)) / 2, cw, Settings::language_value())) {
@@ -959,6 +959,20 @@ void page_settings(float x, float y, float w) {
         m->items.push_back({Settings::network_name(nets[i]), [name] { g.network = name; save_prefs(); ip_changed(); }});
       }
       push(m);
+    }
+    yy += rh;
+  }
+  if(update::available()) {
+    /* A test build (1.2-beta) never asks, so its switch stays off. */
+    const bool test = update::test_build();
+    sep(yy);
+    row_label(x, yy, rh, tr("Check for updates"),
+              test ? trf("Test builds ({0}) never check.", {VERSION_TAG}).c_str() : tr("At startup. Nothing is installed without asking."));
+    if(toggle(rx - P(52), yy + (rh - P(30)) / 2, !test && update::enabled(), !test)) update::set_enabled(!update::enabled());
+    const char *now_label = tr("Check now");
+    const float bx = rx - P(52) - P(16) - button_w(now_label, false);
+    if(button(bx, yy + (rh - P(36)) / 2, now_label, SECONDARY, -1, !test && update::poll() != update::CHECKING, P(36))) {
+      update::check(true);
     }
     yy += rh;
   }
@@ -1186,3 +1200,61 @@ void draw_quick_prompt_desktop(const discovery_request_t &r) {
   text(ax + (aw - text_w(F(14), allow, true)) / 2, by + (P(40) - F(14)) / 2, F(14), INK, allow, true);
   hit_add(HIT_MENU_ITEM, ax, by, aw, P(40), 1);
 }
+
+#if CHIRAL_HAS_UPDATER
+/* The update dialog's sheet (UpdateDialog in ui.cpp), the same look as the
+   one above: buttons right-aligned, the last one gold. */
+void draw_sheet_desktop(const std::string &title, const std::string &sub, const std::vector<std::string> &body,
+                        float progress, const std::string &progress_text,
+                        const std::vector<std::string> &buttons, int focus) {
+  using namespace desk;
+  rect(0, 0, W, H, IM_COL32(5, 6, 8, 150));
+  const float w = std::min(P(560), W - P(64)), x = (W - w) / 2, y = P(96);
+  std::vector<std::vector<std::string>> paras;
+  float lines = 0;
+  for(const std::string &b : body) {
+    paras.push_back(wrap_text(b, F(14), w - P(56)));
+    lines += (float)paras.back().size();
+  }
+  const float h = P(28) + P(30) + (sub.empty() ? 0 : P(26)) + P(14) + P(22) * lines + P(12) * (float)paras.size() +
+                  (progress >= 0 ? P(52) : 0) + (buttons.empty() ? P(8) : P(68));
+  card(x, y, w, h, CARD, BORDER, P(16));
+  hit_add(HIT_OVERLAY_BODY, x, y, w, h);
+  float ty = y + P(28);
+  text(x + P(28), ty, F(18), TEXT, fit_end(title, F(18), w - P(56)).c_str(), true);
+  ty += P(30);
+  if(!sub.empty()) {
+    text(x + P(28), ty, F(13), MUTED, sub.c_str());
+    ty += P(26);
+  }
+  ty += P(14);
+  for(const auto &para : paras) {
+    for(const std::string &l : para) {
+      text(x + P(28), ty, F(14), SOFT, l.c_str());
+      ty += P(22);
+    }
+    ty += P(12);
+  }
+  if(progress >= 0) {
+    const float bw = w - P(56);
+    rect(x + P(28), ty + P(4), bw, P(8), RAISED, P(4));
+    if(progress > 0) rect(x + P(28), ty + P(4), std::max(P(8), bw * progress), P(8), GOLD, P(4));
+    if(!progress_text.empty()) text(x + P(28), ty + P(20), F(12), MUTED, progress_text.c_str());
+    ty += P(52);
+  }
+  float bx = x + w - P(28);
+  const float by = y + h - P(28) - P(40);
+  for(int i = (int)buttons.size() - 1; i >= 0; i--) {
+    const char *label = buttons[i].c_str();
+    const float bw = button_w(label, false);
+    bx -= bw;
+    const bool main = i == (int)buttons.size() - 1, hot = over(bx, by, bw, P(40));
+    if(main) rect(bx, by, bw, P(40), hot ? GOLD_LIGHT : GOLD, P(10));
+    else card(bx, by, bw, P(40), hot ? SEG_ON : RAISED, BORDER, P(10));
+    text(bx + (bw - text_w(F(14), label, true)) / 2, by + (P(40) - F(14)) / 2, F(14), main ? INK : TEXT, label, true);
+    if(i == focus) focus_ring(bx, by, bw, P(40), P(10));
+    hit_add(HIT_MENU_ITEM, bx, by, bw, P(40), i);
+    bx -= P(10);
+  }
+}
+#endif

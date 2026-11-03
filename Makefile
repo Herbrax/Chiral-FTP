@@ -48,7 +48,7 @@ ENGINE := engine/ftp.c engine/listparse.c engine/session.c engine/queue.c \
 WEB_SRCS := web/websrv.c web/api.c web/asset.c
 WEB_STUB := web/stub/websrv_stub.c
 APP     := app/main.cpp app/ui.cpp app/json.cpp app/platform_common.cpp \
-           app/raster.cpp app/i18n.cpp
+           app/raster.cpp app/i18n.cpp app/update.cpp
 IMGUI   := vendor/imgui/imgui.cpp vendor/imgui/imgui_draw.cpp \
            vendor/imgui/imgui_tables.cpp vendor/imgui/imgui_widgets.cpp
 

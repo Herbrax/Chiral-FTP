@@ -42,3 +42,8 @@
 #define CHIRAL_UI_DESKTOP 1
 /* Not the mobile shell (Android only: app/ui_mobile.inc). */
 #define CHIRAL_UI_MOBILE 0
+
+/* Updates itself (app/update.h): asks chiral-ftp.com at startup, and puts a
+   new version in place of the .exe, the .app or the AppImage
+   (platform/sdl/update.cpp). */
+#define CHIRAL_HAS_UPDATER 1

@@ -14,7 +14,7 @@
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 version="${VERSION:?set VERSION}"
-platform="${1:?usage: make-release.sh <switch|ps5|mac|linux|windows>}"
+platform="${1:?usage: make-release.sh <switch|ps5|mac|linux|windows|android>}"
 out="$root/release"
 mkdir -p "$out"
 
@@ -51,6 +51,13 @@ case "$platform" in
     rm -f "$out"/chiral-ftp-*.AppImage
     for a in $appimages; do cp "$a" "$out/"; done
     ;;
+  android)
+    # One APK for phones, tablets and TVs (tools/build-android.sh).
+    [[ -f "$root/dist/chiral-ftp-$version-android.apk" ]] || {
+      echo "missing dist/chiral-ftp-$version-android.apk; run tools/build-android.sh" >&2; exit 1; }
+    rm -f "$out"/chiral-ftp-*-android.apk
+    cp "$root/dist/chiral-ftp-$version-android.apk" "$out/"
+    ;;
   windows)
     # The program itself: one .exe per architecture, x64 and arm64 side by
     # side in the same release.
@@ -63,7 +70,7 @@ case "$platform" in
 esac
 
 files=()
-for f in "chiral-ftp-ps5-$version.zip" chiral-ftp.nro $(cd "$out" && ls chiral-ftp-"$version"-*.AppImage chiral-ftp-"$version"-windows-*.exe 2>/dev/null); do
+for f in "chiral-ftp-ps5-$version.zip" chiral-ftp.nro "chiral-ftp-$version-android.apk" $(cd "$out" && ls chiral-ftp-"$version"-*.AppImage chiral-ftp-"$version"-windows-*.exe 2>/dev/null); do
   [[ -f "$out/$f" ]] && files+=("$f")
 done
 # The Mac app is a folder: its checksum is the program inside it.
@@ -73,6 +80,13 @@ done
 sha() { if command -v sha256sum >/dev/null; then sha256sum "$@" | sed 's/ \*/  /'; else shasum -a 256 "$@"; fi; }
 (cd "$out" && sha "${files[@]}" > SHA256SUMS)
 
-"${PYTHON:-python3}" "$root/tools/release-notes.py" "$root/CHANGELOG.md" "$version" "$out/RELEASE_NOTES.md" "$out/SHA256SUMS"
+# A version CHANGELOG.md has no section for (a test build such as 0.9) gets
+# notes with a line to replace, rather than none.
+notes=()
+grep -qxF "## $version" "$root/CHANGELOG.md" || {
+  echo "warning: CHANGELOG.md has no '## $version' section; RELEASE_NOTES.md says what to write" >&2
+  notes=(--allow-missing)
+}
+"${PYTHON:-python3}" "$root/tools/release-notes.py" ${notes[@]+"${notes[@]}"} "$root/CHANGELOG.md" "$version" "$out/RELEASE_NOTES.md" "$out/SHA256SUMS"
 
 ls -l "$out"

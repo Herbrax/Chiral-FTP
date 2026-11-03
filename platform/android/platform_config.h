@@ -46,3 +46,6 @@
    console layout instead -- decided at run time, from one APK. */
 #define CHIRAL_UI_DESKTOP 1
 #define CHIRAL_UI_MOBILE 1
+
+/* No updater yet (app/update.h): the computers' comes first. */
+#define CHIRAL_HAS_UPDATER 0

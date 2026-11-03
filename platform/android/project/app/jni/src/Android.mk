@@ -52,7 +52,7 @@ LOCAL_SRC_FILES := \
   $(CHIRAL_ROOT)/web/websrv.c $(CHIRAL_ROOT)/web/api.c $(CHIRAL_ROOT)/web/asset.c \
   $(foreach f,$(WEB_PAGES),$(CHIRAL_ROOT)/gen/$(f).c) \
   $(CHIRAL_ROOT)/app/main.cpp $(CHIRAL_ROOT)/app/ui.cpp $(CHIRAL_ROOT)/app/json.cpp \
-  $(CHIRAL_ROOT)/app/platform_common.cpp $(CHIRAL_ROOT)/app/raster.cpp $(CHIRAL_ROOT)/app/i18n.cpp \
+  $(CHIRAL_ROOT)/app/platform_common.cpp $(CHIRAL_ROOT)/app/raster.cpp $(CHIRAL_ROOT)/app/i18n.cpp $(CHIRAL_ROOT)/app/update.cpp \
   $(CHIRAL_ROOT)/vendor/imgui/imgui.cpp $(CHIRAL_ROOT)/vendor/imgui/imgui_draw.cpp \
   $(CHIRAL_ROOT)/vendor/imgui/imgui_tables.cpp $(CHIRAL_ROOT)/vendor/imgui/imgui_widgets.cpp \
   $(CHIRAL_ROOT)/gen/font_regular.c $(CHIRAL_ROOT)/gen/font_bold.c $(CHIRAL_ROOT)/gen/font_mono.c \

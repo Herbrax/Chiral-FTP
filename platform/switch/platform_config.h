@@ -53,3 +53,6 @@
 #define CHIRAL_UI_DESKTOP 0
 /* Not the mobile shell (Android only: app/ui_mobile.inc). */
 #define CHIRAL_UI_MOBILE 0
+
+/* No updater yet (app/update.h): the computers' comes first. */
+#define CHIRAL_HAS_UPDATER 0

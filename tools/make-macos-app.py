@@ -140,7 +140,8 @@ def info_plist(version, minimum):
         'CFBundlePackageType': 'APPL',
         'CFBundleSignature': '????',
         'CFBundleShortVersionString': version,
-        'CFBundleVersion': version,
+        # Numbers only, which a test build's -beta isn't.
+        'CFBundleVersion': version.split('-')[0],
         'CFBundleInfoDictionaryVersion': '6.0',
         'CFBundleDevelopmentRegion': 'en',
         'LSMinimumSystemVersion': '%d.%d' % minimum,

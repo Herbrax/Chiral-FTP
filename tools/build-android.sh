@@ -94,7 +94,7 @@ done
 "$PYTHON" "$here/tools/gen-asset-module.py" --path mark-light.svg "$here/assets/brand/chiral-ftp-mark-light.svg" > "$here/gen/mark-light.svg.c"
 "$PYTHON" "$here/tools/gen-asset-module.py" --path fonts/IBMPlexMono-Medium.ttf "$here/assets/fonts/IBMPlexMono-Medium.ttf" > "$here/gen/plexmono.ttf.c"
 ( cd "$here" && "$PYTHON" tools/gen-i18n.py i18n/translations.json gen/i18n_table.c \
-    app/main.cpp app/ui.cpp app/json.cpp app/platform_common.cpp app/raster.cpp app/i18n.cpp \
+    app/main.cpp app/ui.cpp app/json.cpp app/platform_common.cpp app/raster.cpp app/i18n.cpp app/update.cpp \
     platform/*/*.cpp platform/sdl/macos.mm engine/ftpd.c engine/sftpd.c engine/fsjobs.c \
     app/ui_desktop.inc app/ui_mobile.inc )
 

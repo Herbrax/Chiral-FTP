@@ -23,6 +23,7 @@
 
 #include "i18n.h"
 #include "json.h"
+#include "update.h"
 
 extern "C" {
 #include "config.h"
@@ -420,7 +421,7 @@ struct ServerItem {
   int index;
 };
 
-enum OverlayKind { OV_OTHER, OV_QUEUE, OV_LOG, OV_TEXT, OV_MENU, OV_QUICK, OV_PROMPT };
+enum OverlayKind { OV_OTHER, OV_QUEUE, OV_LOG, OV_TEXT, OV_MENU, OV_QUICK, OV_PROMPT, OV_UPDATE };
 
 /* Touch. The UI is drawn fresh every frame, so rather than keep a parallel
    model of where everything is, each screen records the rectangles it has
@@ -3377,6 +3378,168 @@ void quick_requests() {
   g_touch_dirty = true;
 }
 
+/* ---------- updates ---------- */
+
+#if CHIRAL_HAS_UPDATER && CHIRAL_UI_DESKTOP
+/* A sheet over the window: a title, a line under it, paragraphs, a progress
+   bar when progress >= 0, and buttons along the bottom (HIT_MENU_ITEM 0, 1...,
+   left to right; the last is the main one). ui_desktop.inc. */
+void draw_sheet_desktop(const std::string &title, const std::string &sub, const std::vector<std::string> &body,
+                        float progress, const std::string &progress_text,
+                        const std::vector<std::string> &buttons, int focus);
+
+/* A newer version: what it is, and Update, Not now or Skip this version;
+   then the download, and the restart. Where this copy can't replace itself
+   the main button is the download page instead (update::Offer::cannot). */
+struct UpdateDialog : Overlay {
+  int choice = -1;  // the button the keys are on; the main one at first
+  OverlayKind kind() override { return OV_UPDATE; }
+
+  /* Closed some other way (the menu bar clears every dialog) while it was
+     still only an offer: as good as Not now for this session, without the
+     seven days. */
+  ~UpdateDialog() override {
+    if(update::poll() == update::AVAILABLE) update::dismiss();
+  }
+
+  std::vector<std::string> buttons() {
+    switch(update::poll()) {
+    case update::AVAILABLE:
+      return {tr("Skip this version"), tr("Not now"), update::offer().cannot.empty() ? tr("Update") : tr("Download page")};
+    case update::DOWNLOADING: return {tr("Cancel")};
+    case update::FAILED: return {tr("Close"), tr("Download page")};
+    default: return {};
+    }
+  }
+
+  void open_page() {
+    const std::string page = update::offer().page;
+    platform::open_url(page.empty() ? "https://chiral-ftp.com/download/" : page.c_str());
+  }
+
+  // Button i of buttons(); false when that closes the dialog.
+  bool press(int i) {
+    switch(update::poll()) {
+    case update::AVAILABLE:
+      if(i == 0) update::skip_version();
+      else if(i == 1) update::not_now();
+      else if(update::offer().cannot.empty()) {
+        update::install();
+        choice = -1;
+        return true;
+      } else {
+        open_page();
+        update::not_now();
+      }
+      return false;
+    case update::DOWNLOADING:
+      update::cancel();  // back to the offer, once the download has stopped
+      choice = -1;
+      return true;
+    case update::FAILED:
+      if(i == 1) open_page();
+      update::dismiss();
+      return false;
+    default:
+      return true;  // putting it in place: nothing to choose
+    }
+  }
+
+  bool input(Action a) override {
+    const int n = (int)buttons().size();
+    if(choice < 0 || choice >= n) choice = n - 1;
+    if(a == ACT_LEFT || a == ACT_UP) choice = n ? (choice + n - 1) % n : -1;
+    if(a == ACT_RIGHT || a == ACT_DOWN) choice = n ? (choice + 1) % n : -1;
+    if(a == ACT_CROSS && n) return press(choice);
+    if(a == ACT_CIRCLE) {
+      // Esc: Not now, Cancel or Close, whichever there is.
+      const update::State s = update::poll();
+      if(s == update::AVAILABLE) return press(1);
+      if(s == update::DOWNLOADING || s == update::FAILED) return press(0);
+    }
+    return true;
+  }
+
+  void focus(int a, int b) override {
+    (void)b;
+    choice = a;
+  }
+
+  void draw() override {
+    const update::State s = update::poll();
+    const update::Offer o = update::offer();
+    const std::vector<std::string> b = buttons();
+    if(choice < 0 || choice >= (int)b.size()) choice = (int)b.size() - 1;
+    std::string title, sub, progress_text;
+    std::vector<std::string> body;
+    float progress = -1;
+    if(s == update::AVAILABLE) {
+      title = trf("chiral-ftp {0} is available", {o.version});
+      sub = trf("You have {0}.", {VERSION_TAG});
+      if(o.cannot.empty()) {
+        body.push_back(tr("chiral-ftp downloads it, puts it in place of this copy and starts again. The servers stop for a moment; your settings stay."));
+      } else {
+        body.push_back(tr(o.cannot.c_str()));
+        body.push_back(tr("You can download it from the website instead."));
+      }
+    } else if(s == update::DOWNLOADING) {
+      title = trf("Downloading chiral-ftp {0}", {o.version});
+      long long done = 0, total = 0;
+      update::progress(&done, &total);
+      progress = total > 0 ? std::min(1.0f, (float)((double)done / (double)total)) : 0;
+      char buf[64];
+      if(total > 0) snprintf(buf, sizeof(buf), "%.1f / %.1f MB", done / 1048576.0, total / 1048576.0);
+      else snprintf(buf, sizeof(buf), "%.1f MB", done / 1048576.0);
+      progress_text = buf;
+    } else if(s == update::FAILED) {
+      title = tr("The update didn't work");
+      body.push_back(tr(update::error().c_str()));
+    } else {
+      title = trf("Installing chiral-ftp {0}", {o.version});
+      body.push_back(tr("chiral-ftp starts again in a moment."));
+      progress = 1;
+    }
+    draw_sheet_desktop(title, sub, body, progress, progress_text, b, choice);
+  }
+};
+
+/* The updater's news, whatever is on screen: an offer comes up once nothing
+   else is open; a check asked for in Settings says what it found. */
+void update_poll() {
+  bool open = false;
+  for(auto &o : g.overlays) if(o->kind() == OV_UPDATE) open = true;
+  switch(update::poll()) {
+  case update::AVAILABLE:
+    if(!open && (g.overlays.empty() || update::manual())) {
+      push(new UpdateDialog);
+      g_touch_dirty = true;
+    }
+    break;
+  case update::DOWNLOADING: case update::INSTALLING: case update::FAILED:
+    if(!open) {
+      push(new UpdateDialog);  // it was closed underneath; the download goes on
+      g_touch_dirty = true;
+    }
+    break;
+  case update::UP_TO_DATE:
+    show_toast(trf("chiral-ftp {0} is the latest version", {VERSION_TAG}));
+    update::dismiss();
+    break;
+  case update::CHECK_FAILED:
+    show_toast(tr("Could not check for updates. Try again later."), true);
+    update::dismiss();
+    break;
+  case update::RESTARTING:
+    g.quit = true;  // main starts the new version on the way out
+    break;
+  default:
+    break;
+  }
+}
+#else
+void update_poll() {}
+#endif
+
 /* ---------- file manager ---------- */
 
 Pane &fm_other(Pane &p) {
@@ -4082,6 +4245,7 @@ void update() {
   handle_pointer();
   quick_requests();
   quick_outcome();
+  update_poll();
   quick_lifecycle();
   watch_connection();
   g_jobs.poll();
@@ -4359,7 +4523,7 @@ bool busy() {
   {
     discovery_outcome_t o;
     discovery_get_outcome(&o);
-    for(auto &ov : g.overlays) if(ov->kind() == OV_PROMPT || ov->kind() == OV_QUICK) return true;
+    for(auto &ov : g.overlays) if(ov->kind() == OV_PROMPT || ov->kind() == OV_QUICK || ov->kind() == OV_UPDATE) return true;
     if(o.state == DISCOVERY_ASKING) return true;
   }
 #if CHIRAL_UI_DESKTOP

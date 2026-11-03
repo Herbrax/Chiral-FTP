@@ -16,9 +16,11 @@ version="${INPUT_VERSION:-}"
 version="${version#v}"
 
 if [[ -n "$version" ]]; then
-  # The PS5's contentVersion and Android's versionCode are made of these numbers.
-  [[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || {
-    echo "::error::Version '$version' isn't usable: write MAJOR.MINOR or MAJOR.MINOR.PATCH, such as 1.2.1"
+  # The PS5's contentVersion and Android's versionCode are made of these
+  # numbers. A test build adds -alpha, -beta or -dev (1.2-beta), which the
+  # numbers leave out and which keeps it from asking for updates (app/update.h).
+  [[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-(alpha|beta|dev)[0-9A-Za-z.]*)?$ ]] || {
+    echo "::error::Version '$version' isn't usable: write MAJOR.MINOR or MAJOR.MINOR.PATCH, such as 1.2.1, and for a test build -beta after it (1.2-beta)"
     exit 1
   }
   sed -i.orig "s/^VERSION := .*/VERSION := $version/" "$root/Makefile"

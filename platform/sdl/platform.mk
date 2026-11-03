@@ -9,7 +9,8 @@ BUILD   := .build/sdl
 HOST_CC ?= cc
 DEPS    := .deps/host
 
-PLATFORM_CPP := platform/sdl/backend.cpp
+# The updater (app/update.h): HTTPS and putting the new version in place.
+PLATFORM_CPP := platform/sdl/backend.cpp platform/sdl/update.cpp
 # The SFTP server (CHIRAL_HAS_SFTPD): this build only, on libssh.
 PLATFORM_C   := platform/sdl/system.c engine/sftpd.c
 PLATFORM_MM  :=
@@ -22,7 +23,7 @@ GENERATED    := $(FONTS) $(WEB_GEN) $(GEN_I18N)
 CXX_LIB      := -lstdc++ -lm
 ifeq ($(shell uname -s),Darwin)
 PLATFORM_MM  := platform/sdl/macos.mm
-OS_LIBS      := -framework SystemConfiguration -framework CoreFoundation
+OS_LIBS      := -framework SystemConfiguration -framework CoreFoundation -framework Foundation
 CXX_LIB      := -lc++
 endif
 
@@ -68,11 +69,11 @@ SDL_LIBS     := $(filter-out -lSDL2main,$(shell pkg-config sdl2 --static --libs)
 MHD_LIBS     := $(shell pkg-config libmicrohttpd --static --libs)
 SSH_LIBS     := $(shell pkg-config libssh --static --libs) -lcrypto -lz
 FT_LIBS      := $(shell pkg-config freetype2 --static --libs)
-OS_LIBS      := -lws2_32 -liphlpapi -lole32 -luuid -lshell32 -lcrypt32 -lbcrypt
+OS_LIBS      := -lws2_32 -liphlpapi -lole32 -luuid -lshell32 -lcrypt32 -lbcrypt -lwinhttp
 CXX_LIB      := -static -lstdc++ -lwinpthread
 WIN_RES      := $(BUILD)/chiral-ftp.res.o
-# 1.1 -> 1,1,0,0 for the version resource.
-WIN_VER      := $(subst ., ,$(VERSION)) 0 0 0
+# 1.1 -> 1,1,0,0 for the version resource; a test build's -beta is left out.
+WIN_VER      := $(subst ., ,$(firstword $(subst -, ,$(VERSION)))) 0 0 0
 WIN_VERNUM   := $(word 1,$(WIN_VER)),$(word 2,$(WIN_VER)),$(word 3,$(WIN_VER)),0
 endif
 

@@ -30,7 +30,9 @@ $(WORK)%.o: %.cpp $(wildcard *.hpp *.h)
 	@mkdir -p -- $(@D)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-$(WORK)miniz%.o: miniz%.c
+# The only C here is miniz (a pattern "miniz%.o" wouldn't match miniz.o
+# itself: make's % can't be empty).
+$(WORK)%.o: %.c
 	@mkdir -p -- $(@D)
 	$(CC) $(MINIZ_CFLAGS) -c -o $@ $<
 

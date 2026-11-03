@@ -163,9 +163,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      # Each artifact is one file, named after it (chiral-ftp.nro included).
+      - uses: actions/download-artifact@v8
         with:
-          pattern: chiral-ftp-*
+          pattern: chiral-ftp*
           path: release-files
           merge-multiple: true
       - name: The tag and the release

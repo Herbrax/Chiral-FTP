@@ -83,8 +83,9 @@ jobs:
           key: switch-${{ hashFiles('tools/build-switch-deps.sh', 'tools/build-switch-usbhsfs.sh', 'platform/switch/net.c') }}
       - name: Build
         run: make PLATFORM=switch VERSION="$VERSION"
-      - uses: actions/upload-artifact@v4
+      # The file itself, not in a zip; it names the artifact.
+      - uses: actions/upload-artifact@v7
         with:
-          name: chiral-ftp-${{ env.VERSION }}-switch
+          archive: false
           path: dist/chiral-ftp/chiral-ftp.nro
           if-no-files-found: error

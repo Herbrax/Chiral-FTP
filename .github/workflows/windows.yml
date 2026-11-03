@@ -74,8 +74,9 @@ jobs:
         run: ./tools/build-sftp-deps.sh host
       - name: Build
         run: make PLATFORM=sdl VERSION="$VERSION" -j"$(nproc)" dist
-      - uses: actions/upload-artifact@v4
+      # The file itself, not in a zip; it names the artifact.
+      - uses: actions/upload-artifact@v7
         with:
-          name: chiral-ftp-${{ env.VERSION }}-windows-x64
+          archive: false
           path: dist/chiral-ftp-*-windows-x64.exe
           if-no-files-found: error

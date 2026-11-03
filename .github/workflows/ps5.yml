@@ -70,8 +70,9 @@ jobs:
         run: make PLATFORM=ps5 VERSION="$VERSION"
       - name: Name the zip
         run: cp "dist/chiral-ftp-$VERSION.zip" "dist/chiral-ftp-ps5-$VERSION.zip"
-      - uses: actions/upload-artifact@v4
+      # The file itself, not in a zip; it names the artifact.
+      - uses: actions/upload-artifact@v7
         with:
-          name: chiral-ftp-${{ env.VERSION }}-ps5
+          archive: false
           path: dist/chiral-ftp-ps5-*.zip
           if-no-files-found: error

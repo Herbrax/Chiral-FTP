@@ -15,7 +15,7 @@
 # screen, the pad and the keyboard. No file outside platform/ asks which
 # platform it is on.
 
-VERSION := 1.2
+VERSION := 0.9
 PLATFORM ?= sdl
 
 # The project root, kept across the recursive second pass some platforms

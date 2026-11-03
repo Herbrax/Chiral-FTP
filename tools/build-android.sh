@@ -8,8 +8,6 @@
 #   sdkmanager "ndk;28.2.13676358" "cmake;3.31.6" "platforms;android-35" "build-tools;35.0.1"
 # ANDROID_HOME and JAVA_HOME default to the usual places. Runs on Linux,
 # macOS and Windows (Git Bash or MSYS2).
-#
-# Not built in yet: the SFTP server (libssh).
 set -euo pipefail
 
 SDL_VER=2.32.10

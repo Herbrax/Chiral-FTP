@@ -163,11 +163,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # Each artifact is one file, named after it (chiral-ftp.nro included).
+      # Each artifact is one file, named after it (chiral-ftp.nro included), and
+      # is the release's file as it is: never unpacked, or the PS5's zip would
+      # arrive as its PPSA96024 folder.
       - uses: actions/download-artifact@v8
         with:
           pattern: chiral-ftp*
           path: release-files
           merge-multiple: true
+          skip-decompress: true
       - name: The tag and the release
         run: bash tools/ci-release.sh release-files

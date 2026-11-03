@@ -51,23 +51,26 @@ jobs:
         run: |
           apt-get update
           apt-get install -y git curl make gcc python3
-          pkgs="switch-dev switch-libssh2 switch-mbedtls switch-zlib dkp-toolchain-vars switch-ntfs-3g switch-lwext4 switch-curl"
+          # switch-dev is a group: -Q doesn't know it, -Qg does.
+          group="switch-dev"
+          pkgs="switch-libssh2 switch-mbedtls switch-zlib dkp-toolchain-vars switch-ntfs-3g switch-lwext4 switch-curl"
+          have() { dkp-pacman -Qg $group > /dev/null 2>&1 && dkp-pacman -Q $pkgs > /dev/null 2>&1; }
           mkdir -p /tmp/dkp-cache
           # 1. Already in the image.
-          if dkp-pacman -Q $pkgs > /dev/null 2>&1; then echo "all in the image"; exit 0; fi
+          if have; then echo "all in the image"; exit 0; fi
           # 2. The last run's packages, without the server.
           if ls /tmp/dkp-cache/*.pkg.tar.* > /dev/null 2>&1 &&
              dkp-pacman -U --noconfirm --needed /tmp/dkp-cache/*.pkg.tar.* &&
-             dkp-pacman -Q $pkgs > /dev/null 2>&1; then
+             have; then
             echo "installed from the cache"; exit 0
           fi
           # 3. The server, three times at most.
           for attempt in 1 2 3; do
-            dkp-pacman -Sy --noconfirm --needed --cachedir /tmp/dkp-cache $pkgs && break
+            dkp-pacman -Sy --noconfirm --needed --cachedir /tmp/dkp-cache $group $pkgs && break
             echo "::warning::pkg.devkitpro.org refused (attempt $attempt)"
             sleep $((attempt * 30))
           done
-          dkp-pacman -Q $pkgs
+          dkp-pacman -Q $pkgs && dkp-pacman -Qg $group > /dev/null
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}

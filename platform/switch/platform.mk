@@ -34,7 +34,7 @@ endif
 
 # The updater (app/update.h): HTTPS through devkitPro's libcurl (switch-curl),
 # checked against the console's own certificates.
-PLATFORM_CPP := platform/switch/backend.cpp platform/switch/update.cpp
+PLATFORM_CPP := platform/switch/backend.cpp platform/switch/os_update.cpp
 PLATFORM_C   := platform/switch/system.c platform/switch/init.c platform/switch/net.c platform/switch/usb_drives.c
 
 GENERATED := $(FONTS) $(WEB_GEN) $(GEN_I18N)
@@ -74,6 +74,12 @@ CPPFILES := $(notdir $(APP)) $(notdir $(IMGUI)) $(notdir $(PLATFORM_CPP))
 
 export LD := $(CXX)
 export OFILES := $(CPPFILES:.cpp=.o) $(CFILES:.c=.o)
+# Objects are named after the file alone and found through VPATH, so two
+# sources with one name (app/update.cpp, platform/switch/update.cpp) would
+# both build the first and link it twice.
+ifneq ($(words $(OFILES)),$(words $(sort $(OFILES))))
+$(error two Switch sources share a file name: $(sort $(foreach o,$(OFILES),$(if $(filter-out 1,$(words $(filter $(o),$(OFILES)))),$(o)))))
+endif
 export INCLUDE := $(foreach d,app engine web vendor/imgui gen platform/switch,-I$(CURDIR)/$(d)) \
                   $(foreach d,$(LIBDIRS),-I$(d)/include) -I$(CURDIR)/$(BUILD)
 export LIBPATHS := $(foreach d,$(LIBDIRS),-L$(d)/lib)

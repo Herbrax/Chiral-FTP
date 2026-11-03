@@ -8,7 +8,7 @@ The code: `app/update.h` and `app/update.cpp` (shared),
 `platform/sdl/update.cpp` with `platform/sdl/macos.mm` (the computers), and
 `platform/android/update.cpp` with `ChiralActivity.java` (Android), and
 `platform/ps5/update.cpp` with `platform/ps5/self-updater/` (the PS5), and
-`platform/switch/update.cpp` (the Switch). The
+`platform/switch/os_update.cpp` (the Switch). The
 working notes for whoever changes it are in `docs/AGENT-NOTES.md` §5b3.
 
 ## Contents

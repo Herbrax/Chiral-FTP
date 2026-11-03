@@ -1023,7 +1023,7 @@ it without asking.
   helper with its own protocol (no SHA-256) and the deeper search. It
   unpacks with miniz (`vendor/miniz`), sets 0777, and swaps the files inside
   the mounted folder once the app is gone.
-- **The Switch** (`platform/switch/update.cpp`): `switch-curl` with the
+- **The Switch** (`platform/switch/os_update.cpp`): `switch-curl` with the
   console's own CA list (`sslGetCertificates`, given to mbedTLS through
   `CURLOPT_SSL_CTX_FUNCTION`; `CURLOPT_CAINFO` is set to NULL, as curl's
   default file isn't on the SD card). The path is argv[0] from hbmenu. The

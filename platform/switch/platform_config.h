@@ -56,5 +56,5 @@
 
 /* Updates itself (app/update.h): asks chiral-ftp.com at startup, downloads
    chiral-ftp.new.nro beside the running .nro, swaps the two and has hbmenu's
-   loader start the new one (platform/switch/update.cpp). */
+   loader start the new one (platform/switch/os_update.cpp). */
 #define CHIRAL_HAS_UPDATER 1

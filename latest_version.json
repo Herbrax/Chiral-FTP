@@ -1,65 +1,72 @@
 {
-  "generated_at": "2026-10-30T13:22:56Z",
-  "latest_version": "1.1",
-  "latest_tag": "v1.1",
+  "generated_at": "2026-11-03T16:08:58Z",
+  "latest_version": "1.2",
+  "latest_tag": "v1.2",
   "platforms": {
     "ps5": {
-      "version": "1.1",
-      "tag": "v1.1",
-      "published_at": "2026-10-22T07:02:41Z",
-      "file": "chiral-ftp-ps5-1.1.zip",
-      "size": 2500981,
-      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.1/chiral-ftp-ps5-1.1.zip"
+      "version": "1.2",
+      "tag": "v1.2",
+      "published_at": "2026-11-03T16:08:39Z",
+      "file": "chiral-ftp-ps5-1.2.zip",
+      "size": 5332956,
+      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.2/chiral-ftp-ps5-1.2.zip"
     },
     "switch": {
-      "version": "1.1",
-      "tag": "v1.1",
-      "published_at": "2026-10-22T07:02:41Z",
+      "version": "1.2",
+      "tag": "v1.2",
+      "published_at": "2026-11-03T16:08:39Z",
       "file": "chiral-ftp.nro",
-      "size": 4003471,
-      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.1/chiral-ftp.nro"
+      "size": 4462223,
+      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.2/chiral-ftp.nro"
     },
     "switch2": null,
-    "android": null,
+    "android": {
+      "version": "1.2",
+      "tag": "v1.2",
+      "published_at": "2026-11-03T16:08:39Z",
+      "file": "chiral-ftp-1.2-android.apk",
+      "size": 9658832,
+      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.2/chiral-ftp-1.2-android.apk"
+    },
     "mac": {
-      "version": "1.1",
-      "tag": "v1.1",
-      "published_at": "2026-10-22T07:02:41Z",
-      "file": "chiral-ftp.app.zip",
-      "size": 8848872,
-      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.1/chiral-ftp.app.zip"
+      "version": "1.2",
+      "tag": "v1.2",
+      "published_at": "2026-11-03T16:08:39Z",
+      "file": "chiral-ftp-1.2.dmg",
+      "size": 9769741,
+      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.2/chiral-ftp-1.2.dmg"
     },
     "windows-x64": {
-      "version": "1.1",
-      "tag": "v1.1",
-      "published_at": "2026-10-22T07:02:41Z",
-      "file": "chiral-ftp-1.1-windows-x64.exe",
-      "size": 20377600,
-      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.1/chiral-ftp-1.1-windows-x64.exe"
+      "version": "1.2",
+      "tag": "v1.2",
+      "published_at": "2026-11-03T16:08:39Z",
+      "file": "chiral-ftp-1.2-windows-x64.exe",
+      "size": 20735488,
+      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.2/chiral-ftp-1.2-windows-x64.exe"
     },
     "windows-arm64": {
-      "version": "1.1",
-      "tag": "v1.1",
-      "published_at": "2026-10-22T07:02:41Z",
-      "file": "chiral-ftp-1.1-windows-x64.exe",
-      "size": 20377600,
-      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.1/chiral-ftp-1.1-windows-x64.exe"
+      "version": "1.2",
+      "tag": "v1.2",
+      "published_at": "2026-11-03T16:08:39Z",
+      "file": "chiral-ftp-1.2-windows-x64.exe",
+      "size": 20735488,
+      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.2/chiral-ftp-1.2-windows-x64.exe"
     },
     "linux-x86_64": {
-      "version": "1.1",
-      "tag": "v1.1",
-      "published_at": "2026-10-22T07:02:41Z",
-      "file": "chiral-ftp-1.1-x86_64.AppImage",
-      "size": 11061752,
-      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.1/chiral-ftp-1.1-x86_64.AppImage"
+      "version": "1.2",
+      "tag": "v1.2",
+      "published_at": "2026-11-03T16:08:39Z",
+      "file": "chiral-ftp-1.2-x86_64.AppImage",
+      "size": 11110904,
+      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.2/chiral-ftp-1.2-x86_64.AppImage"
     },
     "linux-aarch64": {
-      "version": "1.1",
-      "tag": "v1.1",
-      "published_at": "2026-10-22T07:02:41Z",
-      "file": "chiral-ftp-1.1-aarch64.AppImage",
-      "size": 10684936,
-      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.1/chiral-ftp-1.1-aarch64.AppImage"
+      "version": "1.2",
+      "tag": "v1.2",
+      "published_at": "2026-11-03T16:08:39Z",
+      "file": "chiral-ftp-1.2-aarch64.AppImage",
+      "size": 10729992,
+      "url": "https://github.com/Herbrax/Chiral-FTP/releases/download/v1.2/chiral-ftp-1.2-aarch64.AppImage"
     }
   }
 }

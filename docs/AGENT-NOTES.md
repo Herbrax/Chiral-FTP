@@ -1032,7 +1032,9 @@ it without asking.
   file alone, so the file isn't `update.cpp` (it would clash with
   `app/update.cpp`). The path is argv[0] from hbmenu. The
   download is `chiral-ftp.new.nro`; the old one goes to `.nro.old` (FAT
-  won't rename over a file); `envSetNextLoad()` starts the new one at exit.
+  won't rename over a file). Then it just closes, as when quit: the
+  maintainer didn't want `envSetNextLoad()` starting the new one. A wrong
+  console date fails the check (the ssl service checks certificate dates).
 - **The Mac's release is a `.dmg`** (`chiral-ftp-<version>.dmg`, made by
   `tools/make-dmg.sh` with an Applications link). The updater mounts it
   read-only with `hdiutil attach -nobrowse` and copies the only `.app` out

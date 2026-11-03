@@ -285,11 +285,14 @@ on saying 1.2. Any other name is kept.
    its name. An older `.old` is deleted first, since the SD card's FAT won't
    rename over a file. hbloader has the running `.nro` in memory, so it can
    be renamed.
-5. **Restart:** as chiral-ftp exits, `envSetNextLoad()` has hbmenu's loader
-   start the new `.nro`. Where the launcher can't do that, the dialog says to
-   open it again from hbmenu.
-6. **Clean-up:** at each start, the new version deletes the `.old` and any
-   `.new.nro` a cut-short download left.
+5. **Closing:** chiral-ftp closes, the way it does when quit, and the
+   dialog says to open it again from hbmenu. It doesn't start the new
+   version itself.
+6. **Clean-up:** the `.old` is deleted as soon as the new `.nro` is in place
+   (nothing reads it: no RomFS, and hbloader has the program in memory). At
+   each start, the app also deletes a `.old` that couldn't be, and any
+   `.new.nro` a cut-short download left, by the name of the `.nro` it was
+   started from.
 
 **Limits**
 - **A power cut between the two renames** leaves `chiral-ftp.nro.old` and
@@ -301,9 +304,11 @@ on saying 1.2. Any other name is kept.
   opened then.
 - **Switch 2:** `latest_version.json` has a `switch2` key but no build. A
   Switch 2 asks as `switch`.
-- **Not yet built or run.** It compiles with devkitA64 and libnx's headers;
-  the Switch workflow (which now installs `switch-curl`) builds it, and no
-  update has been tried on a console.
+- **The console's clock must be right.** The ssl service checks
+  certificate dates, and a Switch kept offline often has the wrong date: the
+  check then fails ("Could not check for updates"). The message log says why
+  (curl's error, with the ssl service's result code) and, for a failed secure
+  connection, shows the console's date and where to set it.
 
 ## PS5
 
@@ -425,6 +430,6 @@ catalog.
 | **Windows** | its own `.exe` path | WinHTTP | rename running `.exe` to `.old` | starts new `.exe`, which deletes `.old` | no UAC; antivirus locks; leftover `.old` from 1.1; same-version move to ARM needs the worker |
 | **Mac** | its own bundle | NSURLSession, the `.dmg` (or `.app.zip`) | copy the app out, swap bundles | `open -n` | App Translocation; non-admin; permissions re-asked; not yet run on a Mac |
 | **Linux** | `$APPIMAGE` | `curl` or `wget` | one rename | starts new AppImage | AppImage only; needs curl or wget; not yet run on Linux |
-| **Switch** | `argv[0]` from hbmenu | `switch-curl` on the console's ssl service | `.new.nro`, `.nro.old`, rename | `envSetNextLoad` | FAT renames; not yet built or run |
+| **Switch** | `argv[0]` from hbmenu | `switch-curl` on the console's ssl service | `.new.nro`, `.nro.old`, rename | closes; opened again from hbmenu | FAT renames; not yet built or run |
 | **PS5** | search, two levels deep | PacBrew libcurl, streamed to `self-updater.elf` | the helper swaps the files after chiral-ftp closes | the user reopens it | payload loader; full elevation; not yet built or run |
 | **Android** | n/a (system installer) | `HttpsURLConnection` | Android's installer | its **Open** button | unknown-sources setting; same signing key; not yet run on a device |

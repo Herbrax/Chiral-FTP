@@ -9,20 +9,22 @@
 
 **The ultimate file manager and FTP interface, on every machine you own.**
 chiral-ftp is cross-platform: it runs on the **PS5**, the **Nintendo Switch**,
-the **Mac** and **Linux**. It's used with a controller on the TV (or a
-keyboard and mouse on a computer) and works in the spirit of FileZilla. And
-every copy finds the others on your network: **Quick connect** opens one
-from another in two presses.
+**Windows**, the **Mac**, **Linux** and **Android** (phones, tablets, foldables
+and Android TV). It's used with a controller on the TV, a keyboard and mouse
+on a computer, or touch on a phone, and works in the spirit of FileZilla.
+Every copy finds the others on your network: **Quick connect** opens one
+from another in two presses. And every copy [updates itself](#updates).
 
 | | |
 |---|---|
 | **PS5** | a native title on the dashboard, via ShadowMountPlus |
 | **Nintendo Switch** | homebrew (`.nro`) from hbmenu |
-| **Mac** | `chiral-ftp.app` (macOS 27 or later, Apple silicon) |
+| **Mac** | a `.dmg` with `chiral-ftp.app` (macOS 27 or later, Apple silicon) |
 | **Linux** | an `.AppImage` (x86_64 or ARM64) |
 | **Windows** | one `.exe` (Windows 10 or 11, x64; runs on Windows on ARM too) |
+| **Android** | one `.apk` for phones, tablets, foldables and Android TV (Android 8 or later) |
 
-Android, PS4 and other platforms are next.
+PS4 and other platforms are next.
 
 When it opens, you choose what to do:
 
@@ -50,6 +52,8 @@ stops them.
 | ![The start screen on the PS5](docs/screenshots/ps5-start.png) | ![The start screen on the Switch](docs/screenshots/switch-start.png) |
 | **On a computer** (Windows, Mac and Linux) | **The web app**, in any browser |
 | ![The computer interface: the SFTP server page](docs/screenshots/computer-server.png) | ![The web app's FTP / SFTP client](docs/screenshots/web-client.png) |
+| **On a foldable or a tablet** (Android) | **On Android TV** |
+| ![The Android file manager, two folders side by side](docs/screenshots/fold-files.png) | ![The start screen on Android TV](docs/screenshots/androidtv-start.png) |
 
 Every screen, on every platform: [Screenshots](#screenshots).
 
@@ -77,7 +81,7 @@ Settings → Language; "Automatic" follows the system language.
 
 **Install**
 
-1. Download `chiral-ftp-ps5-1.1.zip` from the releases and unpack it. It
+1. Download `chiral-ftp-ps5-1.2.zip` from the releases and unpack it. It
    contains the folder `PPSA96024`.
 2. Copy that folder to `/data/homebrew/PPSA96024` on the PS5.
 3. Make sure the folder and **every file in it are 777**. The PS5 refuses to
@@ -86,11 +90,12 @@ Settings → Language; "Automatic" follows the system language.
 4. Start chiral-ftp from the dashboard. The start screen should say "Full
    access to the console's storage", and how it was granted.
 
-**Updating:** close chiral-ftp completely before you replace its files. Most
-FTP clients overwrite `eboot.bin` in place, and the console silently refuses
-that while the title is in use. Upload it under another name and rename it
-over the old one, or use `make PLATFORM=ps5 deploy` (see
-[Building](#building)).
+**Updating:** from 1.2 on, chiral-ftp offers new versions itself (see
+[Updates](#updates)). To update by hand, close chiral-ftp completely before
+you replace its files. Most FTP clients overwrite `eboot.bin` in place, and
+the console silently refuses that while the title is in use. Upload it under
+another name and rename it over the old one, or use `make PLATFORM=ps5
+deploy` (see [Building](#building)).
 
 Settings, saved sites and history are kept in `/data/chiral-ftp`, so updates
 keep them. Every file chiral-ftp writes to the PS5 is set to 777, so homebrew
@@ -105,8 +110,11 @@ the server allows it.
 **Install**
 
 1. Download `chiral-ftp.nro` from the releases.
-2. Copy it into `/switch` on the SD card. To update, replace it.
+2. Copy it into `/switch` on the SD card.
 3. Start it from hbmenu.
+
+From 1.2 on, chiral-ftp offers new versions itself (see [Updates](#updates));
+to update by hand, replace the `.nro`.
 
 Started from the album, homebrew runs with its memory capped near 448 MB.
 That is enough for chiral-ftp, but for the console's full memory hold **R**
@@ -124,8 +132,10 @@ Settings, saved sites, history and host keys are kept in
 
 **Mac**
 
-1. Download `chiral-ftp.app` from the releases.
-2. Drag it to Applications. It carries its own libraries.
+1. Download `chiral-ftp-1.2.dmg` from the releases and open it.
+2. Drag `chiral-ftp.app` onto **Applications**, and open it from there (from
+   the disk image or Downloads it runs, but can't update itself). It carries
+   its own libraries.
 3. The app isn't notarized by Apple, so the first time macOS says it can't
    check it: open **System Settings > Privacy & Security** and choose
    **Open Anyway** (or run `xattr -dr com.apple.quarantine
@@ -136,8 +146,8 @@ It needs **macOS 27 or later on Apple silicon**, and keeps its settings in
 
 **Linux**
 
-1. Download `chiral-ftp-1.1-x86_64.AppImage` from the releases, or
-   `chiral-ftp-1.1-aarch64.AppImage` for an ARM computer (a Raspberry Pi 4
+1. Download `chiral-ftp-1.2-x86_64.AppImage` from the releases, or
+   `chiral-ftp-1.2-aarch64.AppImage` for an ARM computer (a Raspberry Pi 4
    or 5 on 64-bit, for example).
 2. Make it executable (`chmod +x chiral-ftp-*.AppImage`, or Properties >
    Allow executing as a program) and run it.
@@ -149,7 +159,7 @@ It keeps its settings in `~/.local/share/chiral-ftp`.
 
 **Windows**
 
-1. Download `chiral-ftp-1.1-windows-x64.exe` from the releases. It also runs
+1. Download `chiral-ftp-1.2-windows-x64.exe` from the releases. It also runs
    on Windows on ARM PCs, through Windows' own x64 emulation.
 2. Run it; nothing needs installing. The program isn't signed, so the first
    time Windows SmartScreen says it doesn't recognise it: choose **More info
@@ -182,15 +192,48 @@ To build it yourself instead, see [Building](#building): `make
 PLATFORM=sdl` (it needs libssh, `brew install libssh`, for the SFTP server),
 then `make PLATFORM=sdl app` for the Mac app.
 
+## Android
+
+**Requirements:** Android 8.0 or later, on ARM (64- and 32-bit) or x86_64.
+One APK for phones, tablets, foldables and Android TV.
+
+**Install**
+
+1. Download `chiral-ftp-1.2-android.apk` from the releases, on the device or
+   to copy over to it.
+2. Open it and install it, allowing your browser or file manager to install
+   apps when Android asks.
+3. chiral-ftp asks for **All files access**, to manage and share your whole
+   storage. Without it, it still works, with only what Android lets any app
+   see.
+
+To update by hand, install the new APK over the old one; your settings stay.
+
+**On a phone, a tablet or a foldable**, it's made for touch: tabs for Files,
+Client, Server and Quick connect, tap to open, long-press to mark, drag to
+scroll. A phone shows one pane at a time; an unfolded foldable or a tablet
+shows two side by side, and the layout follows the screen as you fold,
+unfold or turn it. Files open in other apps (Open, Open with…, Share), and an
+APK opens in the system installer. The server is SFTP or FTP, with its key's
+fingerprint on the screen.
+
+**On Android TV**, it has the consoles' interface, used with the remote: the
+D-pad moves, **OK** opens, **Back** goes back, **hold OK** opens the menu, and
+**Play/Pause** marks. A gamepad works too.
+
+**Back** goes up a folder; on the first screen it goes to the home screen,
+and the servers keep running.
+
 ## Quick connect
 
 Every copy of chiral-ftp on your network shows up in every other one, PS5,
-Switch, Mac or Linux alike, whatever it's doing. Nothing has to be running
+Switch, Windows, Mac, Linux or Android alike, whatever it's doing. Nothing has to be running
 and nothing has to be set up.
 
-1. **Open Quick connect.** On a console: press **Up** on the start screen.
-   On a computer: **Quick connect** in the sidebar (**⌘K** on a Mac). The
-   devices nearby are listed, with their names and addresses.
+1. **Open Quick connect.** On a console or Android TV: press **Up** on the
+   start screen. On a computer: **Quick connect** in the sidebar (**⌘K** on a
+   Mac). On a phone: the **Quick connect** tab. The devices nearby are
+   listed, with their names and addresses.
 
    | On a console (PS5) | On a computer (Mac) |
    |---|---|
@@ -217,6 +260,36 @@ while that server runs. **Deny**, or let the request run out (30 seconds),
 and nothing is shared. A console is visible while chiral-ftp is open on its
 start screen; a computer, whenever the app is open. Quick connect uses UDP
 port 47121 on your local network.
+
+## Updates
+
+From 1.2 on, chiral-ftp keeps itself up to date, on every platform. At
+startup it asks chiral-ftp.com whether there's a newer version, and if there
+is, it offers **Update**, **Not now** (asks again in 7 days) or **Skip this
+version**.
+
+| | What **Update** does |
+|---|---|
+| **Windows, Mac, Linux** | Replaces the `.exe`, the `.app` or the AppImage where it is, and restarts on the new version. |
+| **Android** | Downloads the new APK and opens Android's installer. Your settings stay. |
+| **Nintendo Switch** | Replaces the `.nro` you started, under the same name, then closes. Open it again from hbmenu. |
+| **PS5** | Closes, puts the new version in chiral-ftp's folder, and shows a notification when it's ready to open. It needs the ELF loader on port 9021, like chiral-ftp itself. |
+
+- **When a copy can't update itself**, you get the download page instead:
+  for example a folder this account can't change, a Mac app opened from the
+  disk image or Downloads, a Switch `.nro` started without hbmenu, or more
+  than one copy installed on the PS5.
+- **Settings > Check for updates** turns the startup check off; **Check now**
+  asks straight away.
+- **What the check sends:** the platform, the version and a random ID made on
+  first start, to count devices. Nothing else.
+- **On the Switch, the console's clock must be right**: the secure connection
+  checks dates. If the check fails, the message log shows the console's date
+  and where to set it.
+- **Test builds** (a version with `-beta`, `-alpha` or `-dev`) never check.
+
+How each platform does it, and its limits, is in
+[docs/AutoUpdate.md](docs/AutoUpdate.md).
 
 ## Using it
 
@@ -296,7 +369,27 @@ Android TV gets the consoles' layout, used with the remote.
 | | | |
 |---|---|---|
 | **Files**<br>![The file manager in a Download folder](docs/screenshots/android-files.png) | **A file's menu** (long-press)<br>![Open, Open with, Share, Select, Cut, Copy, Rename, Delete](docs/screenshots/android-file-menu.png) | **FTP / SFTP client**<br>![This device above, a NAS below, both in Movies](docs/screenshots/android-client.png) |
-| **FTP / SFTP server**<br>![The SFTP server running, with its address and key](docs/screenshots/android-server.png) | **Quick connect**<br>![A TV, a Switch and a PS5 nearby, and the download QR code](docs/screenshots/android-quick-connect.png) | **Quick connect: asking**<br>![The Android device asking the PS5, code 5043](docs/screenshots/android-quick-connect-asking.png) |
+| **FTP / SFTP server**<br>![The SFTP server running, with its address and key](docs/screenshots/android-server.png) | **Quick connect**<br>![A TV, a Switch and a PS5 nearby](docs/screenshots/android-quick-connect.png) | **Quick connect: asking**<br>![The Android device asking the PS5, code 5043](docs/screenshots/android-quick-connect-asking.png) |
+
+**Sideways**, the tabs slide in from the edge:
+
+| | | |
+|---|---|---|
+| **Files**<br>![The file manager on a phone held sideways](docs/screenshots/android-landscape-files.png) | **Client**<br>![The client on a phone held sideways](docs/screenshots/android-landscape-client.png) | **The tabs**<br>![The tabs, slid in from the edge](docs/screenshots/android-landscape-tabs.png) |
+
+**On a foldable or a tablet**, two panes side by side:
+
+| | |
+|---|---|
+| **Files**<br>![Two folders side by side on an unfolded foldable](docs/screenshots/fold-files.png) | **Client**<br>![This device and a server side by side](docs/screenshots/fold-client.png) |
+| **A file's menu**<br>![A file's menu on a foldable](docs/screenshots/fold-file-menu.png) | **FTP / SFTP server**<br>![The server page on a foldable](docs/screenshots/fold-server.png) |
+| **Quick connect**<br>![Quick connect on a foldable](docs/screenshots/fold-quick-connect.png) | **Settings and About**<br>![Settings and About side by side](docs/screenshots/fold-settings-about.png) |
+
+**On Android TV**, the consoles' layout, used with the remote:
+
+| | | |
+|---|---|---|
+| **Start screen**<br>![chiral-ftp's start screen on Android TV](docs/screenshots/androidtv-start.png) | **File manager**<br>![Two folders side by side, one file marked](docs/screenshots/androidtv-file-manager.png) | **Quick connect**<br>![Quick connect on Android TV: a Mac, a Switch, a PS5 and a foldable nearby](docs/screenshots/androidtv-quick-connect.png) |
 
 ### The web app, in a browser
 
@@ -309,7 +402,8 @@ The same pages whichever device serves them: a computer, a PS5 or a Switch.
 ## Known gaps
 
 - **Switch: save data and system storage** (NAND) aren't reachable.
-- **The SFTP server is on computers only**; the consoles' server is FTP.
+- **The SFTP server is on computers and Android only**; the consoles'
+  server is FTP.
 - **Mac**: macOS 27 or later on Apple silicon only, and not notarized
   (see [Windows, Mac and Linux](#windows-mac-and-linux)).
 
@@ -374,6 +468,24 @@ make PLATFORM=sdl release  # and adds it to release/
 The shared code is written against POSIX; `platform/sdl/win32/posix.h`
 gives it that on Windows, with paths as MSYS2 writes them (`/c/Users`, and
 `/` for the list of drives).
+
+**Android** is one APK for every device, with the native library for
+arm64-v8a, armeabi-v7a and x86_64. It needs the Android SDK with the NDK and
+CMake, JDK 17, Python 3 and curl, and builds on Linux, macOS or Windows (Git
+Bash or MSYS2):
+
+```sh
+sdkmanager "ndk;28.2.13676358" "cmake;3.31.6" "platforms;android-35" "build-tools;35.0.1"
+tools/build-android.sh     # dist/chiral-ftp-<version>-android.apk (debug-signed)
+```
+
+The first run fetches and builds the libraries for each ABI (mbedTLS,
+libssh2, libssh and libmicrohttpd).
+
+**Every platform also builds on GitHub Actions**, one workflow each, on every
+push to `dev`; a run's page has its file. **New Release** builds the ticked
+platforms and makes the release, with its notes from
+[CHANGELOG.md](CHANGELOG.md) and its checksums.
 
 The generators are Python 3; if your `python3` is called something else, pass
 it: `make PYTHON=python`. `tools/render-icon.py` regenerates the Switch icon,

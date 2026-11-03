@@ -273,11 +273,10 @@ on saying 1.2. Any other name is kept.
 ## Nintendo Switch
 
 **How it works**
-1. **The check and the download:** devkitPro's libcurl (`switch-curl`) on
-   mbedTLS. The certificates it checks servers against are the console's
-   own: ssl's built-in CA list (`sslGetCertificates`), the trusted ones,
-   handed to mbedTLS before each handshake. Nintendo's system updates keep
-   that list current, and the app carries none of its own.
+1. **The check and the download:** devkitPro's libcurl (`switch-curl`),
+   whose TLS is the console's own ssl service (curl's libnx backend). It
+   checks servers against the console's trusted certificates, which
+   Nintendo's system updates keep current; the app carries none of its own.
 2. **Where it is:** hbmenu passes the `.nro`'s own path in argv
    (`sdmc:/switch/chiral-ftp.nro`). Without it (nxlink, a forwarder) the
    copy can't update itself, and the user gets the download page.
@@ -426,6 +425,6 @@ catalog.
 | **Windows** | its own `.exe` path | WinHTTP | rename running `.exe` to `.old` | starts new `.exe`, which deletes `.old` | no UAC; antivirus locks; leftover `.old` from 1.1; same-version move to ARM needs the worker |
 | **Mac** | its own bundle | NSURLSession, the `.dmg` (or `.app.zip`) | copy the app out, swap bundles | `open -n` | App Translocation; non-admin; permissions re-asked; not yet run on a Mac |
 | **Linux** | `$APPIMAGE` | `curl` or `wget` | one rename | starts new AppImage | AppImage only; needs curl or wget; not yet run on Linux |
-| **Switch** | `argv[0]` from hbmenu | `switch-curl`, the console's CA list | `.new.nro`, `.nro.old`, rename | `envSetNextLoad` | FAT renames; not yet built or run |
+| **Switch** | `argv[0]` from hbmenu | `switch-curl` on the console's ssl service | `.new.nro`, `.nro.old`, rename | `envSetNextLoad` | FAT renames; not yet built or run |
 | **PS5** | search, two levels deep | PacBrew libcurl, streamed to `self-updater.elf` | the helper swaps the files after chiral-ftp closes | the user reopens it | payload loader; full elevation; not yet built or run |
 | **Android** | n/a (system installer) | `HttpsURLConnection` | Android's installer | its **Open** button | unknown-sources setting; same signing key; not yet run on a device |

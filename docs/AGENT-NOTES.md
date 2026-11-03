@@ -1023,10 +1023,14 @@ it without asking.
   helper with its own protocol (no SHA-256) and the deeper search. It
   unpacks with miniz (`vendor/miniz`), sets 0777, and swaps the files inside
   the mounted folder once the app is gone.
-- **The Switch** (`platform/switch/os_update.cpp`): `switch-curl` with the
-  console's own CA list (`sslGetCertificates`, given to mbedTLS through
-  `CURLOPT_SSL_CTX_FUNCTION`; `CURLOPT_CAINFO` is set to NULL, as curl's
-  default file isn't on the SD card). The path is argv[0] from hbmenu. The
+- **The Switch** (`platform/switch/os_update.cpp`): `switch-curl` is curl
+  **7.69** built on **libnx's ssl service**, not mbedTLS (`--with-libnx` in
+  devkitPro's PKGBUILD). The service checks against the console's trusted
+  certificates by itself; `CURLOPT_SSL_CTX_FUNCTION` gets an `SslContext *`,
+  so mbedTLS code there corrupts memory. No `_STR` options (7.85+):
+  `CURLOPT_PROTOCOLS` with `CURLPROTO_HTTPS`. Objects are named after the
+  file alone, so the file isn't `update.cpp` (it would clash with
+  `app/update.cpp`). The path is argv[0] from hbmenu. The
   download is `chiral-ftp.new.nro`; the old one goes to `.nro.old` (FAT
   won't rename over a file); `envSetNextLoad()` starts the new one at exit.
 - **The Mac's release is a `.dmg`** (`chiral-ftp-<version>.dmg`, made in

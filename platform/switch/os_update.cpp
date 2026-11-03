@@ -1,7 +1,8 @@
 // Updates on the Switch (app/update.h). The question and the download go over
-// HTTPS with devkitPro's libcurl, on mbedTLS, and the certificates it checks
-// servers against are the console's own (ssl's built-in CA list, kept up to
-// date by Nintendo's system updates), so the app carries none of its own.
+// HTTPS with devkitPro's libcurl, whose TLS is the console's own ssl service
+// (curl's libnx backend): it checks servers against the console's trusted
+// certificates, kept up to date by Nintendo's system updates, so the app
+// carries none of its own.
 //
 // Putting the new version in place:
 //   1. The .nro's own path comes from hbmenu (argv): sdmc:/switch/chiral-ftp.nro.
@@ -15,81 +16,36 @@
 #include "update.h"
 
 #include <cstdio>
-#include <pthread.h>
 #include <cstring>
+#include <pthread.h>
 #include <string>
 #include <strings.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <vector>
 
 #include <curl/curl.h>
-#include <mbedtls/ssl.h>
-#include <mbedtls/x509_crt.h>
 #include <switch.h>
 
 #include "i18n.h"
 
 namespace {
 
-/* ---------- the console's certificates ---------- */
-
-/* ssl's built-in CA certificates, parsed once into the chain every handshake
-   checks against. False when the service didn't give them. */
-pthread_mutex_t g_ca_lock = PTHREAD_MUTEX_INITIALIZER;
-mbedtls_x509_crt g_ca;
-bool g_ca_loaded = false;
-
-bool load_ca() {
-  pthread_mutex_lock(&g_ca_lock);
-  if(!g_ca_loaded && R_SUCCEEDED(sslInitialize(1))) {
-    u32 ids[1] = {(u32)SslCaCertificateId_All};
-    u32 size = 0, total = 0;
-    if(R_SUCCEEDED(sslGetCertificateBufSize(ids, 1, &size)) && size) {
-      std::vector<u8> buf(size);
-      if(R_SUCCEEDED(sslGetCertificates(buf.data(), size, ids, 1, &total))) {
-        mbedtls_x509_crt_init(&g_ca);
-        const SslBuiltInCertificateInfo *info = (const SslBuiltInCertificateInfo *)buf.data();
-        int parsed = 0;
-        for(u32 i = 0; i < total; i++) {
-          /* Only the ones the console trusts; cert_data is a pointer into buf. */
-          if(info[i].status == SslTrustedCertStatus_EnabledTrusted && info[i].cert_data &&
-             !mbedtls_x509_crt_parse_der(&g_ca, info[i].cert_data, info[i].cert_size)) {
-            parsed++;
-          }
-        }
-        g_ca_loaded = parsed > 0;
-      }
-    }
-    sslExit();
-  }
-  const bool ok = g_ca_loaded;
-  pthread_mutex_unlock(&g_ca_lock);
-  return ok;
-}
-
-/* curl's mbedTLS set-up, handed over before each handshake: the chain is the
-   console's. */
-CURLcode use_console_ca(CURL *, void *config, void *) {
-  mbedtls_ssl_conf_ca_chain(static_cast<mbedtls_ssl_config *>(config), &g_ca, nullptr);
-  return CURLE_OK;
-}
-
 /* ---------- HTTPS ---------- */
 
 pthread_once_t g_curl_once = PTHREAD_ONCE_INIT;
 bool g_curl_ready = false;
 
+/* Also starts the ssl service (and csrng) for curl's libnx backend. */
 void curl_start() {
   g_curl_ready = curl_global_init(CURL_GLOBAL_DEFAULT) == CURLE_OK;
 }
 
-/* A handle for the update API or GitHub: HTTPS only, certificates and names
-   checked against the console's list, and a stall rather than a total time
-   ending a download. */
+/* A handle for the update API or GitHub: HTTPS only, the certificate (against
+   the console's trusted ones) and the name checked, and a stall rather than a
+   total time ending a download. */
 CURL *handle(const std::string &url) {
   pthread_once(&g_curl_once, curl_start);
-  if(!g_curl_ready || !load_ca()) return nullptr;
+  if(!g_curl_ready) return nullptr;
   CURL *c = curl_easy_init();
   if(!c) return nullptr;
   CURLcode ok = CURLE_OK;
@@ -101,13 +57,13 @@ CURL *handle(const std::string &url) {
   set(CURLOPT_NOSIGNAL, 1L);
   set(CURLOPT_SSL_VERIFYPEER, 1L);
   set(CURLOPT_SSL_VERIFYHOST, 2L);
-  /* No file of certificates: curl's built-in default would be one the SD card
-     doesn't have. */
+  /* No file of certificates: the backend would import one on top of the
+     console's, and a built-in default would be a path the SD card hasn't. */
   set(CURLOPT_CAINFO, (const char *)nullptr);
   set(CURLOPT_CAPATH, (const char *)nullptr);
-  set(CURLOPT_SSL_CTX_FUNCTION, use_console_ca);
-  set(CURLOPT_PROTOCOLS_STR, "https");
-  set(CURLOPT_REDIR_PROTOCOLS_STR, "https");
+  /* switch-curl is 7.69: the _STR forms of these came in 7.85. */
+  set(CURLOPT_PROTOCOLS, (long)CURLPROTO_HTTPS);
+  set(CURLOPT_REDIR_PROTOCOLS, (long)CURLPROTO_HTTPS);
   set(CURLOPT_CONNECTTIMEOUT, 15L);
   set(CURLOPT_LOW_SPEED_LIMIT, 1L);
   set(CURLOPT_LOW_SPEED_TIME, 20L);

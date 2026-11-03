@@ -33,7 +33,7 @@ else
 endif
 
 # The updater (app/update.h): HTTPS through devkitPro's libcurl (switch-curl),
-# checked against the console's own certificates.
+# whose TLS is the console's ssl service: -lcurl needs only -lz and -lnx.
 PLATFORM_CPP := platform/switch/backend.cpp platform/switch/os_update.cpp
 PLATFORM_C   := platform/switch/system.c platform/switch/init.c platform/switch/net.c platform/switch/usb_drives.c
 

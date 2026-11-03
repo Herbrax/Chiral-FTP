@@ -32,7 +32,9 @@ else
   WEB_GEN :=
 endif
 
-PLATFORM_CPP := platform/switch/backend.cpp
+# The updater (app/update.h): HTTPS through devkitPro's libcurl (switch-curl),
+# checked against the console's own certificates.
+PLATFORM_CPP := platform/switch/backend.cpp platform/switch/update.cpp
 PLATFORM_C   := platform/switch/system.c platform/switch/init.c platform/switch/net.c platform/switch/usb_drives.c
 
 GENERATED := $(FONTS) $(WEB_GEN) $(GEN_I18N)
@@ -48,7 +50,7 @@ LDFLAGS  := -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir 
 # with the NTFS-3G and lwext4 portlibs (dkp-pacman -S switch-ntfs-3g switch-lwext4).
 USB_LIB  := -lusbhsfs -lntfs-3g -llwext4
 USB_DEP  := .deps/switch/lib/libusbhsfs.a
-LIBS     := -lssh2 $(MHD_LIB) $(USB_LIB) -lmbedtls -lmbedx509 -lmbedcrypto -lz -lnx
+LIBS     := -lssh2 $(MHD_LIB) $(USB_LIB) -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -lz -lnx
 LIBDIRS  := $(PORTLIBS) $(LIBNX) $(CURDIR)/.deps/switch
 
 .deps/switch/lib/libmicrohttpd.a:

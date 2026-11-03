@@ -52,10 +52,22 @@ jobs:
         run: ./tools/build-sftp-deps.sh host
       - name: Build
         run: make PLATFORM=sdl VERSION="$VERSION" -j"$(sysctl -n hw.ncpu)" app
-      - name: Zip
-        run: ditto -c -k --keepParent dist/chiral-ftp.app dist/chiral-ftp.app.zip
+      # chiral-ftp-<version>.dmg: chiral-ftp.app beside a link to Applications,
+      # to drag it onto. The updater opens it the same way (platform/sdl/update.cpp).
+      # hdiutil sometimes finds the runner's disk busy: tried three times.
+      - name: Disk image
+        run: |
+          mkdir -p dist/dmg
+          ditto dist/chiral-ftp.app dist/dmg/chiral-ftp.app
+          ln -s /Applications dist/dmg/Applications
+          for attempt in 1 2 3; do
+            hdiutil create -volname chiral-ftp -srcfolder dist/dmg -fs HFS+ -format UDZO -ov \
+              "dist/chiral-ftp-$VERSION.dmg" && break
+            sleep 10
+          done
+          hdiutil verify "dist/chiral-ftp-$VERSION.dmg"
       - uses: actions/upload-artifact@v4
         with:
           name: chiral-ftp-${{ env.VERSION }}-mac
-          path: dist/chiral-ftp.app.zip
+          path: dist/chiral-ftp-*.dmg
           if-no-files-found: error

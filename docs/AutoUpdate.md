@@ -1,14 +1,14 @@
 # Auto-update
 
 How chiral-ftp finds out about a new version, and how each platform puts it
-in place. The limits of each are listed too. Windows, Mac, Linux, Android
-and the PS5 are built. The Switch is planned, and its section says how it
-would work and what stands in the way.
+in place. The limits of each are listed too. Every platform has it: Windows,
+Mac, Linux, Android, the Switch and the PS5.
 
 The code: `app/update.h` and `app/update.cpp` (shared),
 `platform/sdl/update.cpp` with `platform/sdl/macos.mm` (the computers), and
 `platform/android/update.cpp` with `ChiralActivity.java` (Android), and
-`platform/ps5/update.cpp` with `platform/ps5/self-updater/` (the PS5). The
+`platform/ps5/update.cpp` with `platform/ps5/self-updater/` (the PS5), and
+`platform/switch/update.cpp` (the Switch). The
 working notes for whoever changes it are in `docs/AGENT-NOTES.md` §5b3.
 
 ## Contents
@@ -17,7 +17,7 @@ working notes for whoever changes it are in `docs/AGENT-NOTES.md` §5b3.
 - [Windows](#windows)
 - [Mac](#mac)
 - [Linux](#linux)
-- [Nintendo Switch (planned)](#nintendo-switch-planned)
+- [Nintendo Switch](#nintendo-switch)
 - [PS5](#ps5)
 - [Android](#android)
 - [Summary](#summary)
@@ -194,11 +194,13 @@ on saying 1.2. Any other name is kept.
    it is: `/Applications`, `~/Applications`, the Desktop or anywhere else.
 2. **Can it be replaced?** Both the bundle and the folder it is in must be
    writable. If not, the dialog offers the download page.
-3. **Download:** `NSURLSession`. It needs the release's `chiral-ftp.app.zip`
-   and is saved as `.chiral-ftp-update.zip` next to the bundle.
+3. **Download:** `NSURLSession`. The release's `chiral-ftp-<version>.dmg`
+   (or an older release's `chiral-ftp.app.zip`), saved next to the bundle.
 4. **Swap:**
-   1. `ditto -x -k` unpacks the zip into `.chiral-ftp-update/` beside the
-      bundle.
+   1. A disk image is mounted read-only, hidden from the Finder
+      (`hdiutil attach -nobrowse`). Its `chiral-ftp.app` is copied with
+      `ditto` into `.chiral-ftp-update/` beside the bundle, and the image is
+      unmounted. A zip is unpacked there with `ditto -x -k`.
    2. The new bundle must contain `Contents/MacOS/chiral-ftp`.
    3. Everything in `Contents/MacOS` is made executable again, and the
       quarantine attribute is removed. A zip made off a Mac (v1.1's was made
@@ -216,11 +218,14 @@ on saying 1.2. Any other name is kept.
   and the dialog says to move chiral-ftp to Applications first.
 - **Standard (non-admin) accounts usually can't write to `/Applications`**,
   so they get the download page.
-- **Only a `.zip` updates in place.** `latest_version.json` prefers a
-  `.dmg` to a `.app.zip` when a release has both. Upload a `.dmg` alongside
-  the zip, and every Mac gets the download page instead. Either keep
-  releasing the zip alone, or put `*.app.zip` first in
-  `tools/latest-version.py`.
+- **The release is a `.dmg`** (`chiral-ftp-<version>.dmg`: `chiral-ftp.app`
+  and a link to Applications), which the Mac workflow makes, and
+  `latest_version.json` prefers. A `.zip` still updates in place too, for
+  releases before the change. Copies built before the disk-image support
+  (the first 0.9 test builds) understand only the zip, and get the download
+  page for a `.dmg`.
+- **Opened straight from the disk image** the app runs read-only, so it
+  can't update itself until it's dragged to Applications.
 - **Permissions may be asked again after each update.** The app is
   ad-hoc signed, so each build has a different code identity, and macOS can
   ask again for permissions it ties to that identity. These are the Local
@@ -265,35 +270,41 @@ on saying 1.2. Any other name is kept.
   were run on Windows through MSYS2's POSIX layer, with real `curl`. A real
   AppImage update on a Linux machine is still to do.
 
-## Nintendo Switch (planned)
+## Nintendo Switch
 
-**How it would work**
-1. **Where it is:** hbmenu passes the `.nro`'s own path in `argv[0]`
-   (`sdmc:/switch/chiral-ftp.nro`), so there's nothing to search for.
-2. **Download** into `chiral-ftp.new.nro` beside it.
-3. **Swap:** rename the old file to `chiral-ftp.old`, then the new one to
-   `chiral-ftp.nro`.
-4. **Restart:** `envSetNextLoad()` can ask hbloader to start the new `.nro`
-   as chiral-ftp exits. Otherwise, the user is asked to start it again from
-   hbmenu.
-5. **Clean-up:** the new version deletes the `.old`.
+**How it works**
+1. **The check and the download:** devkitPro's libcurl (`switch-curl`) on
+   mbedTLS. The certificates it checks servers against are the console's
+   own: ssl's built-in CA list (`sslGetCertificates`), the trusted ones,
+   handed to mbedTLS before each handshake. Nintendo's system updates keep
+   that list current, and the app carries none of its own.
+2. **Where it is:** hbmenu passes the `.nro`'s own path in argv
+   (`sdmc:/switch/chiral-ftp.nro`). Without it (nxlink, a forwarder) the
+   copy can't update itself, and the user gets the download page.
+3. **Download:** beside it, as `chiral-ftp.new.nro`.
+4. **Swap:** the old one becomes `chiral-ftp.nro.old` and the new one takes
+   its name. An older `.old` is deleted first, since the SD card's FAT won't
+   rename over a file. hbloader has the running `.nro` in memory, so it can
+   be renamed.
+5. **Restart:** as chiral-ftp exits, `envSetNextLoad()` has hbmenu's loader
+   start the new `.nro`. Where the launcher can't do that, the dialog says to
+   open it again from hbmenu.
+6. **Clean-up:** at each start, the new version deletes the `.old` and any
+   `.new.nro` a cut-short download left.
 
 **Limits**
-- **HTTPS has to be added.** The Switch build has no HTTPS client. devkitPro
-  has `switch-curl` and `switch-mbedtls`, which would have to be linked, and
-  that adds size.
-- **Memory.** Started from the album, the app runs as an applet, with
-  little memory. The download must be written to the SD card as it comes,
-  never held in memory.
-- **The SD card is FAT32 or exFAT,** where a rename won't replace an
-  existing file. The old file has to be moved out of the way first (as in
-  `engine/settings.c`). A power cut between the two renames would leave no
-  `chiral-ftp.nro`. The next start must then notice the `.new.nro` or
-  `.old` and finish the job, or put the old one back.
-- **The `.nro` file name is the same in every release** (`chiral-ftp.nro`),
-  so the version-rename rule never applies here.
-- **Switch 2:** `latest_version.json` has a `switch2` key but no build.
-  Until there is one, a Switch 2 asks as `switch`.
+- **A power cut between the two renames** leaves `chiral-ftp.nro.old` and
+  `chiral-ftp.new.nro` but no `chiral-ftp.nro`. Renaming one of them back by
+  hand fixes it.
+- **The `.nro` keeps the same name in every release** (`chiral-ftp.nro`), so
+  the version-rename rule never applies here.
+- **While it downloads, hbmenu lists `chiral-ftp.new.nro` too,** if it is
+  opened then.
+- **Switch 2:** `latest_version.json` has a `switch2` key but no build. A
+  Switch 2 asks as `switch`.
+- **Not yet built or run.** It compiles with devkitA64 and libnx's headers;
+  the Switch workflow (which now installs `switch-curl`) builds it, and no
+  update has been tried on a console.
 
 ## PS5
 
@@ -413,8 +424,8 @@ catalog.
 | | Finds itself by | Download | Swap | Restart | Main limits |
 |---|---|---|---|---|---|
 | **Windows** | its own `.exe` path | WinHTTP | rename running `.exe` to `.old` | starts new `.exe`, which deletes `.old` | no UAC; antivirus locks; leftover `.old` from 1.1; same-version move to ARM needs the worker |
-| **Mac** | its own bundle | NSURLSession, `.app.zip` | unzip beside, swap bundles | `open -n` | App Translocation; non-admin; `.dmg` blocks it; permissions re-asked; not yet run on a Mac |
+| **Mac** | its own bundle | NSURLSession, the `.dmg` (or `.app.zip`) | copy the app out, swap bundles | `open -n` | App Translocation; non-admin; permissions re-asked; not yet run on a Mac |
 | **Linux** | `$APPIMAGE` | `curl` or `wget` | one rename | starts new AppImage | AppImage only; needs curl or wget; not yet run on Linux |
-| **Switch** | `argv[0]` | to add (`switch-curl`) | `.new.nro`, `.old`, rename | `envSetNextLoad` or by hand | FAT renames; applet memory |
+| **Switch** | `argv[0]` from hbmenu | `switch-curl`, the console's CA list | `.new.nro`, `.nro.old`, rename | `envSetNextLoad` | FAT renames; not yet built or run |
 | **PS5** | search, two levels deep | PacBrew libcurl, streamed to `self-updater.elf` | the helper swaps the files after chiral-ftp closes | the user reopens it | payload loader; full elevation; not yet built or run |
 | **Android** | n/a (system installer) | `HttpsURLConnection` | Android's installer | its **Open** button | unknown-sources setting; same signing key; not yet run on a device |

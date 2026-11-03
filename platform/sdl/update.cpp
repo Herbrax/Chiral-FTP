@@ -480,7 +480,7 @@ bool download(const std::string &url, const std::string &path, const std::atomic
 
 std::string target(const std::string &file, std::string *why) {
   const std::string app = macos_bundle_path();
-  if(app.empty() || !ends_with(app, ".app") || !ends_with(file, ".zip")) {
+  if(app.empty() || !ends_with(app, ".app") || !(ends_with(file, ".dmg") || ends_with(file, ".zip"))) {
     *why = N_("This copy can't update itself: only the released program can.");
     return "";
   }
@@ -498,9 +498,34 @@ std::string target(const std::string &file, std::string *why) {
 }
 
 std::string download_path(const std::string &target, const std::string &file) {
-  (void)file;
-  return dir_of(target) + "/.chiral-ftp-update.zip";
+  return dir_of(target) + (ends_with(file, ".dmg") ? "/.chiral-ftp-update.dmg" : "/.chiral-ftp-update.zip");
 }
+
+namespace {
+/* The disk image's app, copied into staging: mounted read-only where the
+   Finder doesn't show it, copied with ditto (links, signature and modes as
+   they are), and unmounted. */
+bool copy_from_disk_image(const std::string &image, const std::string &staging) {
+  char mount[] = "/tmp/chiral-ftp-update-XXXXXX";
+  if(!mkdtemp(mount)) return false;
+  bool ok = !run({"/usr/bin/hdiutil", "attach", "-nobrowse", "-readonly", "-noautoopen", "-noverify",
+                  "-mountpoint", mount, image});
+  std::string app;
+  if(ok) {
+    if(DIR *d = opendir(mount)) {
+      while(struct dirent *e = readdir(d)) {
+        if(e->d_name[0] != '.' && ends_with(e->d_name, ".app")) app = e->d_name;
+      }
+      closedir(d);
+    }
+    ok = !app.empty() && !mkdir(staging.c_str(), 0755) &&
+         !run({"/usr/bin/ditto", std::string(mount) + "/" + app, staging + "/" + app});
+    run({"/usr/bin/hdiutil", "detach", "-force", mount});
+  }
+  rmdir(mount);
+  return ok;
+}
+}  // namespace
 
 namespace {
 std::string g_staging;
@@ -508,17 +533,20 @@ std::string g_staging;
 
 bool put_in_place(const std::string &target, const std::string &download, const std::string &name,
                   std::string *launch, std::string *why) {
-  (void)name;  // the release's is the zip's; the app keeps its own
+  (void)name;  // the release's is the disk image's or the zip's; the app keeps its own
   *why = N_("chiral-ftp could not put the new version in place. This copy is unchanged.");
   const std::string staging = dir_of(target) + "/.chiral-ftp-update";
   run({"/bin/rm", "-rf", staging});
-  if(run({"/usr/bin/ditto", "-x", "-k", download, staging})) {
+  /* A release's chiral-ftp-<version>.dmg, or an older one's chiral-ftp.app.zip. */
+  const bool unpacked = ends_with(download, ".dmg") ? copy_from_disk_image(download, staging)
+                                                    : !run({"/usr/bin/ditto", "-x", "-k", download, staging});
+  if(!unpacked) {
     run({"/bin/rm", "-rf", staging});
     *why = N_("The download was not the expected file. Nothing was changed.");
     return false;
   }
   unlink(download.c_str());
-  /* The zip holds one chiral-ftp.app (or whatever the release called it). */
+  /* One chiral-ftp.app (or whatever the release called it). */
   std::string fresh;
   if(DIR *d = opendir(staging.c_str())) {
     while(struct dirent *e = readdir(d)) {

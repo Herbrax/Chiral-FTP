@@ -72,7 +72,24 @@ if apks:
 
 Updating: install the new APK over the old one. Your settings stay.
 """
-if "chiral-ftp.app/Contents/MacOS/chiral-ftp" in present or "chiral-ftp.app.zip" in present:
+dmgs = [f for f in present if f.endswith(".dmg")]
+if dmgs:
+    notes += f"""
+**Mac** (Apple silicon)
+
+1. Download `{dmgs[0]}` below and open it.
+2. Drag `chiral-ftp.app` onto Applications and open it from there. (Opened
+   straight from the disk image or from Downloads, it runs but can't update
+   itself.)
+3. The app isn't notarized by Apple, so the first time macOS says it can't
+   check it: open **System Settings > Privacy & Security** and choose
+   **Open Anyway** (or run `xattr -dr com.apple.quarantine
+   /Applications/chiral-ftp.app` once).
+
+Updating: chiral-ftp offers new versions itself. Your settings stay in
+`~/Library/Application Support/chiral-ftp`.
+"""
+elif "chiral-ftp.app/Contents/MacOS/chiral-ftp" in present or "chiral-ftp.app.zip" in present:
     zipped = "chiral-ftp.app.zip" in present
     notes += f"""
 **Mac** ({"Apple silicon" if zipped else "macOS 27 or later, Apple silicon"})

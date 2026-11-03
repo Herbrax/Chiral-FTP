@@ -5807,6 +5807,17 @@
    "zh": "找不到 chiral-ftp 的文件夹，因此无法自行更新。以镜像方式安装的副本无法更新。",
    "ru": "Папка chiral-ftp не найдена, поэтому он не может обновиться сам. Копия, установленная как образ, обновиться не может.",
    "ar": "لم يُعثر على مجلد chiral-ftp، لذا لا يمكنه تحديث نفسه. لا يمكن ذلك لنسخة مثبتة كصورة."
+  },
+  {
+   "en": "chiral-ftp closes now; open it again from hbmenu.",
+   "es": "chiral-ftp se cierra ahora; ábrelo de nuevo desde hbmenu.",
+   "fr": "chiral-ftp se ferme maintenant ; rouvrez-le depuis hbmenu.",
+   "it": "chiral-ftp si chiude ora; riaprilo da hbmenu.",
+   "ja": "chiral-ftp はこれから閉じます。hbmenu からもう一度開いてください。",
+   "ko": "이제 chiral-ftp가 닫힙니다. hbmenu에서 다시 여세요.",
+   "zh": "chiral-ftp 现在关闭；请从 hbmenu 重新打开。",
+   "ru": "chiral-ftp сейчас закроется; откройте его снова из hbmenu.",
+   "ar": "سيُغلق chiral-ftp الآن؛ افتحه مجددًا من hbmenu."
   }
  ]
 }

@@ -1023,9 +1023,15 @@ it without asking.
   helper with its own protocol (no SHA-256) and the deeper search. It
   unpacks with miniz (`vendor/miniz`), sets 0777, and swaps the files inside
   the mounted folder once the app is gone.
-- **Later:** the Switch (download `.new.nro`, rename the old one `.old`,
-  then the new one into place). It is its platform's `update::os`, with
-  `CHIRAL_HAS_UPDATER` set to 1.
+- **The Switch** (`platform/switch/update.cpp`): `switch-curl` with the
+  console's own CA list (`sslGetCertificates`, given to mbedTLS through
+  `CURLOPT_SSL_CTX_FUNCTION`; `CURLOPT_CAINFO` is set to NULL, as curl's
+  default file isn't on the SD card). The path is argv[0] from hbmenu. The
+  download is `chiral-ftp.new.nro`; the old one goes to `.nro.old` (FAT
+  won't rename over a file); `envSetNextLoad()` starts the new one at exit.
+- **The Mac's release is a `.dmg`** (`chiral-ftp-<version>.dmg`, made in
+  mac.yml with an Applications link). The updater mounts it read-only with
+  `hdiutil attach -nobrowse` and copies the app out; a `.zip` still works.
 
 ## 5c. Probe first
 

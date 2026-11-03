@@ -795,30 +795,75 @@ void page_server(float x, float y, float w) {
    list: the download page as a QR code, and the two pages as links that
    open in the browser. qs is the code's size; returns the card's height.
    The phone's page has it too. */
+/* An address over as many lines as the width needs, broken after a '/' where
+   it can be, and anywhere in a part too long for a line of its own. */
+std::vector<std::string> address_lines(const std::string &address, float size, float w) {
+  std::vector<std::string> out;
+  std::string line;
+  for(size_t i = 0; i < address.size();) {
+    const size_t slash = address.find('/', i);
+    const size_t end = slash == std::string::npos ? address.size() : slash + 1;
+    const std::string part = address.substr(i, end - i);
+    i = end;
+    if(!line.empty() && text_w(size, (line + part).c_str()) > w) {
+      out.push_back(line);
+      line.clear();
+    }
+    line += part;
+    while(line.size() > 1 && text_w(size, line.c_str()) > w) {
+      size_t n = line.size() - 1;
+      while(n > 1 && text_w(size, line.substr(0, n).c_str()) > w) n--;
+      out.push_back(line.substr(0, n));
+      line.erase(0, n);
+    }
+  }
+  if(!line.empty()) out.push_back(line);
+  return out;
+}
+
 float download_card(float x, float y, float w, float qs) {
   const float pad = P(16), tx = x + pad + qs + P(20), tw = x + w - pad - tx;
+  /* Everything wraps rather than being cut short: a phone's narrow window has
+     room for neither the title nor the GitHub address on one line. The title
+     is bold, which runs wider than wrap_text measures. */
+  const std::vector<std::string> title = wrap_text(tr("chiral-ftp on your other devices"), F(15), tw * 0.9f);
   const std::vector<std::string> lines =
       wrap_text(tr("Free for Windows, Mac, Linux, Android, Nintendo Switch and PS5. Scan the code, or go to:"), F(13), tw);
-  const float lh = P(20), text_h = P(26) + lines.size() * lh + P(6) + 2 * P(24);
+  std::vector<std::vector<std::string>> links;
+  float link_h = 0;
+  for(const char *page : {kDownloadPage, kReleasesPage}) {
+    links.push_back(address_lines(page, F(13), tw));
+    link_h += links.back().size() * P(20) + P(4);
+  }
+  const float lh = P(20), text_h = title.size() * P(22) + P(4) + lines.size() * lh + P(6) + link_h;
   const float ch = std::max(qs, text_h) + 2 * pad;
   card(x, y, w, ch);
   download_qr(x + pad, y + (ch - qs) / 2, qs);
   float ty = y + pad;
-  text(tx, ty, F(15), TEXT, fit_end(tr("chiral-ftp on your other devices"), F(15), tw - P(8)).c_str(), true);
-  ty += P(26);
+  for(const std::string &l : title) {
+    text(tx, ty, F(15), TEXT, l.c_str(), true);
+    ty += P(22);
+  }
+  ty += P(4);
   for(const std::string &l : lines) {
     text(tx, ty, F(13), MUTED, l.c_str());
     ty += lh;
   }
   ty += P(6);
-  for(const char *page : {kDownloadPage, kReleasesPage}) {
-    const std::string shown = fit_end(page, F(13), tw);
-    const float lw = text_w(F(13), shown.c_str());
-    const Ctl c = control(tx, ty, lw, P(20));
-    text(tx, ty, F(13), c.hot ? GOLD_LIGHT : GOLD, shown.c_str());
-    if(c.hot || c.focus) hline(tx, ty + F(13) + P(1), lw, GOLD);
-    if(c.hit) platform::open_url((std::string("https://") + page).c_str());
-    ty += P(24);
+  const char *const pages[2] = {kDownloadPage, kReleasesPage};
+  for(int k = 0; k < 2; k++) {
+    /* One link however many lines it takes: hovering or clicking any of them
+       is the whole address. */
+    float lw = 0;
+    for(const std::string &l : links[k]) lw = std::max(lw, text_w(F(13), l.c_str()));
+    const Ctl c = control(tx, ty, lw, links[k].size() * P(20));
+    for(const std::string &l : links[k]) {
+      text(tx, ty, F(13), c.hot ? GOLD_LIGHT : GOLD, l.c_str());
+      if(c.hot || c.focus) hline(tx, ty + F(13) + P(1), text_w(F(13), l.c_str()), GOLD);
+      ty += P(20);
+    }
+    if(c.hit) platform::open_url((std::string("https://") + pages[k]).c_str());
+    ty += P(4);
   }
   return ch;
 }

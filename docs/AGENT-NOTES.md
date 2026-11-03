@@ -1033,9 +1033,17 @@ it without asking.
   `app/update.cpp`). The path is argv[0] from hbmenu. The
   download is `chiral-ftp.new.nro`; the old one goes to `.nro.old` (FAT
   won't rename over a file); `envSetNextLoad()` starts the new one at exit.
-- **The Mac's release is a `.dmg`** (`chiral-ftp-<version>.dmg`, made in
-  mac.yml with an Applications link). The updater mounts it read-only with
-  `hdiutil attach -nobrowse` and copies the app out; a `.zip` still works.
+- **The Mac's release is a `.dmg`** (`chiral-ftp-<version>.dmg`, made by
+  `tools/make-dmg.sh` with an Applications link). The updater mounts it
+  read-only with `hdiutil attach -nobrowse` and copies the only `.app` out
+  (the `.background/` folder is skipped); a `.zip` still works. The window's
+  layout (background, icon places) is Finder's `.DS_Store`, written through
+  osascript; when Finder doesn't answer on the runner, the image is still
+  made, as a plain window, with a warning. Its picture is
+  `docs/screenshots/Mockups/mac_dmg_background.png`, drawn by
+  `tools/make-dmg-background.py` with chevrons where `make-dmg.sh` puts the
+  icons (960x540 points, the app at 160,120 and Applications at 160,390,
+  128 pt icons): the two hold the same numbers.
 
 ## 5c. Probe first
 

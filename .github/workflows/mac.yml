@@ -53,19 +53,9 @@ jobs:
       - name: Build
         run: make PLATFORM=sdl VERSION="$VERSION" -j"$(sysctl -n hw.ncpu)" app
       # chiral-ftp-<version>.dmg: chiral-ftp.app beside a link to Applications,
-      # to drag it onto. The updater opens it the same way (platform/sdl/update.cpp).
-      # hdiutil sometimes finds the runner's disk busy: tried three times.
+      # on the brand background, to drag it onto (tools/make-dmg.sh).
       - name: Disk image
-        run: |
-          mkdir -p dist/dmg
-          ditto dist/chiral-ftp.app dist/dmg/chiral-ftp.app
-          ln -s /Applications dist/dmg/Applications
-          for attempt in 1 2 3; do
-            hdiutil create -volname chiral-ftp -srcfolder dist/dmg -fs HFS+ -format UDZO -ov \
-              "dist/chiral-ftp-$VERSION.dmg" && break
-            sleep 10
-          done
-          hdiutil verify "dist/chiral-ftp-$VERSION.dmg"
+        run: bash tools/make-dmg.sh dist/chiral-ftp.app "dist/chiral-ftp-$VERSION.dmg"
       # The file itself, not in a zip; it names the artifact.
       - uses: actions/upload-artifact@v7
         with:

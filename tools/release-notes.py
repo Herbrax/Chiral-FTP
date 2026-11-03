@@ -46,7 +46,8 @@ if f"chiral-ftp-ps5-{version}.zip" in present:
    that way, but some FTP clients don't keep it), then start Chiral-FTP from
    the dashboard.
 
-Updating: close chiral-ftp first, then replace the folder. Your settings and
+Updating: chiral-ftp 1.2 and later offer new versions themselves. From an
+older one, close chiral-ftp first, then replace the folder. Your settings and
 saved sites stay in `/data/chiral-ftp`.
 """
 if "chiral-ftp.nro" in present:
@@ -59,7 +60,8 @@ if "chiral-ftp.nro" in present:
    launching a game and pick chiral-ftp from the menu that opens; starting it
    from the album works too, with less memory.
 
-Updating: replace the `.nro`. Your settings and saved sites stay in
+Updating: chiral-ftp 1.2 and later offer new versions themselves. From an
+older one, replace the `.nro`. Your settings and saved sites stay in
 `/switch/chiral-ftp`.
 """
 apks = [f for f in present if f.endswith(".apk")]
@@ -70,7 +72,8 @@ if apks:
 1. Download `{apks[0]}` below, on the device or to copy over to it.
 2. Open it and install it, allowing installs from that source if Android asks.
 
-Updating: install the new APK over the old one. Your settings stay.
+Updating: chiral-ftp offers new versions itself, or install the new APK
+over the old one. Your settings stay.
 """
 dmgs = [f for f in present if f.endswith(".dmg")]
 if dmgs:
@@ -104,7 +107,7 @@ elif "chiral-ftp.app/Contents/MacOS/chiral-ftp" in present or "chiral-ftp.app.zi
 Updating: replace the app. Your settings stay in
 `~/Library/Application Support/chiral-ftp`.
 """
-appimages = sorted(f for f in present if f.endswith(".AppImage"))
+appimages = sorted((f for f in present if f.endswith(".AppImage")), key=lambda f: ("aarch64" in f, f))  # most PCs first
 if appimages:
     # x86_64 for most PCs, aarch64 for ARM ones: say which is which when both are there.
     def kind(f):
@@ -117,7 +120,8 @@ if appimages:
 2. Make it executable (`chmod +x chiral-ftp-*.AppImage`, or Properties >
    Allow executing as a program) and run it.
 
-Updating: replace the file. Your settings stay in `~/.local/share/chiral-ftp`.
+Updating: chiral-ftp 1.2 and later offer new versions themselves. From an
+older one, replace the file. Your settings stay in `~/.local/share/chiral-ftp`.
 """
 exes = [f for f in present if f.endswith(".exe")]
 if exes:
@@ -135,7 +139,8 @@ if exes:
    **More info > Run anyway**. When Windows Firewall asks, allow private
    networks, so that a console or phone can reach the server.
 
-Updating: replace the `.exe`. Your settings stay in `%APPDATA%\\chiral-ftp`.
+Updating: chiral-ftp 1.2 and later offer new versions themselves. From an
+older one, replace the `.exe`. Your settings stay in `%APPDATA%\\chiral-ftp`.
 To keep everything on a USB stick instead, settings included, make a folder
 named `data` next to the `.exe`: chiral-ftp then keeps its settings there.
 """

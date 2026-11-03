@@ -5,13 +5,22 @@
 chiral-ftp now runs on **Android**: phones, tablets, foldables and
 **Android TV**, from one APK. That makes six platforms: Windows, Mac, Linux,
 Android, Nintendo Switch and PS5. All of them find each other with Quick
-connect.
+connect, and from this version on, all of them **update themselves**.
+
+**Thank you**: chiral-ftp has already passed **1,500 downloads**. Every bug
+report, idea and kind word since 1.0 has gone into making it better.
+
+### New: chiral-ftp.com
+
+chiral-ftp now has its own website, **[chiral-ftp.com](https://chiral-ftp.com)**,
+with the downloads for every platform in one place
+([chiral-ftp.com/download](https://chiral-ftp.com/download)).
 
 ### New: Android phones, tablets and foldables
 
 | Files | Client | Quick connect |
 |---|---|---|
-| ![The file manager on an Android device](docs/screenshots/android-files.png) | ![An Android device and a NAS, both in Movies](docs/screenshots/android-client.png) | ![A TV, a Switch and a PS5 nearby, and the download QR code](docs/screenshots/android-quick-connect.png) |
+| ![The file manager on an Android device](docs/screenshots/android-files.png) | ![An Android device and a NAS, both in Movies](docs/screenshots/android-client.png) | ![A TV, a Switch and a PS5 nearby, and where to get chiral-ftp](docs/screenshots/android-quick-connect.png) |
 
 - **Everything the other versions do**: the **SFTP or FTP server**, the
   **web app**, the **file manager** and the **FTP / SFTP client** with
@@ -46,51 +55,86 @@ connect.
 |---|---|
 | ![chiral-ftp's start screen on Android TV](docs/screenshots/androidtv-start.png) | ![Two folders side by side, one file marked](docs/screenshots/androidtv-file-manager.png) |
 
-- **The TV interface**, the same one the PS5 and the Switch have, at
-  1920x1080, used with the remote.
+- **The TV interface**, the same one the PS5 and the Switch have, used
+  with the remote.
 - **The remote's buttons**: the D-pad moves, **OK** opens, **Back** goes
   back, **hold OK** opens the menu (settings, the message log, About), and
   **Play/Pause** marks. The bottom bar shows the remote's buttons, or a
   gamepad's (A, B, X, Y) as soon as you use one.
-- Everything says "TV", not "console", in the app and in the web app.
 - Back on the start screen goes to the TV's home screen; the servers keep
   running.
 
-### Windows, Mac and Linux: updates
+### New: updates, on every platform
 
-- **chiral-ftp tells you when there's a new version.** At startup it asks
-  chiral-ftp.com, and when there's a newer one it offers **Update**, **Not
-  now** (asks again in 7 days) or **Skip this version**.
-- **Update replaces this copy and restarts**, wherever it is: the `.exe`,
-  the `.app` (in Applications or anywhere else) or the AppImage. A file
-  named for its version takes the new version's name. Where it can't (a
-  folder this account can't change, or a Mac app still running from
-  Downloads), you get the download page instead.
+- **chiral-ftp tells you when there's a new version**, on all six
+  platforms. At startup it asks chiral-ftp.com, and when there's a newer one
+  it offers **Update**, **Not now** (asks again in 7 days) or **Skip this
+  version**.
+- **Update installs it for you**, with a progress bar:
+  - **Windows, Mac and Linux**: the `.exe`, the `.app` or the AppImage is
+    replaced where it is, and chiral-ftp restarts on the new version.
+  - **Android**: the new APK goes to Android's installer, as when you
+    install one by hand. Your settings stay.
+  - **Nintendo Switch**: the `.nro` you started is replaced, under the same
+    name. chiral-ftp then closes; open it again from hbmenu.
+  - **PS5**: chiral-ftp closes, the new version is put in its folder, and a
+    notification says when it's ready to open. It needs the payload loader
+    on port 9021, like chiral-ftp itself. With more than one copy installed,
+    it says so and changes none of them.
+- **Where a copy can't update itself**, you get the download page instead:
+  a folder this account can't change, a Mac app opened straight from the
+  disk image or from Downloads, or a Switch `.nro` started without hbmenu.
 - **Settings > Check for updates** turns the startup check off, and **Check
-  now** asks straight away. The check sends the platform, the version and a
-  random ID made on first start, to count devices; nothing else. Test
-  builds (`-beta`, `-alpha`, `-dev`) never check.
+  now** asks straight away, on computers, phones, TVs and consoles. The check
+  sends the platform, the version and a random ID made on first start, to
+  count devices; nothing else. Test builds (`-beta`, `-alpha`, `-dev`) never
+  check.
+- **On the Switch, the console's clock must be right**: the secure
+  connection checks dates. When the check fails, the message log shows the
+  console's date and where to set it.
+- Copies of 1.1 and earlier don't have this yet: download 1.2 once by hand,
+  and it takes care of the next ones.
+
+### Mac: a disk image
+
+- The Mac download is now **`chiral-ftp-1.2.dmg`**: open it and drag
+  chiral-ftp onto **Applications**, as the window shows. The window also
+  says how to open an app that Apple hasn't checked (**System Settings >
+  Privacy & Security > Open Anyway**).
 
 ### Everywhere
 
 | On the PS5 | On a computer |
 |---|---|
-| ![Quick connect on the PS5, with the download QR code](docs/screenshots/ps5-quick-connect.png) | ![Quick connect on a computer, with the download QR code](docs/screenshots/computer-quick-connect.png) |
+| ![Quick connect on the PS5, with the download links](docs/screenshots/ps5-quick-connect.png) | ![Quick connect on a computer, with the download links](docs/screenshots/computer-quick-connect.png) |
 
-- **Quick connect shows where to get chiral-ftp** for your other devices: a
-  QR code to scan with a phone, and the download pages
-  (chiral-ftp.com/download and the GitHub releases).
+- **Quick connect shows where to get chiral-ftp** for your other devices:
+  chiral-ftp.com/download and the GitHub releases.
 - **Android devices show up in Quick connect** with a phone or a TV
   icon, as "Android" and "Android TV".
 - **About** lists every platform chiral-ftp runs on, with links to
   chiral-ftp.com and the GitHub repository.
 
-### Downloads
+### Later: the app stores
 
-- `chiral-ftp-1.2-android.apk`: phones, tablets, foldables and Android TV.
-  Open it on the device to install it (allow your browser or file manager
-  to install apps when Android asks). To update, install the new one over
-  it; your settings are kept.
+If there's enough demand, a signed Android version will come to the **Google
+Play Store**, and a signed Mac version to the **Mac App Store**. Until then,
+the downloads here are unsigned: the Install steps below say how to open
+them the first time.
+
+### For developers: every platform builds on GitHub
+
+- **Each platform has its own GitHub Actions workflow**: Windows, Mac,
+  Linux (x86_64 and ARM64 AppImages), Android, Switch and PS5. Every push to
+  `dev` builds all of them, and each run's page has its file to download. Run
+  one by hand with a version, such as `1.2-beta`, for a test build (a test
+  version never asks for updates).
+- **New Release** builds the platforms you tick and, only if every one of
+  them succeeds, tags the version and makes its release: the files, the notes
+  from this changelog and the checksums. Run again for an existing version, it
+  adds the ticked platforms' files to that release.
+- **Latest version** keeps `latest_version.json`, each platform's newest
+  file, up to date for the website.
 
 ## 1.1
 

@@ -1,13 +1,14 @@
 # Auto-update
 
 How chiral-ftp finds out about a new version, and how each platform puts it
-in place. The limits of each are listed too. Windows, Mac, Linux and
-Android are built. Switch and PS5 are planned, and their sections say how
-they would work and what stands in the way.
+in place. The limits of each are listed too. Windows, Mac, Linux, Android
+and the PS5 are built. The Switch is planned, and its section says how it
+would work and what stands in the way.
 
 The code: `app/update.h` and `app/update.cpp` (shared),
 `platform/sdl/update.cpp` with `platform/sdl/macos.mm` (the computers), and
-`platform/android/update.cpp` with `ChiralActivity.java` (Android). The
+`platform/android/update.cpp` with `ChiralActivity.java` (Android), and
+`platform/ps5/update.cpp` with `platform/ps5/self-updater/` (the PS5). The
 working notes for whoever changes it are in `docs/AGENT-NOTES.md` §5b3.
 
 ## Contents
@@ -17,7 +18,7 @@ working notes for whoever changes it are in `docs/AGENT-NOTES.md` §5b3.
 - [Mac](#mac)
 - [Linux](#linux)
 - [Nintendo Switch (planned)](#nintendo-switch-planned)
-- [PS5 (planned)](#ps5-planned)
+- [PS5](#ps5)
 - [Android](#android)
 - [Summary](#summary)
 
@@ -294,83 +295,77 @@ on saying 1.2. Any other name is kept.
 - **Switch 2:** `latest_version.json` has a `switch2` key but no build.
   Until there is one, a Switch 2 asks as `switch`.
 
-## PS5 (planned)
+## PS5
 
-**How it would work**
-1. **Where it is:** a title can't easily tell which folder it was started
-   from, so it searches:
-   - `/data/homebrew`;
-   - the root of every drive the app already lists (internal storage, USB,
-     M.2 SSD);
-   - two folders deep at most in each.
+Built on what ProsperoStore does: the same HTTPS (PacBrew's libcurl) and
+the boilerplate's self-update helper, made chiral-ftp's. The check is
+chiral-ftp's own update API, like the other platforms, not the homebrew
+catalog.
 
-   A copy is any folder whose `sce_sys/param.json` has `titleId` set to
-   `PPSA96024`, whatever the folder is called. Folders named `PPSA96024-2`
-   and `PPSA96024-old` (an update's leftovers) are ignored.
-2. **Duplicates:** two copies or more means "Duplicate copies found, update
-   impossible". Nothing is touched.
-3. **Download** the release zip, the way ProsperoStore does on an
-   elevated title:
-   - **Transport:** PacBrew's libcurl with OpenSSL (`PACBREW_PACKAGES +=
-     libcurl`). The console's own `sceHttp`/`sceSsl` rejects every public
-     site once a title is elevated (`0x8095f00c`), and chiral-ftp elevates
-     through Lapy.
-   - **Shims:** `ps5/examples/update-check/console_curl.c`, with
-     `APP_WRAP_SYMBOLS += fcntl`. It provides name lookup on
-     `sceNetResolver`, the `fcntl` fix and non-blocking sockets.
-     `console_curl_setup()` goes on every curl handle.
-   - **Certificates:** checked against the console's own list,
-     `/system/common/cert/CA_LIST.cer`, passed as `CURLOPT_CAINFO`.
-   - **Settings:** HTTPS only, IPv4, HTTP/1.1, a 15 s connect timeout, and
-     a stall limit (`CURLOPT_LOW_SPEED_LIMIT 1` for 20 s) rather than a
-     total time.
-   - **Redirects** are followed by hand (curl's `FOLLOWLOCATION` off), as
-     ProsperoStore does, and only to GitHub's release file host.
-   - **Where it goes:** the zip is written to the same drive as the copy as
-     it arrives, never held in memory.
-   - **Unpacking:** miniz, as ProsperoStore does, into `PPSA96024-2` beside
-     the copy. Refuse absolute paths, `..` and links, and require the
-     unpacked `sce_sys/param.json` to name `PPSA96024`.
-4. **Set the permissions explicitly:** `chmod 0777` on `PPSA96024-2` itself
-   and on every folder and file inside it. Don't rely on the modes stored in
-   the zip. Then check them all before going on; the console won't start a
-   title whose folder or files aren't 777. This is the PS5 version of the Mac
-   lesson: v1.1's Mac zip had no Unix modes, and the updated app "can't be
-   opened".
-5. **Swap:** rename `PPSA96024` to `PPSA96024-old`, then `PPSA96024-2` to
-   `PPSA96024`.
-6. **Restart:** ask the user to close chiral-ftp and open it again. A title
-   can't restart itself.
-7. **Clean-up:** the new version deletes `PPSA96024-old` once it has started
-   successfully.
+**How it works**
+1. **The check:** `"platform":"ps5"`, over HTTPS with PacBrew's libcurl and
+   OpenSSL (`platform/ps5/update.cpp`).
+   - **Why libcurl:** the console's own `sceHttp`/`sceSsl` rejects every
+     public site once a title is elevated (`0x8095f00c`), and chiral-ftp
+     elevates through Lapy.
+   - **Certificates** come from `/system/common/cert/CA_LIST.cer`.
+   - **Console settings:** each socket gets the console's `SO_NBIO`. Name
+     lookups and the libc pieces PacBrew's archives need are
+     `pacbrew_netdb.c` and `pacbrew_compat.c`, the boilerplate's.
+2. **Where it is:** the app searches `/data/homebrew`, `/data/etaHEN/games`
+   and the root, `homebrew` and `etaHEN/games` of `/mnt/ext0`, `/mnt/ext1`
+   and `/mnt/usb0`–`7`, two folders deep at most in each.
+   - **A copy** is any folder whose `sce_sys/param.json` names
+     `PPSA96024`, whatever the folder is called.
+   - **Duplicates:** two copies or more means "Duplicate copies found,
+     update impossible", before anything is downloaded.
+3. **The helper:** on Update, chiral-ftp sends `self-updater.elf`, which
+   ships beside `eboot.bin`, to the payload loader on port 9021, the way it
+   sends `lapy.elf`.
+   - **What it is told:** the title, both content versions, the zip's size
+     and the version's name (`platform/ps5/self-updater/protocol.h`).
+   - **It checks again:** it searches the same places itself, refuses
+     duplicates the same way, and requires the copy to be the version that
+     is running.
+4. **Download:** the zip streams from GitHub straight to the helper, which
+   saves it in `<drive>/self-update/PPSA96024/` on the copy's own drive.
+   Nothing goes through the app's storage.
+5. **Unpacking:** the helper checks the size and the archive: no absolute
+   paths, no `..`, no links, one app. It then unpacks with miniz, **sets
+   0777 on every file and folder**, and requires the new `param.json` to
+   name `PPSA96024` at the version announced.
+6. **Close:** chiral-ftp says "apply". The dialog says it closes now and that
+   a notification will follow. A few seconds later it closes itself with
+   `sceSystemServiceLoadExec("exit")`; a title can't quit by returning from
+   `main`.
+7. **Swap:** once chiral-ftp is gone, the helper moves the old files out of
+   the copy's folder and the new ones in.
+   - **The folder ShadowMountPlus mounted stays where it is**, so the next
+     launch reads the new files.
+   - **The old files are then deleted** with the work folder. Files in the
+     folder that the release doesn't contain are left alone.
+   - **Last steps:** it refreshes the console's copy of `sce_sys` and posts
+     "Chiral-FTP was updated to 1.2. Open it again."
 
 **Limits**
-- **Renaming the folder of the running title may not be possible.**
-  ShadowMountPlus may hold it open or refuse the rename. Try it with a
-  throwaway title first. If it refuses, the swap has to happen on the next
-  start, before anything from the folder is loaded, or from another title.
-- **The renaming is ours alone.** ProsperoStore and the boilerplate's
-  self-update kit avoid renaming the running title's folder. They swap the
-  files inside it from a helper program after the app has closed, because
-  the console's mount points at that folder. Renaming is the maintainer's
-  chosen plan; test it on a console first.
-- **New code in the PS5 build:** libcurl, OpenSSL and their
-  dependencies (and their licence notices), `console_curl.c`, and miniz.
-  `tools/build-ps5.sh` links by hand, so the PacBrew archives and the
-  `--wrap=fcntl` have to be added there, not only to the boilerplate's
-  Makefile.
-- **Space for two copies:** the old and the new copy exist side by side
-  until clean-up, so the drive needs room for both.
-- **exFAT USB drives** have the same no-replace rename behaviour as the
-  Switch's SD card. And a power cut mid-swap can leave only `-old` and `-2`.
-  The next start must notice that and finish the swap.
-- **The dashboard entry and the homebrew catalog** use `contentVersion` and
-  the title ID. The version shown on the dashboard updates only when the
-  new folder's `param.json` is read, which may take a restart of the
-  console.
-- **The search is slow on big drives.** It goes two levels deep on every
-  drive, so it should run in the background, and only when an update is
-  accepted, not at every start.
+- **Needs a payload loader on port 9021**, as the jailbroken setups
+  chiral-ftp runs on have. Without one, the update says so and nothing is
+  changed.
+- **Needs the full elevation.** Without it the app can't read the console's
+  certificate list or the other drives, and the check and the search fail.
+- **No SHA-256**, by choice: the size and the GitHub address are checked, as
+  on the computers.
+- **Not yet built or run.**
+  - **What has been run:** the helper ran on a computer against fake console
+    folders, with an update, a duplicate two folders down, one three folders
+    down, a download of the wrong size, and a copy at another version, all
+    behaving.
+  - **What hasn't:** the PS5 build, with PacBrew linked by hand in
+    `tools/build-ps5.sh`, and an update on a console.
+- **A power cut during the swap**, a fraction of a second of renames, can
+  leave the folder incomplete. The app then has to be copied again.
+- **Space for the zip and the unpacked copy** is needed on the copy's drive
+  until the swap.
 
 ## Android
 
@@ -421,5 +416,5 @@ on saying 1.2. Any other name is kept.
 | **Mac** | its own bundle | NSURLSession, `.app.zip` | unzip beside, swap bundles | `open -n` | App Translocation; non-admin; `.dmg` blocks it; permissions re-asked; not yet run on a Mac |
 | **Linux** | `$APPIMAGE` | `curl` or `wget` | one rename | starts new AppImage | AppImage only; needs curl or wget; not yet run on Linux |
 | **Switch** | `argv[0]` | to add (`switch-curl`) | `.new.nro`, `.old`, rename | `envSetNextLoad` or by hand | FAT renames; applet memory |
-| **PS5** | search, two levels deep | PacBrew libcurl, then miniz | `PPSA96024-2` to `PPSA96024` | user reopens | renaming the running title; no unzip yet; duplicates |
+| **PS5** | search, two levels deep | PacBrew libcurl, streamed to `self-updater.elf` | the helper swaps the files after chiral-ftp closes | the user reopens it | payload loader; full elevation; not yet built or run |
 | **Android** | n/a (system installer) | `HttpsURLConnection` | Android's installer | its **Open** button | unknown-sources setting; same signing key; not yet run on a device |

@@ -4,7 +4,7 @@
 //
 // In chiral-ftp: the boilerplate's examples/pacbrew-curl/compat.c, as
 // ProsperoStore ships it, for the updater's libcurl (platform/ps5/update.cpp).
-// pipe2 is left out, being runtime.c's.
+// pipe2 is left out, being runtime.c's, and gmtime_r, being the SDK libc.a's.
 //
 // PacBrew's archives are built for the payload SDK's libc. A native title
 // links against the console's libc import stubs, which do not export these.
@@ -144,42 +144,6 @@ void ZSTD_trace_decompress_end(unsigned long long trace, const void *record)
 
 #endif
 
-/* OpenSSL checks certificate validity dates with gmtime_r, so this one has to
- * be correct, not a stub. Days since 1970 to a civil date (Howard Hinnant's
- * algorithm). */
-struct tm *gmtime_r(const time_t *when, struct tm *out)
-{
-    long long seconds = (long long)*when;
-    long long days = seconds / 86400;
-    long long rest = seconds % 86400;
-    if (rest < 0)
-    {
-        rest += 86400;
-        --days;
-    }
-    memset(out, 0, sizeof(*out));
-    out->tm_hour = (int)(rest / 3600);
-    out->tm_min = (int)(rest % 3600 / 60);
-    out->tm_sec = (int)(rest % 60);
-    out->tm_wday = (int)(((days % 7) + 11) % 7);
-    const long long z = days + 719468;
-    const long long era = (z >= 0 ? z : z - 146096) / 146097;
-    const long long doe = z - era * 146097;
-    const long long yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    const long long doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    const long long mp = (5 * doy + 2) / 153;
-    const long long month = mp < 10 ? mp + 3 : mp - 9;
-    const long long year = yoe + era * 400 + (month <= 2 ? 1 : 0);
-    if (year - 1900 < INT_MIN || year - 1900 > INT_MAX)
-    {
-        errno = EOVERFLOW;
-        return NULL;
-    }
-    out->tm_mday = (int)(doy - (153 * mp + 2) / 5 + 1);
-    out->tm_mon = (int)(month - 1);
-    out->tm_year = (int)(year - 1900);
-    const int leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
-    static const int before[12] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
-    out->tm_yday = before[out->tm_mon] + out->tm_mday - 1 + (leap && out->tm_mon > 1 ? 1 : 0);
-    return out;
-}
+/* gmtime_r, which OpenSSL checks certificate dates with, is the payload SDK's
+ * libc.a one: chiral-ftp links that archive (tools/build-ps5.sh), and two
+ * definitions don't link. It is a full one, not a stub. */

@@ -945,8 +945,9 @@ again with another to see it add, then delete both draft and tag.
 At startup the app asks the maintainer's worker whether there's something
 newer, and offers it. Where it can, it replaces itself. Only where
 `CHIRAL_HAS_UPDATER` is 1 (platform_config.h): sdl, so Windows, Mac and
-Linux, and Android (`platform/android/update.cpp`: Java's HttpsURLConnection
-over JNI, then the APK to Android's installer; state `HANDED_OFF`).
+Linux, Android (`platform/android/update.cpp`: Java's HttpsURLConnection
+over JNI, then the APK to Android's installer; state `HANDED_OFF`) and the
+PS5 (below).
 Everywhere else `app/update.cpp` compiles to stubs, and the UI calls
 it without asking.
 
@@ -1012,14 +1013,19 @@ it without asking.
   display". Run without `--headless`, keeping `--script`, to see the
   restart work. Each check counts a device in the worker's stats; for the
   HTTP code alone, an unknown platform name gets `{"update":false}`.
-- **Later:** Switch (download `.new.nro`, rename the old one `.old`, then
-  the new one into place), PS5 (search `/data/homebrew` and each drive's
-  root two levels down for `PPSA96024`; with two copies say "Duplicate
-  copies found, update impossible"; download into `PPSA96024-2`, `chmod
-  0777` the folder and everything in it whatever the zip says, then
-  rename; ask for a restart) and Android (PackageInstaller). Each one is
-  its platform's `update::os`, with `CHIRAL_HAS_UPDATER` set to 1 and a
-  console drawing for `UpdateDialog`, which only draws the desktop's.
+- **The PS5** (`platform/ps5/update.cpp`, docs/AutoUpdate.md): PacBrew's
+  libcurl for HTTPS (`sceSsl` refuses public sites once elevated), linked
+  by hand in `tools/build-ps5.sh`. The app finds the one copy (two folders
+  deep; "Duplicate copies found, update impossible") and sends
+  `self-updater.elf` to the loader on 9021. It streams the zip to the helper
+  and says "apply", then exits through `sceSystemServiceLoadExec("exit")`.
+  The helper is `platform/ps5/self-updater`, the boilerplate's self-update
+  helper with its own protocol (no SHA-256) and the deeper search. It
+  unpacks with miniz (`vendor/miniz`), sets 0777, and swaps the files inside
+  the mounted folder once the app is gone.
+- **Later:** the Switch (download `.new.nro`, rename the old one `.old`,
+  then the new one into place). It is its platform's `update::os`, with
+  `CHIRAL_HAS_UPDATER` set to 1.
 
 ## 5c. Probe first
 

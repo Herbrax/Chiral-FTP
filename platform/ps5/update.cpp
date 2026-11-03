@@ -274,9 +274,9 @@ bool start_helper(std::string *why) {
   const std::uint16_t port = CHIRAL_UPDATE_LOADER_PORT;
   const NetSockaddrIn loader{sizeof(NetSockaddrIn), 2, (std::uint16_t)((port << 8) | (port >> 8)), 0x0100007f, 0, {0}};
   ok = ok && sceNetConnect(socket, &loader, sizeof(loader)) >= 0;
-  char buf[64 * 1024];
+  std::vector<char> buf(64 * 1024);  // not on the worker's stack
   ssize_t n;
-  while(ok && (n = read(file, buf, sizeof(buf))) != 0) ok = n > 0 && send_all(socket, buf, (size_t)n);
+  while(ok && (n = read(file, buf.data(), buf.size())) != 0) ok = n > 0 && send_all(socket, buf.data(), (size_t)n);
   close(file);
   if(!ok) {
     if(socket >= 0) sceNetSocketClose(socket);

@@ -173,7 +173,13 @@ void join() {
 
 bool start(void *(*fn)(void *), void *arg) {
   join();
-  g_worker_started = !pthread_create(&g_worker, nullptr, fn, arg);
+  /* A stack of its own size: the console's default is small, and a TLS
+     handshake plus the PS5's helper start (platform/ps5/update.cpp) need more. */
+  pthread_attr_t attr;
+  pthread_attr_init(&attr);
+  pthread_attr_setstacksize(&attr, 1024 * 1024);
+  g_worker_started = !pthread_create(&g_worker, &attr, fn, arg);
+  pthread_attr_destroy(&attr);
   return g_worker_started;
 }
 

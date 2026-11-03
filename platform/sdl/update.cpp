@@ -191,12 +191,33 @@ bool random_bytes(void *out, size_t n) {
   return BCryptGenRandom(nullptr, (PUCHAR)out, (ULONG)n, BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0;
 }
 
-const char *platform_key() {
+const char *build_key() {
 #if defined(__aarch64__) || defined(_M_ARM64)
   return "windows-arm64";
 #else
   return "windows-x64";
 #endif
+}
+
+/* What the hardware is, which the program's own build can't say: Windows on
+   ARM runs the x64 program in emulation, and inside it GetNativeSystemInfo()
+   and PROCESSOR_ARCHITECTURE both answer x64. IsWow64Process2 (Windows 10
+   1709 on; emulation came later) gives the real machine either way. */
+const char *platform_key() {
+  typedef BOOL(WINAPI * Wow64Process2)(HANDLE, USHORT *, USHORT *);
+  const Wow64Process2 query =
+      (Wow64Process2)(void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "IsWow64Process2");
+  USHORT process = 0, machine = 0;
+  if(query && query(GetCurrentProcess(), &process, &machine)) {
+    return machine == 0xAA64 /* IMAGE_FILE_MACHINE_ARM64 */ ? "windows-arm64" : "windows-x64";
+  }
+  return build_key();
+}
+
+std::string file_key(const std::string &file) {
+  if(file.find("-windows-arm64") != std::string::npos) return "windows-arm64";
+  if(file.find("-windows-x64") != std::string::npos) return "windows-x64";
+  return build_key();
 }
 
 bool post_json(const std::string &url, const std::string &body, int timeout_s, long *status, std::string *reply) {
@@ -435,7 +456,16 @@ namespace update {
 namespace os {
 
 const char *platform_key() {
-  return "mac";
+  return "mac";  // Apple silicon only: there is no Intel build to be on the wrong one
+}
+
+const char *build_key() {
+  return platform_key();
+}
+
+std::string file_key(const std::string &file) {
+  (void)file;
+  return platform_key();
 }
 
 bool post_json(const std::string &url, const std::string &body, int timeout_s, long *status, std::string *reply) {
@@ -501,6 +531,11 @@ bool put_in_place(const std::string &target, const std::string &download, const 
     *why = N_("The download was not the expected file. Nothing was changed.");
     return false;
   }
+  /* A zip made anywhere but on a Mac (v1.1's was made on Windows) stores no
+     Unix permissions, and the program comes out of it without its x: macOS
+     then says the app "can't be opened". The code signature doesn't cover
+     modes, so setting it back is all it takes. */
+  run({"/bin/chmod", "-R", "a+x", fresh + "/Contents/MacOS"});
   run({"/usr/bin/xattr", "-dr", "com.apple.quarantine", fresh});
   const std::string old = dir_of(target) + "/.chiral-ftp-old.app";
   run({"/bin/rm", "-rf", old});
@@ -541,6 +576,18 @@ const char *platform_key() {
 #else
   return "linux-x86_64";
 #endif
+}
+
+/* An AppImage runs only on its own architecture (no Windows-style
+   emulation to speak of), so the build is the machine. */
+const char *build_key() {
+  return platform_key();
+}
+
+std::string file_key(const std::string &file) {
+  if(file.find("-aarch64.") != std::string::npos) return "linux-aarch64";
+  if(file.find("-x86_64.") != std::string::npos) return "linux-x86_64";
+  return platform_key();
 }
 
 bool post_json(const std::string &url, const std::string &body, int timeout_s, long *status, std::string *reply) {
@@ -611,6 +658,10 @@ void clean_up(const std::string &path) {
 
 #endif
 #endif
+
+const char *restart_note() {
+  return N_("chiral-ftp starts again in a moment.");
+}
 
 }  // namespace os
 }  // namespace update

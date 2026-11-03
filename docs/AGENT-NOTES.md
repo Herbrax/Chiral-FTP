@@ -902,12 +902,20 @@ again with another to see it add, then delete both draft and tag.
   update an earlier install with it.
 - **The PS5's `contentVersion` follows `VERSION`** (`tools/content-version.py`:
   1.1 → `01.001.000`, 1.1.2 → `01.001.002`): consoles and the PS5 homebrew
-  catalog find updates by it, not by the tag. `make PLATFORM=ps5` writes it
-  into the package and into the committed `platform/ps5/sce_sys/param.json`
-  (the copy the catalog reads at the release's tag), and `make check` fails
-  while that file is behind. New Release writes it on the tag's own commit
-  (only for a release with a PS5 file); a release made locally needs it
-  committed before tagging. VERSION must be MAJOR.MINOR or MAJOR.MINOR.PATCH.
+  catalog find updates by it, not by the tag. Every PS5 build makes it from
+  `VERSION` for the package's own `param.json`, so a 0.9 test build says
+  `00.009.000` whatever the repository holds. The build doesn't touch the
+  committed `platform/ps5/sce_sys/param.json`. That copy matters only at a
+  release's tag, where the catalog reads it, and New Release writes it on
+  the tag's own commit (only for a release with a PS5 file). Run on `main`,
+  New Release also commits it to `main` itself, only ever upwards. So
+  `main`'s file always says what the PS5 last got, and a release without a
+  PS5 file carries that into its tag. `dev` is never touched, and merging
+  `dev` into `main` doesn't undo it, since `dev` doesn't change the file. A release made
+  locally needs `tools/content-version.py --sync <version>
+  platform/ps5/sce_sys/param.json` committed before tagging. VERSION is
+  MAJOR.MINOR or MAJOR.MINOR.PATCH, with `-beta`, `-alpha` or `-dev` after it
+  for a test build, which the contentVersion leaves out.
 - **Linux** builds only on Linux: `tools/make-appimage.sh` (linuxdeploy), run
   by `.github/workflows/linux-appimage.yml` on Ubuntu 22.04; locally,
   `tools/make-release.sh linux` then adds it to `release/`. An
@@ -937,14 +945,20 @@ again with another to see it add, then delete both draft and tag.
 At startup the app asks the maintainer's worker whether there's something
 newer, and offers it. Where it can, it replaces itself. Only where
 `CHIRAL_HAS_UPDATER` is 1 (platform_config.h): sdl, so Windows, Mac and
-Linux. Everywhere else `app/update.cpp` compiles to stubs, and the UI calls
+Linux, and Android (`platform/android/update.cpp`: Java's HttpsURLConnection
+over JNI, then the APK to Android's installer; state `HANDED_OFF`).
+Everywhere else `app/update.cpp` compiles to stubs, and the UI calls
 it without asking.
 
 - **The question:** `POST https://chiral-ftp.com/api/v1/check` with
   `{"platform","version","device"}`, on a thread of its own, once per
   launch, 8 s at most. The platform keys are the ones in
   `latest_version.json` (`windows-x64`, `windows-arm64`, `mac`,
-  `linux-x86_64`, `linux-aarch64`; `os::platform_key()`). The device ID is
+  `linux-x86_64`, `linux-aarch64`; `os::platform_key()`). The key is the
+  *machine*, not the build. An x64 `.exe` on an ARM PC asks as
+  `windows-arm64` (from `IsWow64Process2`; inside emulation everything else
+  says x64), adds `"build":"windows-x64"`, and moves onto the ARM `.exe` when
+  offered one (docs/AutoUpdate.md, Windows). The device ID is
   16 random bytes in hex, made on first start. Anything but 200 with
   `"update":true` shows nothing, unless the user pressed **Check now**.
 - **The answer is checked, not trusted:** it must be newer by the numbers
@@ -969,7 +983,9 @@ it without asking.
     exit the new version starts with `--updated-from <old>`, and deletes the
     `.old` once it can. Only a `.exe.old` in its own folder is deleted.
   - **Mac:** the bundle is `[NSBundle mainBundle]`, wherever it is. The
-    `.app.zip` is unpacked with `ditto` beside it and the bundles are
+    `.app.zip` is unpacked with `ditto` beside it, `Contents/MacOS` gets
+    its x back (v1.1's zip was made on Windows and has no Unix modes, so
+    the app "can't be opened" without it), and the bundles are
     swapped. The old bundle is deleted at exit, and `open -n` starts the
     new one. A bundle under `/AppTranslocation/` (opened from Downloads
     without being moved) can't update; the user is told to move it to
@@ -999,7 +1015,8 @@ it without asking.
 - **Later:** Switch (download `.new.nro`, rename the old one `.old`, then
   the new one into place), PS5 (search `/data/homebrew` and each drive's
   root two levels down for `PPSA96024`; with two copies say "Duplicate
-  copies found, update impossible"; download into `PPSA96024-2` and
+  copies found, update impossible"; download into `PPSA96024-2`, `chmod
+  0777` the folder and everything in it whatever the zip says, then
   rename; ask for a restart) and Android (PackageInstaller). Each one is
   its platform's `update::os`, with `CHIRAL_HAS_UPDATER` set to 1 and a
   console drawing for `UpdateDialog`, which only draws the desktop's.

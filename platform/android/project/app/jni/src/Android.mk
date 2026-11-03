@@ -57,7 +57,7 @@ LOCAL_SRC_FILES := \
   $(CHIRAL_ROOT)/vendor/imgui/imgui_tables.cpp $(CHIRAL_ROOT)/vendor/imgui/imgui_widgets.cpp \
   $(CHIRAL_ROOT)/gen/font_regular.c $(CHIRAL_ROOT)/gen/font_bold.c $(CHIRAL_ROOT)/gen/font_mono.c \
   $(CHIRAL_ROOT)/gen/i18n_table.c \
-  $(CHIRAL_ROOT)/platform/android/backend.cpp $(CHIRAL_ROOT)/platform/android/system.c
+  $(CHIRAL_ROOT)/platform/android/backend.cpp $(CHIRAL_ROOT)/platform/android/update.cpp $(CHIRAL_ROOT)/platform/android/system.c
 
 LOCAL_C_INCLUDES := $(LOCAL_PATH)/../SDL/include $(CHIRAL_ROOT)/platform/android $(CHIRAL_ROOT)/engine \
   $(CHIRAL_ROOT)/app $(CHIRAL_ROOT)/web $(CHIRAL_ROOT)/vendor/imgui $(CHIRAL_ROOT)/gen $(DEPS)/include

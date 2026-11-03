@@ -1386,7 +1386,7 @@ void ip_changed();
 
 struct Settings : Overlay {
   int cursor = 0;  // an index into rows()
-  enum { LANG, NETWORK, CONNS, POLICY, RETRIES, MTIME, HIDDEN, SAVEPASS, KEYS, LOGVIEW, COUNT };
+  enum { LANG, NETWORK, CONNS, POLICY, RETRIES, MTIME, HIDDEN, SAVEPASS, UPDATES, UPDATE_NOW, KEYS, LOGVIEW, COUNT };
 
   /* The rows shown. Network only where the machine is on networks to choose
      between, which is a computer (system_networks returns 0 elsewhere). */
@@ -1396,6 +1396,9 @@ struct Settings : Overlay {
     std::vector<int> r;
     for(int i = 0; i < COUNT; i++) {
       if(i == NETWORK && !networks) continue;
+      // Updates only where the platform has an updater; a test build never checks.
+      if((i == UPDATES || i == UPDATE_NOW) && !update::available()) continue;
+      if(i == UPDATE_NOW && update::test_build()) continue;
       r.push_back(i);
     }
     return r;
@@ -1483,6 +1486,9 @@ struct Settings : Overlay {
       }
       save_prefs();
       return;
+    case UPDATES:
+      if(!update::test_build()) update::set_enabled(!update::enabled());
+      return;
     default: return;
     }
     settings_set(&s);
@@ -1529,6 +1535,8 @@ struct Settings : Overlay {
     rows[MTIME] = {tr("Keep file dates"), s.preserve_mtime ? tr("On") : tr("Off")};
     rows[HIDDEN] = {tr("Show hidden files (FTP LIST -a)"), g.show_hidden ? tr("On") : tr("Off")};
     rows[SAVEPASS] = {tr("Remember passwords in Recent"), g.save_pass ? tr("On") : tr("Off")};
+    rows[UPDATES] = {tr("Check for updates"), !update::test_build() && update::enabled() ? tr("On") : tr("Off")};
+    rows[UPDATE_NOW] = {tr("Check now"), update::poll() == update::CHECKING ? "..." : ""};
     rows[KEYS] = {tr("Forget saved SFTP host keys"), ""};
     rows[LOGVIEW] = {tr("Message log"), ""};
     const int current = id();
@@ -1544,7 +1552,10 @@ struct Settings : Overlay {
                  i == CONNS || i == LANG || i == NETWORK ? draw::ACCENT2 : draw::MUTED, rows[i].value.c_str());
       yy += row;
     }
-    const char *hint = current == CONNS ? tr("Each transfer logs in with its own connection, like FileZilla. Up to 30; the queue backs off if the server allows fewer.")
+    const std::string update_hint = update::test_build() ? trf("Test builds ({0}) never check.", {VERSION_TAG})
+                                                         : std::string(tr("At startup. Nothing is installed without asking."));
+    const char *hint = current == UPDATES || current == UPDATE_NOW ? update_hint.c_str()
+                       : current == CONNS ? tr("Each transfer logs in with its own connection, like FileZilla. Up to 30; the queue backs off if the server allows fewer.")
                        : current == NETWORK ? tr("The address the FTP server and web app screens show. Automatic picks your local network (192.168.x.x) over a VPN.")
                        : current == LANG ? tr(device_text(N_("Automatic follows the console's system language."),
                                                           N_("Automatic follows your system language.")))
@@ -1668,6 +1679,8 @@ bool Settings::input(Action a) {
               tr("Forget"), [] { show_toast(ftp_forget_host_keys() ? tr("Could not remove the keys") : tr("Saved host keys forgotten")); });
     } else if(id() == LOGVIEW) {
       push(new LogView);
+    } else if(id() == UPDATE_NOW) {
+      update::check(true);
     } else {
       change(1);
     }
@@ -3380,13 +3393,69 @@ void quick_requests() {
 
 /* ---------- updates ---------- */
 
-#if CHIRAL_HAS_UPDATER && CHIRAL_UI_DESKTOP
+#if CHIRAL_HAS_UPDATER
+#if CHIRAL_UI_DESKTOP
 /* A sheet over the window: a title, a line under it, paragraphs, a progress
    bar when progress >= 0, and buttons along the bottom (HIT_MENU_ITEM 0, 1...,
    left to right; the last is the main one). ui_desktop.inc. */
 void draw_sheet_desktop(const std::string &title, const std::string &sub, const std::vector<std::string> &body,
                         float progress, const std::string &progress_text,
                         const std::vector<std::string> &buttons, int focus);
+#endif
+
+#if !CHIRAL_UI_DESKTOP || CHIRAL_UI_MOBILE  // a TV, from the Android build, draws the console's
+/* The same sheet in the console layout: big type, the main button last. */
+void draw_sheet_console(const std::string &title, const std::string &sub, const std::vector<std::string> &body,
+                        float progress, const std::string &progress_text,
+                        const std::vector<std::string> &buttons, int focus) {
+  const float w = dialog_w(1100), pad = 44;
+  std::vector<std::vector<std::string>> paras;
+  float lines = 0;
+  for(const std::string &b : body) {
+    paras.push_back(wrap_text(b, FS_READ, w - 2 * pad));
+    lines += (float)paras.back().size();
+  }
+  const float h = 40 + 56 + (sub.empty() ? 0 : 46) + 24 + 38 * lines + 16 * (float)paras.size() +
+                  (progress >= 0 ? 90 : 0) + (buttons.empty() ? 20 : 104);
+  const float x = (W - w) / 2, y = (H - h) / 2;
+  draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 160));
+  draw::rect(x, y, w, h, draw::PANEL, 18);
+  hit_add(HIT_OVERLAY_BODY, x, y, w, h);
+  float ty = y + 40;
+  draw::text_clip(x + pad, ty, FS_TITLE, draw::TEXT, title.c_str(), w - 2 * pad, true);
+  ty += 56;
+  if(!sub.empty()) {
+    draw::text(x + pad, ty, FS_SMALL, draw::MUTED, sub.c_str());
+    ty += 46;
+  }
+  ty += 24;
+  for(const auto &para : paras) {
+    for(const std::string &l : para) {
+      draw::text(x + pad, ty, FS_READ, draw::TEXT, l.c_str());
+      ty += 38;
+    }
+    ty += 16;
+  }
+  if(progress >= 0) {
+    const float bw = w - 2 * pad;
+    draw::rect(x + pad, ty + 8, bw, 16, draw::PANEL2, 8);
+    if(progress > 0) draw::rect(x + pad, ty + 8, std::max(16.0f, bw * progress), 16, draw::ACCENT, 8);
+    if(!progress_text.empty()) draw::text(x + pad, ty + 36, FS_SMALL, draw::MUTED, progress_text.c_str());
+  }
+  float bx = x + w - pad;
+  const float by = y + h - 40 - 64;
+  for(int i = (int)buttons.size() - 1; i >= 0; i--) {
+    const char *label = buttons[i].c_str();
+    const float tw = draw::text_size(FS, label, true).x, bw = std::max(200.0f, tw + 60);
+    bx -= bw;
+    const bool main = i == (int)buttons.size() - 1;
+    hit_add(HIT_MENU_ITEM, bx, by, bw, 64, i);
+    draw::rect(bx, by, bw, 64, i == focus ? (main ? draw::ACCENT : draw::SEL) : draw::PANEL2, 12);
+    draw::text(bx + (bw - tw) / 2, by + 16, FS, draw::TEXT, label, true);
+    bx -= 20;
+  }
+}
+#endif
 
 /* A newer version: what it is, and Update, Not now or Skip this version;
    then the download, and the restart. Where this copy can't replace itself
@@ -3408,6 +3477,7 @@ struct UpdateDialog : Overlay {
       return {tr("Skip this version"), tr("Not now"), update::offer().cannot.empty() ? tr("Update") : tr("Download page")};
     case update::DOWNLOADING: return {tr("Cancel")};
     case update::FAILED: return {tr("Close"), tr("Download page")};
+    case update::HANDED_OFF: return {tr("Close")};
     default: return {};
     }
   }
@@ -3440,6 +3510,9 @@ struct UpdateDialog : Overlay {
       if(i == 1) open_page();
       update::dismiss();
       return false;
+    case update::HANDED_OFF:
+      update::dismiss();  // the system's installer has it from here
+      return false;
     default:
       return true;  // putting it in place: nothing to choose
     }
@@ -3455,7 +3528,7 @@ struct UpdateDialog : Overlay {
       // Esc: Not now, Cancel or Close, whichever there is.
       const update::State s = update::poll();
       if(s == update::AVAILABLE) return press(1);
-      if(s == update::DOWNLOADING || s == update::FAILED) return press(0);
+      if(s == update::DOWNLOADING || s == update::FAILED || s == update::HANDED_OFF) return press(0);
     }
     return true;
   }
@@ -3494,12 +3567,23 @@ struct UpdateDialog : Overlay {
     } else if(s == update::FAILED) {
       title = tr("The update didn't work");
       body.push_back(tr(update::error().c_str()));
+    } else if(s == update::HANDED_OFF) {
+      title = trf("Installing chiral-ftp {0}", {o.version});
+      body.push_back(tr("Confirm the update in the system's installer. chiral-ftp closes while it is replaced; open it again afterwards."));
     } else {
       title = trf("Installing chiral-ftp {0}", {o.version});
-      body.push_back(tr("chiral-ftp starts again in a moment."));
+      body.push_back(tr(update::restart_note()));
       progress = 1;
     }
-    draw_sheet_desktop(title, sub, body, progress, progress_text, b, choice);
+#if CHIRAL_UI_DESKTOP
+    if(desktop_ui()) {
+      draw_sheet_desktop(title, sub, body, progress, progress_text, b, choice);
+      return;
+    }
+#endif
+#if !CHIRAL_UI_DESKTOP || CHIRAL_UI_MOBILE
+    draw_sheet_console(title, sub, body, progress, progress_text, b, choice);
+#endif
   }
 };
 
@@ -3515,7 +3599,7 @@ void update_poll() {
       g_touch_dirty = true;
     }
     break;
-  case update::DOWNLOADING: case update::INSTALLING: case update::FAILED:
+  case update::DOWNLOADING: case update::INSTALLING: case update::FAILED: case update::HANDED_OFF:
     if(!open) {
       push(new UpdateDialog);  // it was closed underneath; the download goes on
       g_touch_dirty = true;

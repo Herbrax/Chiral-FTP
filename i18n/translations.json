@@ -5730,6 +5730,83 @@
    "zh": "macOS 正在从临时副本运行 chiral-ftp。请将它移到“应用程序”并从那里打开，它就能自行更新。",
    "ru": "macOS запускает chiral-ftp из временной копии. Переместите его в «Программы» и откройте оттуда — тогда он сможет обновляться сам.",
    "ar": "يشغّل macOS برنامج chiral-ftp من نسخة مؤقتة. انقله إلى التطبيقات وافتحه من هناك، وسيتمكن من تحديث نفسه."
+  },
+  {
+   "en": "Android's installer could not be opened. Download the APK from the website instead.",
+   "es": "No se pudo abrir el instalador de Android. Descarga el APK desde el sitio web.",
+   "fr": "Impossible d'ouvrir l'installateur d'Android. Téléchargez l'APK depuis le site web.",
+   "it": "Impossibile aprire il programma di installazione di Android. Scarica l'APK dal sito web.",
+   "ja": "Android のインストーラーを開けませんでした。ウェブサイトから APK をダウンロードしてください。",
+   "ko": "Android 설치 프로그램을 열 수 없습니다. 웹사이트에서 APK를 다운로드하세요.",
+   "zh": "无法打开 Android 安装程序。请从网站下载 APK。",
+   "ru": "Не удалось открыть установщик Android. Скачайте APK с сайта.",
+   "ar": "تعذّر فتح مثبّت Android. نزّل ملف APK من الموقع بدلًا من ذلك."
+  },
+  {
+   "en": "Confirm the update in the system's installer. chiral-ftp closes while it is replaced; open it again afterwards.",
+   "es": "Confirma la actualización en el instalador del sistema. chiral-ftp se cierra mientras se reemplaza; ábrelo de nuevo después.",
+   "fr": "Confirmez la mise à jour dans l'installateur du système. chiral-ftp se ferme pendant son remplacement ; rouvrez-le ensuite.",
+   "it": "Conferma l'aggiornamento nel programma di installazione del sistema. chiral-ftp si chiude mentre viene sostituito; riaprilo dopo.",
+   "ja": "システムのインストーラーでアップデートを確定してください。置き換え中は chiral-ftp が閉じます。完了後にもう一度開いてください。",
+   "ko": "시스템 설치 프로그램에서 업데이트를 확인하세요. 교체되는 동안 chiral-ftp가 닫힙니다. 끝나면 다시 여세요.",
+   "zh": "请在系统安装程序中确认更新。替换期间 chiral-ftp 会关闭，完成后请重新打开。",
+   "ru": "Подтвердите обновление в системном установщике. Пока chiral-ftp заменяется, он закроется; потом откройте его снова.",
+   "ar": "أكّد التحديث في مثبّت النظام. يُغلق chiral-ftp أثناء استبداله؛ افتحه مجددًا بعد ذلك."
+  },
+  {
+   "en": "Duplicate copies found, update impossible",
+   "es": "Se encontraron copias duplicadas; no se puede actualizar",
+   "fr": "Copies en double trouvées, mise à jour impossible",
+   "it": "Trovate copie duplicate, aggiornamento impossibile",
+   "ja": "重複したコピーが見つかりました。アップデートできません",
+   "ko": "중복된 사본이 있어 업데이트할 수 없습니다",
+   "zh": "发现重复的副本，无法更新",
+   "ru": "Найдены копии-дубликаты, обновление невозможно",
+   "ar": "عُثر على نسخ مكررة، التحديث غير ممكن"
+  },
+  {
+   "en": "The update helper couldn't be started. Is the payload loader (port 9021) running?",
+   "es": "No se pudo iniciar el asistente de actualización. ¿Está en marcha el cargador de payloads (puerto 9021)?",
+   "fr": "Impossible de démarrer l'assistant de mise à jour. Le chargeur de payloads (port 9021) est-il lancé ?",
+   "it": "Impossibile avviare l'assistente di aggiornamento. Il caricatore di payload (porta 9021) è in esecuzione?",
+   "ja": "アップデート用ヘルパーを起動できませんでした。ペイロードローダー（ポート 9021）は動いていますか？",
+   "ko": "업데이트 도우미를 시작할 수 없습니다. 페이로드 로더(포트 9021)가 실행 중인가요?",
+   "zh": "无法启动更新助手。payload 加载器（端口 9021）是否在运行？",
+   "ru": "Не удалось запустить помощник обновления. Загрузчик payload (порт 9021) запущен?",
+   "ar": "تعذّر تشغيل مساعد التحديث. هل محمّل الحمولات (المنفذ 9021) قيد التشغيل؟"
+  },
+  {
+   "en": "The update helper stopped.",
+   "es": "El asistente de actualización se detuvo.",
+   "fr": "L'assistant de mise à jour s'est arrêté.",
+   "it": "L'assistente di aggiornamento si è fermato.",
+   "ja": "アップデート用ヘルパーが停止しました。",
+   "ko": "업데이트 도우미가 멈췄습니다.",
+   "zh": "更新助手已停止。",
+   "ru": "Помощник обновления остановился.",
+   "ar": "توقف مساعد التحديث."
+  },
+  {
+   "en": "chiral-ftp closes now. A notification says when the new version is in place; then open it again.",
+   "es": "chiral-ftp se cierra ahora. Una notificación avisará cuando la nueva versión esté lista; luego ábrelo de nuevo.",
+   "fr": "chiral-ftp se ferme maintenant. Une notification indiquera quand la nouvelle version sera en place ; rouvrez-le ensuite.",
+   "it": "chiral-ftp si chiude ora. Una notifica avviserà quando la nuova versione sarà pronta; poi riaprilo.",
+   "ja": "chiral-ftp はこれから閉じます。新しいバージョンの準備ができると通知が表示されるので、その後もう一度開いてください。",
+   "ko": "이제 chiral-ftp가 닫힙니다. 새 버전이 준비되면 알림이 표시되니 그때 다시 여세요.",
+   "zh": "chiral-ftp 现在关闭。新版本就位后会有通知，届时请重新打开。",
+   "ru": "chiral-ftp сейчас закроется. Когда новая версия будет на месте, появится уведомление; затем откройте его снова.",
+   "ar": "سيُغلق chiral-ftp الآن. سيظهر إشعار عندما يصبح الإصدار الجديد جاهزًا، ثم افتحه مجددًا."
+  },
+  {
+   "en": "chiral-ftp's folder wasn't found, so it can't update itself. A copy installed as an image can't.",
+   "es": "No se encontró la carpeta de chiral-ftp, así que no puede actualizarse. Una copia instalada como imagen no puede hacerlo.",
+   "fr": "Le dossier de chiral-ftp est introuvable, il ne peut donc pas se mettre à jour. Une copie installée comme image ne le peut pas.",
+   "it": "La cartella di chiral-ftp non è stata trovata, quindi non può aggiornarsi. Una copia installata come immagine non può farlo.",
+   "ja": "chiral-ftp のフォルダーが見つからないため、自動でアップデートできません。イメージとしてインストールしたコピーはアップデートできません。",
+   "ko": "chiral-ftp 폴더를 찾을 수 없어 스스로 업데이트할 수 없습니다. 이미지로 설치한 사본은 업데이트할 수 없습니다.",
+   "zh": "找不到 chiral-ftp 的文件夹，因此无法自行更新。以镜像方式安装的副本无法更新。",
+   "ru": "Папка chiral-ftp не найдена, поэтому он не может обновиться сам. Копия, установленная как образ, обновиться не может.",
+   "ar": "لم يُعثر على مجلد chiral-ftp، لذا لا يمكنه تحديث نفسه. لا يمكن ذلك لنسخة مثبتة كصورة."
   }
  ]
 }

@@ -43,7 +43,7 @@ def main(argv):
     if found[2] == want:
         return 0
     if mode == '--check':
-        print('%s: contentVersion is %s, but VERSION %s needs %s (make PLATFORM=ps5 updates it)'
+        print('%s: contentVersion is %s, but VERSION %s needs %s (content-version.py --sync writes it)'
               % (path, found[2], argv[1], want), file=sys.stderr)
         return 1
     open(path, 'w', encoding='utf-8').write(FIELD.sub(r'\g<1>%s\g<3>' % want, text, count=1))

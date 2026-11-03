@@ -52,6 +52,36 @@ elif [[ "$with_ps5" == true ]]; then
   )
 fi
 
+# ---------- main's param.json ----------
+
+# Released from main with a PS5 file: main's own param.json takes the new
+# contentVersion too, so the file in the repository is always what the PS5 last
+# got. A release without a PS5 file then carries that into its tag, as above.
+# Only ever upwards (a PS5 file added to an older version leaves it), and only
+# main: a branch being worked on is never touched.
+if [[ "$with_ps5" == true && "${GITHUB_REF:-}" == refs/heads/main ]]; then
+  git fetch -q origin main
+  git worktree add -q --detach "$work/main" origin/main
+  (
+    cd "$work/main"
+    want="$(python3 "$root/tools/content-version.py" "$version")"
+    have="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1])).get("contentVersion", ""))' "$param")"
+    if [[ ! "$have" =~ ^[0-9]{2}\.[0-9]{3}\.[0-9]{3}$ || "$want" > "$have" ]]; then
+      python3 "$root/tools/content-version.py" --sync "$version" "$param"
+      git config user.name "github-actions[bot]"
+      git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      git add "$param"
+      git commit -q -m "PS5 contentVersion $want (v$version)"
+      # A refusal (a protected main) mustn't stop the release half made.
+      if git push -q origin HEAD:main; then
+        echo "main: $param says $want"
+      else
+        echo "::warning::main wasn't updated (is it protected?): its $param still says $have"
+      fi
+    fi
+  )
+fi
+
 # ---------- checksums and notes ----------
 
 existing=false

@@ -30,6 +30,19 @@ fi
 clang18=$(command -v clang-18)
 [[ -x "$tool" && -x "$sdk/bin/prospero-lld" ]] || { echo "build ps5/ (the boilerplate) first: cd ps5 && make" >&2; exit 1; }
 "$root/tools/build-ps5-deps.sh"
+# The updater's HTTPS (platform/ps5/update.cpp): PacBrew's libcurl with
+# OpenSSL, the pinned prebuilt ports the boilerplate fetches and verifies
+# (about 346 MB the first time, kept in ps5/.deps/pacbrew). Its flags go to
+# update.cpp alone and its archives to the link, so nothing else in the app
+# sees PacBrew's headers.
+curl_cflags=()
+curl_libs=()
+if [[ "$variant" == app ]]; then
+  resolution="$(bash "$bp/tools/setup-pacbrew-dependencies.sh" --resolve libcurl)"
+  mapfile -d '' -t curl_cflags < <(python3 -c 'import json,sys; [print(v, end="\0") for v in json.loads(sys.argv[1])["cflags"]]' "$resolution")
+  mapfile -d '' -t curl_libs < <(python3 -c 'import json,sys; [print(v, end="\0") for v in json.loads(sys.argv[1])["libs"]]' "$resolution")
+  echo "PacBrew libcurl: ${curl_libs[*]}"
+fi
 deps="$root/.deps/ps5"
 
 cc() { PS5_PAYLOAD_SDK="$sdk" PS5_CLANG="$clang18" sh "$bp/tooling/prospero-clang18" "$@"; }
@@ -90,8 +103,21 @@ case "$variant" in
     extra_libs=()
     ;;
 esac
-for s in "${c_srcs[@]}"; do compile "$s" "${cflags[@]}"; done
-for s in "${cxx_srcs[@]}"; do compile "$s" "${cxxflags[@]}"; done
+# The PacBrew shims are the boilerplate's, kept as they are: without -Werror.
+shim_cflags=()
+for f in "${cflags[@]}"; do [[ "$f" == -Werror ]] || shim_cflags+=("$f"); done
+for s in "${c_srcs[@]}"; do
+  case "$s" in
+    platform/ps5/pacbrew_*) compile "$s" "${shim_cflags[@]}" ;;
+    *) compile "$s" "${cflags[@]}" ;;
+  esac
+done
+for s in "${cxx_srcs[@]}"; do
+  case "$s" in
+    platform/ps5/update.cpp) compile "$s" "${cxxflags[@]}" "${curl_cflags[@]}" ;;
+    *) compile "$s" "${cxxflags[@]}" ;;
+  esac
+done
 # The boilerplate's program entry (_start, init/fini arrays), as ProsperoEden uses it.
 cc -std=c++20 -O2 -fno-exceptions -fno-rtti -c "$bp/tooling/native/app_crt.cpp" -o "$obj/app_crt.o"
 
@@ -122,10 +148,12 @@ lib="$sdk/target/lib"
   --no-dynamic-linker -Map="$obj/link.map" \
   -o "$obj/llvm-pie.elf" "$obj/app_crt.o" "${objects[@]}" \
   "${extra_libs[@]}" \
+  ${curl_libs[@]+--start-group "${curl_libs[@]}" --end-group} \
   --start-group "$lib/libc++.a" "$lib/libc++abi.a" "$lib/libunwind.a" --end-group \
   --as-needed "$lib/libSceLibcInternal.so" "$lib/libkernel.so" "$lib/libc.a" \
   "$lib/libSceNet.so" "$lib/libSceVideoOut.so" "$lib/libScePad.so" "$lib/libSceUserService.so" \
-  "$lib/libSceSystemService.so" "$lib/libSceImeDialog.so" "$lib/libSceSysmodule.so" "$stub"
+  "$lib/libSceSystemService.so" "$lib/libSceImeDialog.so" "$lib/libSceSysmodule.so" "$stub" \
+  ${curl_libs[@]+"$lib"/*.so}
 
 # A title may only make system calls through libkernel: anything taken from
 # the SDK's raw syscall stubs (libc.a syscalls.o) is killed at run time with
@@ -144,11 +172,13 @@ mkdir -p "$out/sce_sys" "$out/sce_module"
 "$tool" self --sign --in "$obj/eboot.elf" --out "$out/eboot.bin" --magic 0x1D3D154F
 (cd "$bp/runtime" && sha256sum --check --strict libc.prx.sha256 >/dev/null)
 cp "$bp/runtime/libc.prx" "$out/sce_module/libc.prx"
-# contentVersion follows VERSION (tools/content-version.py), in the package
-# and in the committed param.json, which is where the homebrew catalog
-# reads it at the release's tag.
+# contentVersion follows VERSION (tools/content-version.py), made here on
+# every build for the package's own param.json: a 0.9 test build says
+# 00.009.000 whatever the repository holds. The committed param.json isn't
+# touched. Its contentVersion matters only at a release's tag, where the
+# homebrew catalog reads it, and New Release sets it on the tag's own commit
+# (tools/ci-release.sh).
 content_version="$(python3 "$root/tools/content-version.py" "$version")"
-[[ "$variant" != app ]] || python3 "$root/tools/content-version.py" --sync "$version" "$root/platform/ps5/sce_sys/param.json"
 python3 - "$root/platform/ps5/sce_sys/param.json" "$out/sce_sys/param.json" "$title" "$app_name" "$content_version" <<'PY'
 import json, sys
 p = json.load(open(sys.argv[1]))
@@ -180,6 +210,29 @@ if [[ "$variant" == app ]]; then
   cp "$root/.deps/build-ps5/libmicrohttpd-"*/COPYING "$out/licenses/libmicrohttpd-LGPL-2.1.txt"
   cp "$root/.deps/build-ps5/libssh2-"*/COPYING "$out/licenses/libssh2-BSD.txt"
   cp "$root/.deps/build-ps5/mbedtls-"*/LICENSE "$out/licenses/mbedTLS-Apache-2.0.txt"
+  # The updater: self-updater.elf, the boilerplate's self-update helper made
+  # chiral-ftp's (platform/ps5/self-updater), a payload for the console's loader,
+  # sent by platform/ps5/update.cpp. Built with the payload SDK.
+  make -s -C "$root/platform/ps5/self-updater" PS5_PAYLOAD_SDK="$sdk" ROOT="$root" \
+    OUTPUT="$obj/self-updater/self-updater.elf"
+  python3 "$bp/tools/validate-loader-elf.py" "$obj/self-updater/self-updater.elf"
+  cp "$obj/self-updater/self-updater.elf" "$out/"
+  cp "$root/vendor/miniz/LICENSE" "$out/licenses/miniz-MIT.txt"
+  # PacBrew's libcurl and what it links: their licences, which its prefix
+  # doesn't carry, from each project at the version PacBrew v0.40.2 has.
+  # Fetched once into .deps/ps5-licenses.
+  notices="$root/.deps/ps5-licenses"
+  mkdir -p "$notices"
+  while read -r name url; do
+    [[ -s "$notices/$name" ]] || curl -fsSL --retry 3 -o "$notices/$name" "$url"
+    cp "$notices/$name" "$out/licenses/$name"
+  done <<'LICENSES'
+curl-MIT-like.txt https://raw.githubusercontent.com/curl/curl/curl-8_18_0/COPYING
+OpenSSL-Apache-2.0.txt https://raw.githubusercontent.com/openssl/openssl/openssl-3.5.2/LICENSE.txt
+zlib.txt https://raw.githubusercontent.com/madler/zlib/v1.3.1/LICENSE
+zstd-BSD.txt https://raw.githubusercontent.com/facebook/zstd/v1.5.6/LICENSE
+libpsl-MIT.txt https://raw.githubusercontent.com/rockdaboot/libpsl/0.21.5/COPYING
+LICENSES
 fi
 "$tool" self --inspect --file "$out/eboot.bin" | tail -3
 

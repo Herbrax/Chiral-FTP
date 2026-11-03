@@ -12,8 +12,12 @@
 TARGET    := chiral-ftp
 TITLE_ID  := PPSA96024
 
-PLATFORM_CPP := platform/ps5/backend.cpp platform/ps5/elevation/elevation.cpp
-PLATFORM_C   := platform/ps5/system.c platform/ps5/runtime.c platform/ps5/net.c
+# The updater (app/update.h): HTTPS through PacBrew's libcurl, with the libc
+# pieces its archives need, and self-updater.elf, which tools/build-ps5.sh
+# builds from platform/ps5/self-updater.
+PLATFORM_CPP := platform/ps5/backend.cpp platform/ps5/elevation/elevation.cpp platform/ps5/update.cpp
+PLATFORM_C   := platform/ps5/system.c platform/ps5/runtime.c platform/ps5/net.c \
+                platform/ps5/pacbrew_compat.c platform/ps5/pacbrew_netdb.c
 GENERATED    := $(FONTS) $(WEB_GEN) $(GEN_I18N) gen/icon0.png.c
 
 # The dashboard icon is served by the web app as its favicon too.

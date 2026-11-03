@@ -11,7 +11,9 @@
 # the branch being released, which sets VERSION to this version (and the PS5's
 # contentVersion, for a release with a PS5 file). That commit is on the tag only:
 # the branch isn't touched, so a branch still being worked on can't conflict. Move
-# its VERSION on when you like.
+# its VERSION on when you like. One exception: run on main with a PS5 file, main's
+# own param.json takes the new contentVersion too (never a lower one), so the
+# repository always says what the PS5 last got.
 #
 # A version that already has a tag: the ticked platforms are built from that tag,
 # so they are the same code as the rest, and their files are added to its release.

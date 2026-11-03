@@ -44,5 +44,7 @@
 /* Not the mobile shell (Android only: app/ui_mobile.inc). */
 #define CHIRAL_UI_MOBILE 0
 
-/* No updater yet (app/update.h): the computers' comes first. */
-#define CHIRAL_HAS_UPDATER 0
+/* Updates itself (app/update.h): asks chiral-ftp.com at startup, and the
+   release zip goes to self-updater.elf, which puts it in place once chiral-ftp
+   has closed (platform/ps5/update.cpp). */
+#define CHIRAL_HAS_UPDATER 1

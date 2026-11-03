@@ -11,10 +11,18 @@ import android.os.Environment;
 import android.provider.Settings;
 import android.view.View;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+
+import javax.net.ssl.HttpsURLConnection;
 
 import org.libsdl.app.SDLActivity;
 
@@ -100,6 +108,93 @@ public class ChiralActivity extends SDLActivity {
         });
         return true;
     }
+
+    /* Called from the native side (platform/android/update.cpp), on the
+       updater's own thread: the update API's question, a JSON body POSTed
+       over HTTPS. The status, a newline, then the body; null when no answer
+       came back. */
+    public byte[] updatePost(String address, byte[] body, int timeoutSeconds) {
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(address).openConnection();
+            if (!(c instanceof HttpsURLConnection)) {
+                return null;
+            }
+            c.setConnectTimeout(timeoutSeconds * 1000);
+            c.setReadTimeout(timeoutSeconds * 1000);
+            c.setRequestMethod("POST");
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json");
+            c.setFixedLengthStreamingMode(body.length);
+            try (OutputStream o = c.getOutputStream()) {
+                o.write(body);
+            }
+            final int status = c.getResponseCode();
+            final ByteArrayOutputStream out = new ByteArrayOutputStream();
+            out.write((status + "\n").getBytes(StandardCharsets.UTF_8));
+            try (InputStream in = status >= 400 ? c.getErrorStream() : c.getInputStream()) {
+                if (in != null) {
+                    final byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) > 0 && out.size() < 64 * 1024) {
+                        out.write(buf, 0, n);
+                    }
+                }
+            }
+            return out.toByteArray();
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (c != null) {
+                c.disconnect();
+            }
+        }
+    }
+
+    /* Called from the native side, on the updater's thread: the release's
+       APK into path, following GitHub's redirect to its file host. Each
+       block read is reported to updateProgress(), which says whether to go
+       on. The HTTP status (200 when it all arrived), 0 when it was stopped,
+       -1 when it failed. */
+    public int updateDownload(String address, byte[] pathBytes) {
+        final File file = new File(new String(pathBytes, StandardCharsets.UTF_8));
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(address).openConnection();
+            if (!(c instanceof HttpsURLConnection)) {
+                return -1;
+            }
+            c.setConnectTimeout(20000);
+            c.setReadTimeout(60000);
+            c.setInstanceFollowRedirects(true);  // https to https, which GitHub's is
+            final int status = c.getResponseCode();
+            if (status != 200) {
+                return status;
+            }
+            long total = 0;
+            try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(file)) {
+                final byte[] buf = new byte[64 * 1024];
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                    total += n;
+                    if (!updateProgress(total)) {
+                        return 0;
+                    }
+                }
+            }
+            return 200;
+        } catch (Exception e) {
+            return -1;
+        } finally {
+            if (c != null) {
+                c.disconnect();
+            }
+        }
+    }
+
+    /* platform/android/update.cpp: the bytes so far; false to stop. */
+    private static native boolean updateProgress(long bytes);
 
     /* Sideways, a swipe in from the middle of the left or right edge brings
        chiral-ftp's tabs in (app/ui_mobile.inc). Those edges are also

@@ -1243,6 +1243,23 @@ float page_settings_m(float x, float y, float w) {
         }
       });
     }
+    if(update::available()) {
+      /* A test build (1.2-beta) never asks, so its switch stays off. */
+      const bool test = update::test_build();
+      const std::string note = test ? trf("Test builds ({0}) never check.", {VERSION_TAG})
+                                    : std::string(tr("At startup. Nothing is installed without asking."));
+      sep(yy);
+      row_small(yy, tr("Check for updates"), note.c_str(), P(52), [&](float cx, float cy) {
+        if(toggle(cx, cy - P(15), !test && update::enabled(), !test)) update::set_enabled(!update::enabled());
+      });
+      if(!test) {
+        const char *now_label = tr("Check now");
+        sep(yy);
+        row_small(yy, now_label, nullptr, button_w(now_label, false), [&](float cx, float cy) {
+          if(button(cx, cy - P(18), now_label, SECONDARY, -1, update::poll() != update::CHECKING, P(36))) update::check(true);
+        });
+      }
+    }
   });
 
   group(tr("TRANSFERS"));

@@ -179,9 +179,18 @@ bool start(void *(*fn)(void *), void *arg) {
 
 void *run_check(void *arg) {
   const bool manual = arg != nullptr;
+  /* Asked as the machine, not as this build: an x64 copy on an ARM PC is a
+     windows-arm64 device, and says what it is in "build" so that it can be
+     moved onto the ARM program. */
+  const std::string machine = os::platform_key(), build = os::build_key();
   char body[256];
-  snprintf(body, sizeof(body), "{\"platform\":\"%s\",\"version\":\"%s\",\"device\":\"%s\"}",
-           os::platform_key(), VERSION_TAG, g_saved.device.c_str());
+  if(machine == build) {
+    snprintf(body, sizeof(body), "{\"platform\":\"%s\",\"version\":\"%s\",\"device\":\"%s\"}",
+             machine.c_str(), VERSION_TAG, g_saved.device.c_str());
+  } else {
+    snprintf(body, sizeof(body), "{\"platform\":\"%s\",\"version\":\"%s\",\"device\":\"%s\",\"build\":\"%s\"}",
+             machine.c_str(), VERSION_TAG, g_saved.device.c_str(), build.c_str());
+  }
   long status = 0;
   std::string reply;
   const bool answered = os::post_json(API, body, CHECK_TIMEOUT_S, &status, &reply);
@@ -201,9 +210,19 @@ void *run_check(void *arg) {
   o.page = json::get_str(top, "page");
   if(!starts_with_nocase(o.page, "https://")) o.page = PAGE;
   /* Only what is really newer, and really ours: the answer is checked, not
-     trusted. */
-  const bool offered = json::get_bool(top, "update") && newer(o.version, VERSION_TAG) &&
-                       starts_with_nocase(o.url, RELEASES) && plain_name(o.file) && ends_with(o.url, "/" + o.file);
+     trusted. A copy running on hardware it wasn't built for also takes the
+     same version built for that hardware. A copy that was never trades
+     itself for one that isn't: an ARM PC offered the x64 program, from a
+     release without an ARM one, keeps its own. */
+  const std::string fits = os::file_key(o.file);
+  const bool onto_machine = build != machine && fits == machine && !newer(VERSION_TAG, o.version);
+  const bool off_machine = build == machine && fits != machine;
+  const bool offered = json::get_bool(top, "update") && (newer(o.version, VERSION_TAG) || onto_machine) &&
+                       !off_machine && starts_with_nocase(o.url, RELEASES) && plain_name(o.file) &&
+                       ends_with(o.url, "/" + o.file);
+  if(machine != build) {
+    log_msg(0, LOG_STATUS, "Update check: this is a %s copy on a %s machine", build.c_str(), machine.c_str());
+  }
   if(!offered) {
     set_state(manual ? UP_TO_DATE : IDLE);
     return nullptr;
@@ -259,8 +278,13 @@ void *run_install(void *) {
     fail(why);
     return nullptr;
   }
-  log_msg(0, LOG_STATUS, "Update: chiral-ftp %s is in place, restarting", o.version.c_str());
   Lock l;
+  if(launch.empty()) {
+    log_msg(0, LOG_STATUS, "Update: chiral-ftp %s handed to the system's installer", o.version.c_str());
+    g_state = HANDED_OFF;
+    return nullptr;
+  }
+  log_msg(0, LOG_STATUS, "Update: chiral-ftp %s is in place, restarting", o.version.c_str());
   g_launch = launch;
   g_state = RESTARTING;
   return nullptr;
@@ -288,6 +312,7 @@ void init(int argc, char **argv) {
       save();
     }
   }
+  os::clean_up("");
   for(int i = 1; i + 1 < argc; i++) {
     if(!strcmp(argv[i], "--updated-from")) {
       pthread_t t;
@@ -394,6 +419,10 @@ void stop() {
   join();
 }
 
+const char *restart_note() {
+  return os::restart_note();
+}
+
 void finish() {
   std::string launch;
   {
@@ -420,6 +449,7 @@ void skip_version() {}
 void cancel() {}
 void dismiss() {}
 bool enabled() { return false; }
+const char *restart_note() { return ""; }
 void set_enabled(bool) {}
 void stop() {}
 void finish() {}

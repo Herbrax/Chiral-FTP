@@ -47,5 +47,6 @@
 #define CHIRAL_UI_DESKTOP 1
 #define CHIRAL_UI_MOBILE 1
 
-/* No updater yet (app/update.h): the computers' comes first. */
-#define CHIRAL_HAS_UPDATER 0
+/* Updates itself (app/update.h): asks chiral-ftp.com at startup, downloads
+   the new APK and hands it to Android's installer (platform/android/update.cpp). */
+#define CHIRAL_HAS_UPDATER 1

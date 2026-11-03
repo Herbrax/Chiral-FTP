@@ -43,7 +43,7 @@ jobs:
       - name: Packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang-18 lld-18 llvm-18 ninja-build cmake make curl wget unzip python3
+          sudo apt-get install -y clang-18 lld-18 llvm-18 ninja-build cmake make curl wget unzip python3 pkg-config
           # Unversioned names (clang, llvm-ar, ld.lld), which the scripts also look for.
           echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
       - name: Version
@@ -52,12 +52,15 @@ jobs:
         run: bash tools/ci-version.sh
       - uses: actions/cache@v4
         with:
+          # ps5/.deps holds PacBrew's prebuilt ports too (the updater's libcurl),
+          # .deps/ps5-licenses the licence texts the package carries for them.
           path: |
             ps5/.deps
             .deps/ps5
             .deps/build-ps5
             .deps/src
-          key: ps5-${{ hashFiles('tools/build-ps5-deps.sh', 'ps5/tools/setup-native-dependencies.sh') }}
+            .deps/ps5-licenses
+          key: ps5-${{ hashFiles('tools/build-ps5-deps.sh', 'ps5/tools/setup-native-dependencies.sh', 'ps5/tools/setup-pacbrew-dependencies.sh') }}
       - name: The boilerplate's SDK, tools and libc.prx
         working-directory: ps5
         run: |

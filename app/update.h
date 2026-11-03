@@ -27,6 +27,7 @@ enum State {
   INSTALLING,
   FAILED,      // error() says why; this copy is unchanged
   RESTARTING,  // the new version is in place: quit, and it starts at exit
+  HANDED_OFF,  // given to the system's installer (Android), which takes it from there
 };
 
 struct Offer {
@@ -61,6 +62,8 @@ void set_enabled(bool on);
 bool test_build();
 /* Where the platform has an updater at all. */
 bool available();
+/* What the dialog says once the new version is in place (update::os). */
+const char *restart_note();
 /* From main, on the way out: stops the threads, then, after an update,
    starts the new version. */
 void stop();
@@ -69,9 +72,16 @@ void finish();
 /* What each platform provides (platform/<name>/update.cpp), where
    CHIRAL_HAS_UPDATER is 1. Messages are English, for tr(). */
 namespace os {
-/* The update API's name for this build: "windows-x64", "mac",
-   "linux-x86_64"... */
+/* The update API's name for this machine, from the hardware, not from this
+   build: "windows-arm64" for an x64 copy run under Windows on ARM's
+   emulation. */
 const char *platform_key();
+/* The same name for the program that is running: "windows-x64" in that
+   case. It differs from platform_key() only where a build can run on
+   hardware it wasn't made for. */
+const char *build_key();
+/* Which of those names a release file (the answer's "file") is built for. */
+std::string file_key(const std::string &file);
 /* n bytes from the system's random source; false when there is none. */
 bool random_bytes(void *out, size_t n);
 /* HTTPS POST of a JSON body. False when no answer came back at all;
@@ -89,13 +99,19 @@ std::string target(const std::string &file, std::string *why);
 std::string download_path(const std::string &target, const std::string &file);
 /* Puts the download in place of target, under name (target's own name, or
    the release's when target's had the old version in it). Sets launch to
-   what to start at exit. On failure target is left as it was. */
+   what to start at exit, or leaves it empty where the system's installer
+   took the download and replaces the app itself (Android). On failure
+   target is left as it was. */
 bool put_in_place(const std::string &target, const std::string &download, const std::string &name,
                   std::string *launch, std::string *why);
 /* Starts launch, the new version, as this process exits. */
 bool relaunch(const std::string &launch);
+/* What the dialog says once the new version is in place (English, for tr()):
+   that it starts again, or, on the PS5, that it closes and to open it again. */
+const char *restart_note();
 /* In the new version: removes what the old one left behind (path, from
-   --updated-from), once it has gone. */
+   --updated-from), once it has gone. Called with "" at every start, for what
+   a platform leaves without saying (Android's downloaded APK). */
 void clean_up(const std::string &path);
 }  // namespace os
 

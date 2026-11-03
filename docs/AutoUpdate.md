@@ -1,12 +1,13 @@
 # Auto-update
 
 How chiral-ftp finds out about a new version, and how each platform puts it
-in place. The limits of each are listed too. Windows, Mac and Linux are
-built. Switch, PS5 and Android are planned, and their sections say how they
-would work and what stands in the way.
+in place. The limits of each are listed too. Windows, Mac, Linux and
+Android are built. Switch and PS5 are planned, and their sections say how
+they would work and what stands in the way.
 
-The code: `app/update.h` and `app/update.cpp` (shared), and
-`platform/sdl/update.cpp` with `platform/sdl/macos.mm` (the computers). The
+The code: `app/update.h` and `app/update.cpp` (shared),
+`platform/sdl/update.cpp` with `platform/sdl/macos.mm` (the computers), and
+`platform/android/update.cpp` with `ChiralActivity.java` (Android). The
 working notes for whoever changes it are in `docs/AGENT-NOTES.md` §5b3.
 
 ## Contents
@@ -17,7 +18,7 @@ working notes for whoever changes it are in `docs/AGENT-NOTES.md` §5b3.
 - [Linux](#linux)
 - [Nintendo Switch (planned)](#nintendo-switch-planned)
 - [PS5 (planned)](#ps5-planned)
-- [Android (planned)](#android-planned)
+- [Android](#android)
 - [Summary](#summary)
 
 ## What every platform shares
@@ -156,8 +157,28 @@ on saying 1.2. Any other name is kept.
   - the new copy never starts;
   - or the update goes to a version without this code (1.1 and older).
   It does no harm, and the next update replaces it.
-- **Windows on ARM** gets the x64 `.exe` until an `arm64` one is released.
-  `latest_version.json` falls back to x64 for `windows-arm64`.
+- **Windows on ARM: a copy can be the wrong build for its PC.** An x64
+  copy runs on an ARM PC through Windows' emulation. Inside it,
+  `GetNativeSystemInfo()` and `PROCESSOR_ARCHITECTURE` both say x64, and
+  the program's own build says x64 too, so neither can be trusted.
+  - **How the hardware is found:** `IsWow64Process2`, which reports the real
+    machine to an emulated program as well.
+  - **What the check sends:** `"platform":"windows-arm64"` (the machine),
+    plus `"build":"windows-x64"` (the copy) when the two differ. The worker
+    ignores the extra field today.
+  - **An x64 copy on an ARM PC** takes the ARM `.exe` as soon as one is
+    offered. It takes it even at the same version, but only when the worker
+    answers `"update":true`. It still takes newer x64 releases while none
+    has an ARM `.exe`, since `latest_version.json` falls back to x64 for
+    `windows-arm64`.
+  - **An ARM copy never trades itself for the x64 program**, even a newer
+    one from a release without an ARM `.exe`. It waits for the next ARM
+    build.
+  - **For the worker to move a copy at the same version:** when `build`
+    differs from `platform`, answer `"update":true` with the platform's
+    latest file even if its version equals the one sent, as long as that
+    file is for the platform (`-windows-arm64.exe`). Without that change,
+    the move happens at the next release.
 - **Proxies that need a login** aren't supported. The check fails silently.
 - **Two windows of the same `.exe`:** the other one keeps running the old
   code until it is closed.
@@ -178,7 +199,10 @@ on saying 1.2. Any other name is kept.
    1. `ditto -x -k` unpacks the zip into `.chiral-ftp-update/` beside the
       bundle.
    2. The new bundle must contain `Contents/MacOS/chiral-ftp`.
-   3. Its quarantine attribute is removed.
+   3. Everything in `Contents/MacOS` is made executable again, and the
+      quarantine attribute is removed. A zip made off a Mac (v1.1's was made
+      on Windows) has no Unix permissions. Without the first step, the app
+      comes out "can't be opened".
    4. The old bundle becomes `.chiral-ftp-old.app`, and the new one takes its
       name.
    5. If the second rename fails, the old bundle is put back.
@@ -285,13 +309,39 @@ on saying 1.2. Any other name is kept.
    and `PPSA96024-old` (an update's leftovers) are ignored.
 2. **Duplicates:** two copies or more means "Duplicate copies found, update
    impossible". Nothing is touched.
-3. **Download** the release zip, then unpack it into `PPSA96024-2` beside
-   the copy, with every file and folder set to 777.
-4. **Swap:** rename `PPSA96024` to `PPSA96024-old`, then `PPSA96024-2` to
+3. **Download** the release zip, the way ProsperoStore does on an
+   elevated title:
+   - **Transport:** PacBrew's libcurl with OpenSSL (`PACBREW_PACKAGES +=
+     libcurl`). The console's own `sceHttp`/`sceSsl` rejects every public
+     site once a title is elevated (`0x8095f00c`), and chiral-ftp elevates
+     through Lapy.
+   - **Shims:** `ps5/examples/update-check/console_curl.c`, with
+     `APP_WRAP_SYMBOLS += fcntl`. It provides name lookup on
+     `sceNetResolver`, the `fcntl` fix and non-blocking sockets.
+     `console_curl_setup()` goes on every curl handle.
+   - **Certificates:** checked against the console's own list,
+     `/system/common/cert/CA_LIST.cer`, passed as `CURLOPT_CAINFO`.
+   - **Settings:** HTTPS only, IPv4, HTTP/1.1, a 15 s connect timeout, and
+     a stall limit (`CURLOPT_LOW_SPEED_LIMIT 1` for 20 s) rather than a
+     total time.
+   - **Redirects** are followed by hand (curl's `FOLLOWLOCATION` off), as
+     ProsperoStore does, and only to GitHub's release file host.
+   - **Where it goes:** the zip is written to the same drive as the copy as
+     it arrives, never held in memory.
+   - **Unpacking:** miniz, as ProsperoStore does, into `PPSA96024-2` beside
+     the copy. Refuse absolute paths, `..` and links, and require the
+     unpacked `sce_sys/param.json` to name `PPSA96024`.
+4. **Set the permissions explicitly:** `chmod 0777` on `PPSA96024-2` itself
+   and on every folder and file inside it. Don't rely on the modes stored in
+   the zip. Then check them all before going on; the console won't start a
+   title whose folder or files aren't 777. This is the PS5 version of the Mac
+   lesson: v1.1's Mac zip had no Unix modes, and the updated app "can't be
+   opened".
+5. **Swap:** rename `PPSA96024` to `PPSA96024-old`, then `PPSA96024-2` to
    `PPSA96024`.
-5. **Restart:** ask the user to close chiral-ftp and open it again. A title
+6. **Restart:** ask the user to close chiral-ftp and open it again. A title
    can't restart itself.
-6. **Clean-up:** the new version deletes `PPSA96024-old` once it has started
+7. **Clean-up:** the new version deletes `PPSA96024-old` once it has started
    successfully.
 
 **Limits**
@@ -299,11 +349,16 @@ on saying 1.2. Any other name is kept.
   ShadowMountPlus may hold it open or refuse the rename. Try it with a
   throwaway title first. If it refuses, the swap has to happen on the next
   start, before anything from the folder is loaded, or from another title.
-- **An unpacker is needed.** The PS5 build has no zip code. A small inflate
-  library (such as miniz) would be needed, or the release would have to ship
-  the files differently.
-- **HTTPS:** the PS5 build links only `libmbedcrypto`. A TLS client
-  (`libmbedtls` and `libmbedx509`) would have to be built for the console.
+- **The renaming is ours alone.** ProsperoStore and the boilerplate's
+  self-update kit avoid renaming the running title's folder. They swap the
+  files inside it from a helper program after the app has closed, because
+  the console's mount points at that folder. Renaming is the maintainer's
+  chosen plan; test it on a console first.
+- **New code in the PS5 build:** libcurl, OpenSSL and their
+  dependencies (and their licence notices), `console_curl.c`, and miniz.
+  `tools/build-ps5.sh` links by hand, so the PacBrew archives and the
+  `--wrap=fcntl` have to be added there, not only to the boilerplate's
+  Makefile.
 - **Space for two copies:** the old and the new copy exist side by side
   until clean-up, so the drive needs room for both.
 - **exFAT USB drives** have the same no-replace rename behaviour as the
@@ -317,39 +372,54 @@ on saying 1.2. Any other name is kept.
   drive, so it should run in the background, and only when an update is
   accepted, not at every start.
 
-## Android (planned)
+## Android
 
-**How it would work**
-1. **Download** the APK into the app's own cache folder.
-2. **Install** it through Android's `PackageInstaller` session. Android
-   shows its own confirmation, and the new version starts after it is
-   installed.
+**How it works**
+1. **The check and the download** go through Java's `HttpsURLConnection`
+   (`ChiralActivity.updatePost` and `updateDownload`), called over JNI from
+   `platform/android/update.cpp`. The download follows GitHub's redirect to
+   its file host, and reports each block to `updateProgress()`, which is
+   how the dialog shows progress and how Cancel stops it.
+2. **Where it goes:** `chiral-ftp-update.apk` in the app's private data
+   folder. It is deleted at the next start, whether the update was installed
+   or turned down.
+3. **Install:** the APK goes to Android's own installer, the same way the
+   file manager's Open hands it an `.apk` (`backend::open_file`, through the
+   app's file provider). The dialog then says to confirm there.
+4. **Restart:** Android closes chiral-ftp while it replaces it, and its
+   installer offers **Open** when it's done.
 
 **Limits**
-- **"Install unknown apps" must be allowed for chiral-ftp.** The user must
-  allow it in the system settings. The manifest already declares
+- **"Install unknown apps" must be allowed for chiral-ftp.** Android asks
+  the first time, and offers the setting. The manifest already declares
   `REQUEST_INSTALL_PACKAGES`, which only makes the setting available.
 - **The signature must match.** Android installs over the existing app only
-  if both APKs are signed with the same key. Releases are signed with the
-  keystore in the `ANDROID_DEBUG_KEYSTORE` GitHub secret. A build signed with
-  any other key fails with "App not installed", and so does a copy installed
-  from somewhere else.
-- **`versionCode` must go up.** It does, since it is made from the version
-  (1.2 becomes 1002000). Test builds share the code of their release
-  (1.2-beta is also 1002000), so a beta can't be updated to its own release
-  without uninstalling first.
+  if both APKs are signed with the same key.
+  - **Which key:** release APKs are signed with the keystore in the
+    `ANDROID_DEBUG_KEYSTORE` GitHub secret. Builds made on the maintainer's
+    PC use `~/.android/debug.keystore`, which is the same key if the secret
+    was made from that file.
+  - **Anything else fails** with "App not installed": an APK signed with
+    another key, or a copy installed from somewhere else.
+- **`versionCode` may not go down.** It is made from the version (1.2
+  becomes 1002000), so a newer release always has a higher one.
+- **Nothing is offered until a release has an APK.** `latest_version.json`
+  lists no Android file yet.
 - **Play Protect** may warn about, or slow down, installs of apps that
   aren't from the Play Store.
-- **Android TV:** the system installer may not be easy to reach with a
-  remote on some TVs.
+- **Android TV:** the update dialog is drawn in the TV layout, but the
+  system installer may be hard to reach with a remote on some TVs.
+- **Not yet run on a device.** It builds, and the native callback is
+  exported for all three architectures, but no update has been installed
+  on a phone or TV yet.
 
 ## Summary
 
 | | Finds itself by | Download | Swap | Restart | Main limits |
 |---|---|---|---|---|---|
-| **Windows** | its own `.exe` path | WinHTTP | rename running `.exe` to `.old` | starts new `.exe`, which deletes `.old` | no UAC; antivirus locks; leftover `.old` from 1.1 |
+| **Windows** | its own `.exe` path | WinHTTP | rename running `.exe` to `.old` | starts new `.exe`, which deletes `.old` | no UAC; antivirus locks; leftover `.old` from 1.1; same-version move to ARM needs the worker |
 | **Mac** | its own bundle | NSURLSession, `.app.zip` | unzip beside, swap bundles | `open -n` | App Translocation; non-admin; `.dmg` blocks it; permissions re-asked; not yet run on a Mac |
 | **Linux** | `$APPIMAGE` | `curl` or `wget` | one rename | starts new AppImage | AppImage only; needs curl or wget; not yet run on Linux |
 | **Switch** | `argv[0]` | to add (`switch-curl`) | `.new.nro`, `.old`, rename | `envSetNextLoad` or by hand | FAT renames; applet memory |
-| **PS5** | search, two levels deep | to add (TLS) | `PPSA96024-2` to `PPSA96024` | user reopens | renaming the running title; no unzip yet; duplicates |
-| **Android** | n/a (system installer) | to add | `PackageInstaller` | the system | unknown-sources setting; same signing key |
+| **PS5** | search, two levels deep | PacBrew libcurl, then miniz | `PPSA96024-2` to `PPSA96024` | user reopens | renaming the running title; no unzip yet; duplicates |
+| **Android** | n/a (system installer) | `HttpsURLConnection` | Android's installer | its **Open** button | unknown-sources setting; same signing key; not yet run on a device |

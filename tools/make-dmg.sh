@@ -61,11 +61,11 @@ tell application "Finder"
     set the bounds of container window to {200, 120, 1160, 660}
     set opts to the icon view options of container window
     set arrangement of opts to not arranged
-    set icon size of opts to 128
+    set icon size of opts to 112
     set text size of opts to 14
     set background picture of opts to file ".background:background.tiff"
-    set position of item "$name.app" of container window to {160, 120}
-    set position of item "Applications" of container window to {160, 390}
+    set position of item "$name.app" of container window to {160, 88}
+    set position of item "Applications" of container window to {160, 330}
     update without registering applications
     delay 2
     close

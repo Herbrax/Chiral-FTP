@@ -1042,8 +1042,8 @@ it without asking.
   made, as a plain window, with a warning. Its picture is
   `docs/screenshots/Mockups/mac_dmg_background.png`, drawn by
   `tools/make-dmg-background.py` with chevrons where `make-dmg.sh` puts the
-  icons (960x540 points, the app at 160,120 and Applications at 160,390,
-  128 pt icons): the two hold the same numbers.
+  icons (960x540 points, the app at 160,88 and Applications at 160,330,
+  112 pt icons): the two hold the same numbers.
 
 ## 5c. Probe first
 

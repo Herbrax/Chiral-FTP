@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cerrno>
+#include <cstdint>
 #include <cstring>
 #include <ctime>
 #include <pthread.h>
@@ -22,6 +23,7 @@
 
 #include "i18n.h"
 #include "json.h"
+#include "update.h"
 
 extern "C" {
 #include "config.h"
@@ -64,14 +66,87 @@ const float FS = 28, FS_SMALL = 23, FS_TITLE = 34;
    the note under its heading. On a TV across a room, FS_SMALL is small. */
 const float FS_READ = 27, FS_CARD = 32;
 
+/* A dialog's width. On a phone the window can be narrower than the dialog
+   was drawn for (a folded phone is about 600 units across), so it shrinks
+   to fit there; everywhere else it is the width it was given. */
+inline float dialog_w(float w) {
+#if CHIRAL_UI_MOBILE
+  return std::min(w, W - 24);
+#else
+  return w;
+#endif
+}
+
+#if CHIRAL_UI_DESKTOP
+/* The computer interface's sidebar and pages, or the console layout. A
+   phone or tablet has the former, arranged by the mobile shell; a TV, from
+   the same build, the latter: its window isn't the layout. */
+inline bool desktop_ui() {
+#if CHIRAL_UI_MOBILE
+  return platform::windowed();
+#else
+  return true;
+#endif
+}
+#endif
+
 /* Text that names the machine. A console's says "the console", and a
    computer's (CHIRAL_DEVICE_COMPUTER) says "this computer" -- and leaves out
    what only a console has, the SD card or the TV. Both are marked N_() at
    the call, so each is in the catalogue; translate the result with tr(). */
+#if CHIRAL_UI_MOBILE
+/* Android, one build for both: a phone, or a TV with the console's layout.
+   Each console sentence has its phone and TV versions here, found by the
+   console one; nullptr where a phone never shows it (the TV's is used). */
+struct DeviceWords {
+  const char *console, *phone, *tv;
+};
+const DeviceWords kDeviceWords[] = {
+    {"Could not save to the console", N_("Could not save to this phone"), N_("Could not save to the TV")},
+    {"Start in a console folder", N_("Start in a folder on this phone"), N_("Start in a folder on the TV")},
+    {"Automatic follows the console's system language.", N_("Automatic follows this phone's system language."),
+     N_("Automatic follows the TV's system language.")},
+    {"Left/Right to change. Settings are saved on the console right away.", nullptr,
+     N_("Left/Right to change. Settings are saved on the TV right away.")},
+    {"The ultimate file manager and FTP interface for this console:", nullptr,
+     N_("The ultimate file manager and FTP interface for this TV:")},
+    {"  FTP server: other devices connect to the console with any FTP app.", nullptr,
+     N_("  FTP server: other devices connect to the TV with any SFTP or FTP app.")},
+    {"  Web app: manage the console's files from a browser, upload and download.", nullptr,
+     N_("  Web app: manage the TV's files from a browser, upload and download.")},
+    {"Open a console folder on the left first", N_("Open a local folder on the left first"), N_("Open a local folder on the left first")},
+    {"Permanently delete {0} from the console? Folders are deleted with everything inside.",
+     N_("Permanently delete {0} from this phone? Folders are deleted with everything inside."),
+     N_("Permanently delete {0} from the TV? Folders are deleted with everything inside.")},
+    {"Download to the console", N_("Download to this phone"), N_("Download to the TV")},
+    {"Other devices connect to the console with FileZilla, a file manager or any FTP app.",
+     N_("Other devices connect to this phone with FileZilla, Cyberduck, a file manager or any SFTP or FTP app."),
+     N_("Other devices connect to the TV with FileZilla, Cyberduck, a file manager or any SFTP or FTP app.")},
+    {"Console files: browse, download to your PC, upload from it (drag and drop works), copy, move, rename, delete.", nullptr,
+     N_("TV files: browse, download to your PC, upload from it (drag and drop works), copy, move, rename, delete.")},
+    {"This console shows up on the others as \"{0}\".", N_("This device shows up on the others as \"{0}\"."),
+     N_("This device shows up on the others as \"{0}\".")},
+    {"Turn the console into an FTP server. Connect to it from your PC, phone or another console.", nullptr,
+     N_("Turn the TV into an SFTP or FTP server. Connect to it from your PC, phone or a console.")},
+    {"Open chiral-ftp in a browser on your PC: manage the console's files, upload and download.", nullptr,
+     N_("Open chiral-ftp in a browser on your PC: manage the TV's files, upload and download.")},
+    {"Copy and move files on the console: the SD card, the homebrew folder, anywhere.", nullptr,
+     N_("Copy and move files on the TV: its storage, USB drives, anywhere.")},
+    {"Connect from the console to your laptop, PC or NAS and transfer files both ways.", nullptr,
+     N_("Connect from the TV to your laptop, PC or NAS and transfer files both ways.")},
+};
+#endif
+
 inline const char *device_text(const char *console, const char *computer) {
 #if CHIRAL_DEVICE_COMPUTER
   (void)console;
   return computer;
+#elif CHIRAL_UI_MOBILE
+  (void)computer;
+  for(const DeviceWords &d : kDeviceWords) {
+    if(!strcmp(d.console, console)) return platform::windowed() && d.phone ? d.phone : d.tv;
+  }
+  return console;
 #else
   (void)computer;
   return console;
@@ -346,7 +421,7 @@ struct ServerItem {
   int index;
 };
 
-enum OverlayKind { OV_OTHER, OV_QUEUE, OV_LOG, OV_TEXT, OV_MENU, OV_QUICK, OV_PROMPT };
+enum OverlayKind { OV_OTHER, OV_QUEUE, OV_LOG, OV_TEXT, OV_MENU, OV_QUICK, OV_PROMPT, OV_UPDATE };
 
 /* Touch. The UI is drawn fresh every frame, so rather than keep a parallel
    model of where everything is, each screen records the rectangles it has
@@ -555,6 +630,14 @@ void save_store(const char *name, const std::vector<json::Object> &items) {
   if(store_write(name, s.c_str(), s.size())) show_toast(tr(device_text(N_("Could not save to the console"), N_("Could not save to this computer"))), true);
 }
 
+#if CHIRAL_UI_MOBILE
+/* The order of a phone's lists (a pane's ⋮, Sort by), the same in every
+   pane and remembered. Folders stay first whatever it is. */
+enum SortBy { SORT_NAME, SORT_DATE, SORT_SIZE, SORT_TYPE };
+int g_sort_by = SORT_NAME;
+bool g_sort_desc = false;
+#endif
+
 void load_all() {
   g.sites = load_store("sites");
   g.history = load_store("history");
@@ -564,6 +647,10 @@ void load_all() {
     g.save_pass = json::get_bool(prefs[0], "save_pass", true);
     g.network = json::get_str(prefs[0], "network");
     platform::set_zoom((float)json::get_num(prefs[0], "zoom", 1.0));
+#if CHIRAL_UI_MOBILE
+    g_sort_by = std::max(0, std::min((int)SORT_TYPE, (int)json::get_num(prefs[0], "sort_by", SORT_NAME)));
+    g_sort_desc = json::get_bool(prefs[0], "sort_desc", false);
+#endif
   }
 }
 
@@ -574,6 +661,10 @@ void save_prefs() {
   json::set_str(o, "language", i18n_choice());
   json::set_str(o, "network", g.network);
   json::set_num(o, "zoom", platform::zoom());
+#if CHIRAL_UI_MOBILE
+  json::set_num(o, "sort_by", g_sort_by);
+  json::set_bool(o, "sort_desc", g_sort_desc);
+#endif
   save_store("prefs", {o});
 }
 
@@ -628,12 +719,38 @@ void add_history(json::Object site) {
 
 /* ---------- pane loading ---------- */
 
+#if CHIRAL_UI_MOBILE
+// A file's type, for Sort by type: what follows its last dot ("" for none, or a dot file).
+const char *name_ext(const std::string &name) {
+  const size_t dot = name.rfind('.');
+  return dot == std::string::npos || dot == 0 ? "" : name.c_str() + dot + 1;
+}
+
+void sort_entries(std::vector<Entry> &v) {
+  std::stable_sort(v.begin(), v.end(), [](const Entry &a, const Entry &b) {
+    if(a.dir != b.dir) return a.dir;
+    int c = 0;
+    switch(g_sort_by) {
+    case SORT_DATE: c = a.mtime < b.mtime ? -1 : a.mtime > b.mtime; break;
+    case SORT_SIZE: if(!a.dir) c = a.size < b.size ? -1 : a.size > b.size; break;  // folders by name
+    case SORT_TYPE: c = strcasecmp(name_ext(a.name), name_ext(b.name)); break;
+    default: break;
+    }
+    if(g_sort_desc) c = -c;
+    if(c) return c < 0;
+    // Then by name: A to Z, unless it's the name order itself that's reversed.
+    const int n = strcasecmp(a.name.c_str(), b.name.c_str());
+    return g_sort_by == SORT_NAME && g_sort_desc ? n > 0 : n < 0;
+  });
+}
+#else
 void sort_entries(std::vector<Entry> &v) {
   std::sort(v.begin(), v.end(), [](const Entry &a, const Entry &b) {
     if(a.dir != b.dir) return a.dir;
     return strcasecmp(a.name.c_str(), b.name.c_str()) < 0;
   });
 }
+#endif
 
 void clamp_cursor(Pane &p, int count) {
   if(p.cursor >= count) p.cursor = count - 1;
@@ -933,7 +1050,7 @@ struct TextEntry : Overlay {
   }
 
   void draw() override {
-    float w = 1100, h = 250, x = (W - w) / 2, y = (H - h) / 2;
+    float w = dialog_w(1100), h = 250, x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 150));
     draw::rect(x, y, w, h, draw::PANEL, 18);
     hit_add(HIT_OVERLAY_BODY, x, y, w, h);
@@ -992,7 +1109,7 @@ struct Menu : Overlay {
   }
 
   void draw() override {
-    float row = 62, w = 760;
+    float row = 62, w = dialog_w(760);
     float h = 120 + row * items.size() + (subtitle.empty() ? 0 : 36);
     float x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 140));
@@ -1036,7 +1153,7 @@ struct Confirm : Overlay {
   }
 
   void draw() override {
-    float w = 980, h = 300, x = (W - w) / 2, y = (H - h) / 2;
+    float w = dialog_w(980), h = 300, x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 150));
     draw::rect(x, y, w, h, draw::PANEL, 18);
     hit_add(HIT_OVERLAY_BODY, x, y, w, h);
@@ -1224,7 +1341,7 @@ struct Form : Overlay {
 
   void draw() override {
     std::vector<int> f = fields();
-    float row = 60, w = 1240;
+    float row = 60, w = dialog_w(1240);
     int text_rows = (int)f.size() - 3;
     float h = 130 + row * text_rows + 110;
     float x = (W - w) / 2, y = (H - h) / 2;
@@ -1269,7 +1386,7 @@ void ip_changed();
 
 struct Settings : Overlay {
   int cursor = 0;  // an index into rows()
-  enum { LANG, NETWORK, CONNS, POLICY, RETRIES, MTIME, HIDDEN, SAVEPASS, KEYS, LOGVIEW, COUNT };
+  enum { LANG, NETWORK, CONNS, POLICY, RETRIES, MTIME, HIDDEN, SAVEPASS, UPDATES, UPDATE_NOW, KEYS, LOGVIEW, COUNT };
 
   /* The rows shown. Network only where the machine is on networks to choose
      between, which is a computer (system_networks returns 0 elsewhere). */
@@ -1279,6 +1396,9 @@ struct Settings : Overlay {
     std::vector<int> r;
     for(int i = 0; i < COUNT; i++) {
       if(i == NETWORK && !networks) continue;
+      // Updates only where the platform has an updater; a test build never checks.
+      if((i == UPDATES || i == UPDATE_NOW) && !update::available()) continue;
+      if(i == UPDATE_NOW && update::test_build()) continue;
       r.push_back(i);
     }
     return r;
@@ -1366,6 +1486,9 @@ struct Settings : Overlay {
       }
       save_prefs();
       return;
+    case UPDATES:
+      if(!update::test_build()) update::set_enabled(!update::enabled());
+      return;
     default: return;
     }
     settings_set(&s);
@@ -1412,6 +1535,8 @@ struct Settings : Overlay {
     rows[MTIME] = {tr("Keep file dates"), s.preserve_mtime ? tr("On") : tr("Off")};
     rows[HIDDEN] = {tr("Show hidden files (FTP LIST -a)"), g.show_hidden ? tr("On") : tr("Off")};
     rows[SAVEPASS] = {tr("Remember passwords in Recent"), g.save_pass ? tr("On") : tr("Off")};
+    rows[UPDATES] = {tr("Check for updates"), !update::test_build() && update::enabled() ? tr("On") : tr("Off")};
+    rows[UPDATE_NOW] = {tr("Check now"), update::poll() == update::CHECKING ? "..." : ""};
     rows[KEYS] = {tr("Forget saved SFTP host keys"), ""};
     rows[LOGVIEW] = {tr("Message log"), ""};
     const int current = id();
@@ -1427,7 +1552,10 @@ struct Settings : Overlay {
                  i == CONNS || i == LANG || i == NETWORK ? draw::ACCENT2 : draw::MUTED, rows[i].value.c_str());
       yy += row;
     }
-    const char *hint = current == CONNS ? tr("Each transfer logs in with its own connection, like FileZilla. Up to 30; the queue backs off if the server allows fewer.")
+    const std::string update_hint = update::test_build() ? trf("Test builds ({0}) never check.", {VERSION_TAG})
+                                                         : std::string(tr("At startup. Nothing is installed without asking."));
+    const char *hint = current == UPDATES || current == UPDATE_NOW ? update_hint.c_str()
+                       : current == CONNS ? tr("Each transfer logs in with its own connection, like FileZilla. Up to 30; the queue backs off if the server allows fewer.")
                        : current == NETWORK ? tr("The address the FTP server and web app screens show. Automatic picks your local network (192.168.x.x) over a VPN.")
                        : current == LANG ? tr(device_text(N_("Automatic follows the console's system language."),
                                                           N_("Automatic follows your system language.")))
@@ -1496,7 +1624,7 @@ struct About : Overlay {
   }
 
   void draw() override {
-    float w = 1400, h = 900, x = (W - w) / 2, y = (H - h) / 2;
+    float w = dialog_w(1400), h = 960, x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 160));
     draw::rect(x, y, w, h, draw::PANEL, 18);
     hit_add(HIT_OVERLAY_BODY, x, y, w, h);
@@ -1513,12 +1641,13 @@ struct About : Overlay {
                                                   N_("  Web app: manage this computer's files from another device's browser."))},
         {FS_READ, draw::MUTED, false, platform::about_file_manager()},
         {FS_READ, draw::MUTED, false, N_("  FTP / SFTP client: up to 30 transfers at once with your laptop, PC or NAS.")},
-        {FS_READ, draw::TEXT, false, N_("chiral-ftp runs on PS5, Nintendo Switch, PC and Mac. Android, PS4 and more are coming soon.")},
+        {FS_READ, draw::TEXT, false, N_("chiral-ftp runs on Windows, Mac, Linux, Android, Nintendo Switch and PS5. Get it at:")},
+        {FS_READ, draw::ACCENT2, false, "chiral-ftp.com"},
         {12, 0, false, ""},
         {FS, draw::ACCENT2, true, N_("Made by Herbrax (Simo Hakim)")},
         {FS_READ, draw::MUTED, false, "simohakim.com  \xc2\xb7  linkedin.com/in/simo-hakim"},
         {FS, draw::TEXT, false, N_("Found a bug? Please report it on GitHub. Pull requests are welcome.")},
-        {FS_READ, draw::ACCENT2, false, "github.com/Herbrax/chiral-ftp"},
+        {FS_READ, draw::ACCENT2, false, "github.com/Herbrax/Chiral-FTP"},
         {12, 0, false, ""},
         {FS_READ, draw::TEXT, true, N_("Built with open-source work by others, thank you:")},
     };
@@ -1550,6 +1679,8 @@ bool Settings::input(Action a) {
               tr("Forget"), [] { show_toast(ftp_forget_host_keys() ? tr("Could not remove the keys") : tr("Saved host keys forgotten")); });
     } else if(id() == LOGVIEW) {
       push(new LogView);
+    } else if(id() == UPDATE_NOW) {
+      update::check(true);
     } else {
       change(1);
     }
@@ -2130,7 +2261,11 @@ void draw_pane(Pane &p, int idx, bool fm, float x, float y, float w, float h) {
   if(focus) draw::frame(x, y, w, h, draw::ACCENT, 16, 3);
 
   // Header: which side, and where we are.
+#if CHIRAL_UI_MOBILE
+  const char *who = !server_side ? (platform::windowed() ? tr("This phone") : tr("This TV"))
+#else
   const char *who = !server_side ? device_text("Console", tr("This computer"))
+#endif
                     : g.connected ? (g.server_label.empty() ? tr("Server") : g.server_label.c_str())
                                   : tr("Servers");
   draw::text(x + 28, y + 14, FS_TITLE, focus ? draw::TEXT : draw::MUTED, who, true);
@@ -2366,7 +2501,7 @@ ServerPrefs g_srv;
 
 void save_server_prefs();  // further down
 
-#if CHIRAL_DEVICE_COMPUTER
+#if CHIRAL_DEVICE_COMPUTER || CHIRAL_UI_MOBILE  // the desktop pages' server page, on a phone too
 /* Shares what the server screen was told to: a folder, or the whole
    computer (system_ftpd_full_root). */
 void set_shared_root(const std::string &v) {
@@ -2635,7 +2770,7 @@ void go_mode(Mode m) {
   g_row_cursor = 0;
 }
 
-#if CHIRAL_DEVICE_COMPUTER
+#if CHIRAL_DEVICE_COMPUTER || CHIRAL_UI_MOBILE
 /* A folder as the server screen shows it: the home folder as "~". */
 std::string short_path(const std::string &path) {
   const char *home = getenv("HOME");
@@ -2888,6 +3023,8 @@ const char *kind_label(const char *kind) {
   if(!strcmp(kind, "mac")) return "Mac";
   if(!strcmp(kind, "windows")) return "Windows";
   if(!strcmp(kind, "linux")) return "Linux";
+  if(!strcmp(kind, "android")) return "Android";
+  if(!strcmp(kind, "androidtv")) return "Android TV";
   return kind;
 }
 
@@ -2901,21 +3038,41 @@ const char *kind_badge(const char *kind) {
 ImU32 kind_tint(const char *kind) {
   if(!strcmp(kind, "switch")) return IM_COL32(0x3A, 0x14, 0x16, 255);
   if(!strcmp(kind, "mac")) return IM_COL32(0x2A, 0x24, 0x16, 255);
+  if(!strncmp(kind, "android", 7)) return IM_COL32(0x14, 0x34, 0x22, 255);
   return IM_COL32(0x14, 0x32, 0x5C, 255);
 }
 
 ImU32 kind_ink(const char *kind) {
   if(!strcmp(kind, "switch")) return IM_COL32(0xFF, 0x8A, 0x8A, 255);
   if(!strcmp(kind, "mac")) return IM_COL32(0xF2, 0xD9, 0x8A, 255);
+  if(!strncmp(kind, "android", 7)) return IM_COL32(0x8A, 0xE6, 0xA8, 255);
   return IM_COL32(0xA9, 0xCE, 0xFF, 255);
 }
 
+/* What kind of device, in an s x s square: its badge, or for Android a
+   phone or a TV drawn in outline. */
 void kind_square(float x, float y, float s, const char *kind) {
   draw::rect(x, y, s, s, kind_tint(kind), s * 0.22f);
+  const ImU32 ink = kind_ink(kind);
+  const float t = std::max(1.5f, s * 0.06f);  // the outline
+  ImDrawList *d = draw::dl();
+  if(!strcmp(kind, "android")) {
+    const float w = s * 0.36f, h = s * 0.60f, px = x + (s - w) / 2, py = y + (s - h) / 2;
+    d->AddRect(ImVec2(px, py), ImVec2(px + w, py + h), ink, s * 0.08f, 0, t);
+    d->AddRectFilled(ImVec2(x + s * 0.43f, py + h - s * 0.13f), ImVec2(x + s * 0.57f, py + h - s * 0.13f + t), ink, t / 2);
+    return;
+  }
+  if(!strcmp(kind, "androidtv")) {
+    const float w = s * 0.64f, h = s * 0.42f, px = x + (s - w) / 2, py = y + s * 0.22f;
+    d->AddRect(ImVec2(px, py), ImVec2(px + w, py + h), ink, s * 0.05f, 0, t);
+    d->AddRectFilled(ImVec2(x + s * 0.47f, py + h), ImVec2(x + s * 0.53f, py + h + s * 0.08f), ink);
+    d->AddRectFilled(ImVec2(x + s * 0.34f, py + h + s * 0.08f), ImVec2(x + s * 0.66f, py + h + s * 0.08f + t), ink, t / 2);
+    return;
+  }
   const char *b = kind_badge(kind);
   const float fs = s * 0.36f;
   ImVec2 ts = draw::text_size(fs, b, true);
-  draw::text(x + (s - ts.x) / 2, y + (s - ts.y) / 2, fs, kind_ink(kind), b, true);
+  draw::text(x + (s - ts.x) / 2, y + (s - ts.y) / 2, fs, ink, b, true);
 }
 
 // The four digits both screens show, one to a box.
@@ -2928,6 +3085,39 @@ void code_boxes(float cx, float y, float box, const char *code, ImU32 bg) {
     const float fs = box * 0.68f;
     ImVec2 ts = draw::text_size(fs, d, true);
     draw::text(bx + (box - ts.x) / 2, y + (box * 1.2f - ts.y) / 2, fs, draw::ACCENT2, d, true);
+  }
+}
+
+/* Where to get chiral-ftp for the other devices, as Quick connect says it:
+   the download page, and the same page as a QR code for a phone's camera. */
+const char *const kDownloadPage = "chiral-ftp.com/download";
+const char *const kReleasesPage = "github.com/Herbrax/Chiral-FTP/releases";
+
+// https://chiral-ftp.com/download: QR 2-L, 25 x 25 (tools/gen-qr.py)
+const int kDownloadQrSize = 25;
+const std::uint32_t kDownloadQr[25] = {
+    0x01FC267F, 0x01040041, 0x01758E5D, 0x01747B5D, 0x01752B5D, 0x01047441, 0x01FD557F,
+    0x00018000, 0x0030FAE3, 0x00F8CC95, 0x01B9B270, 0x012549AA, 0x010D16E8, 0x0088A8A9,
+    0x01B8E259, 0x016E0931, 0x005F6141, 0x00112F00, 0x01152B7F, 0x0091CF41, 0x00DFB85D,
+    0x0187EA5D, 0x0162F45D, 0x011D4141, 0x01231D7F,
+};
+
+/* The code in an s x s white square, its quiet zone inside. Each module is
+   a whole number of screen pixels, so a camera gets sharp edges. */
+void download_qr(float x, float y, float s) {
+  const int n = kDownloadQrSize, quiet = 3;
+  const float px = platform::pixel();
+  const float m = std::max(1.0f, std::floor(s / (n + 2 * quiet) / px)) * px;
+  draw::rect(x, y, s, s, IM_COL32(255, 255, 255, 255), s * 0.04f);
+  const float ox = std::round((x + (s - n * m) / 2) / px) * px;
+  const float oy = std::round((y + (s - n * m) / 2) / px) * px;
+  for(int r = 0; r < n; r++) {
+    for(int c = 0; c < n;) {
+      int e = c;
+      while(e < n && (kDownloadQr[r] >> e & 1)) e++;
+      if(e > c) draw::rect(ox + c * m, oy + r * m, (e - c) * m, m, IM_COL32(0, 0, 0, 255));
+      c = e + 1;
+    }
   }
 }
 
@@ -2994,8 +3184,12 @@ struct QuickPrompt : Overlay {
     discovery_request_t now;
     if(discovery_pending(&now) && !strcmp(now.nonce, req.nonce)) req.seconds_left = now.seconds_left;
 #if CHIRAL_UI_DESKTOP
-    draw_quick_prompt_desktop(req);
-#else
+    if(desktop_ui()) {
+      draw_quick_prompt_desktop(req);
+      return;
+    }
+#endif
+#if !CHIRAL_UI_DESKTOP || CHIRAL_UI_MOBILE  // a TV, from the Android build, draws the console's
     const float w = 960, h = 560, x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 160));
     draw::rect(x, y, w, h, draw::PANEL, 18);
@@ -3074,7 +3268,7 @@ struct QuickList : Overlay {
 
   void draw() override {
     refresh();
-    const float w = 1180, h = 760, x = (W - w) / 2, y = (H - h) / 2;
+    const float w = 1180, h = 940, x = (W - w) / 2, y = (H - h) / 2;
     draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 150));
     draw::rect(x, y, w, h, draw::PANEL, 18);
     hit_add(HIT_OVERLAY_BODY, x, y, w, h);
@@ -3104,7 +3298,8 @@ struct QuickList : Overlay {
         draw::text(x + 92, yy + 60, FS_SMALL, draw::MUTED, tr("Open chiral-ftp on the other device: it shows up here by itself."));
       }
     }
-    for(int i = 0; i < (int)peers.size() && yy + row < y + h - 120; i++, yy += row) {
+    const float band = y + h - 380;  // where to get chiral-ftp, below the list
+    for(int i = 0; i < (int)peers.size() && yy + row < band - 10; i++, yy += row) {
       const discovery_peer_t &p = peers[i];
       const bool on = i == cursor;
       hit_add(HIT_MENU_ITEM, x + 24, yy, w - 48, row - 10, i);
@@ -3114,6 +3309,18 @@ struct QuickList : Overlay {
       const std::string sub = std::string(kind_label(p.kind)) + "  \xc2\xb7  " + p.ip + "  \xc2\xb7  chiral-ftp " + p.version;
       draw::text_clip(x + 118, yy + 48, FS_SMALL, draw::MUTED, sub.c_str(), w - 420);
     }
+    draw::rect(x + 44, band, w - 88, 2, draw::LINE);
+    const float qs = 196, tx = x + 44 + qs + 36, tw = x + w - 44 - tx;
+    download_qr(x + 44, band + 24, qs);
+    float ty = band + 28;
+    draw::text_clip(tx, ty, FS, draw::TEXT, tr("chiral-ftp on your other devices"), tw, true);
+    ty += 50;
+    for(const std::string &l : wrap_text(tr("Free for Windows, Mac, Linux, Android, Nintendo Switch and PS5. Scan the code, or go to:"), FS_SMALL, tw)) {
+      draw::text(tx, ty, FS_SMALL, draw::MUTED, l.c_str());
+      ty += 34;
+    }
+    draw::text_clip(tx, ty + 8, FS_SMALL, draw::ACCENT2, kDownloadPage, tw, true);
+    draw::text_clip(tx, ty + 46, FS_SMALL, draw::ACCENT2, kReleasesPage, tw);
     char me[64];
     system_device_name(me, sizeof(me));
     draw::text_clip(x + 44, y + h - 130, FS_SMALL, draw::MUTED,
@@ -3183,6 +3390,239 @@ void quick_requests() {
   push(new QuickPrompt(r));
   g_touch_dirty = true;
 }
+
+/* ---------- updates ---------- */
+
+#if CHIRAL_HAS_UPDATER
+#if CHIRAL_UI_DESKTOP
+/* A sheet over the window: a title, a line under it, paragraphs, a progress
+   bar when progress >= 0, and buttons along the bottom (HIT_MENU_ITEM 0, 1...,
+   left to right; the last is the main one). ui_desktop.inc. */
+void draw_sheet_desktop(const std::string &title, const std::string &sub, const std::vector<std::string> &body,
+                        float progress, const std::string &progress_text,
+                        const std::vector<std::string> &buttons, int focus);
+#endif
+
+#if !CHIRAL_UI_DESKTOP || CHIRAL_UI_MOBILE  // a TV, from the Android build, draws the console's
+/* The same sheet in the console layout: big type, the main button last. */
+void draw_sheet_console(const std::string &title, const std::string &sub, const std::vector<std::string> &body,
+                        float progress, const std::string &progress_text,
+                        const std::vector<std::string> &buttons, int focus) {
+  const float w = dialog_w(1100), pad = 44;
+  std::vector<std::vector<std::string>> paras;
+  float lines = 0;
+  for(const std::string &b : body) {
+    paras.push_back(wrap_text(b, FS_READ, w - 2 * pad));
+    lines += (float)paras.back().size();
+  }
+  const float h = 40 + 56 + (sub.empty() ? 0 : 46) + 24 + 38 * lines + 16 * (float)paras.size() +
+                  (progress >= 0 ? 90 : 0) + (buttons.empty() ? 20 : 104);
+  const float x = (W - w) / 2, y = (H - h) / 2;
+  draw::rect(0, 0, W, H, IM_COL32(0, 0, 0, 160));
+  draw::rect(x, y, w, h, draw::PANEL, 18);
+  hit_add(HIT_OVERLAY_BODY, x, y, w, h);
+  float ty = y + 40;
+  draw::text_clip(x + pad, ty, FS_TITLE, draw::TEXT, title.c_str(), w - 2 * pad, true);
+  ty += 56;
+  if(!sub.empty()) {
+    draw::text(x + pad, ty, FS_SMALL, draw::MUTED, sub.c_str());
+    ty += 46;
+  }
+  ty += 24;
+  for(const auto &para : paras) {
+    for(const std::string &l : para) {
+      draw::text(x + pad, ty, FS_READ, draw::TEXT, l.c_str());
+      ty += 38;
+    }
+    ty += 16;
+  }
+  if(progress >= 0) {
+    const float bw = w - 2 * pad;
+    draw::rect(x + pad, ty + 8, bw, 16, draw::PANEL2, 8);
+    if(progress > 0) draw::rect(x + pad, ty + 8, std::max(16.0f, bw * progress), 16, draw::ACCENT, 8);
+    if(!progress_text.empty()) draw::text(x + pad, ty + 36, FS_SMALL, draw::MUTED, progress_text.c_str());
+  }
+  float bx = x + w - pad;
+  const float by = y + h - 40 - 64;
+  for(int i = (int)buttons.size() - 1; i >= 0; i--) {
+    const char *label = buttons[i].c_str();
+    const float tw = draw::text_size(FS, label, true).x, bw = std::max(200.0f, tw + 60);
+    bx -= bw;
+    const bool main = i == (int)buttons.size() - 1;
+    hit_add(HIT_MENU_ITEM, bx, by, bw, 64, i);
+    draw::rect(bx, by, bw, 64, i == focus ? (main ? draw::ACCENT : draw::SEL) : draw::PANEL2, 12);
+    draw::text(bx + (bw - tw) / 2, by + 16, FS, draw::TEXT, label, true);
+    bx -= 20;
+  }
+}
+#endif
+
+/* A newer version: what it is, and Update, Not now or Skip this version;
+   then the download, and the restart. Where this copy can't replace itself
+   the main button is the download page instead (update::Offer::cannot). */
+struct UpdateDialog : Overlay {
+  int choice = -1;  // the button the keys are on; the main one at first
+  OverlayKind kind() override { return OV_UPDATE; }
+
+  /* Closed some other way (the menu bar clears every dialog) while it was
+     still only an offer: as good as Not now for this session, without the
+     seven days. */
+  ~UpdateDialog() override {
+    if(update::poll() == update::AVAILABLE) update::dismiss();
+  }
+
+  std::vector<std::string> buttons() {
+    switch(update::poll()) {
+    case update::AVAILABLE:
+      return {tr("Skip this version"), tr("Not now"), update::offer().cannot.empty() ? tr("Update") : tr("Download page")};
+    case update::DOWNLOADING: return {tr("Cancel")};
+    case update::FAILED: return {tr("Close"), tr("Download page")};
+    case update::HANDED_OFF: return {tr("Close")};
+    default: return {};
+    }
+  }
+
+  void open_page() {
+    const std::string page = update::offer().page;
+    platform::open_url(page.empty() ? "https://chiral-ftp.com/download/" : page.c_str());
+  }
+
+  // Button i of buttons(); false when that closes the dialog.
+  bool press(int i) {
+    switch(update::poll()) {
+    case update::AVAILABLE:
+      if(i == 0) update::skip_version();
+      else if(i == 1) update::not_now();
+      else if(update::offer().cannot.empty()) {
+        update::install();
+        choice = -1;
+        return true;
+      } else {
+        open_page();
+        update::not_now();
+      }
+      return false;
+    case update::DOWNLOADING:
+      update::cancel();  // back to the offer, once the download has stopped
+      choice = -1;
+      return true;
+    case update::FAILED:
+      if(i == 1) open_page();
+      update::dismiss();
+      return false;
+    case update::HANDED_OFF:
+      update::dismiss();  // the system's installer has it from here
+      return false;
+    default:
+      return true;  // putting it in place: nothing to choose
+    }
+  }
+
+  bool input(Action a) override {
+    const int n = (int)buttons().size();
+    if(choice < 0 || choice >= n) choice = n - 1;
+    if(a == ACT_LEFT || a == ACT_UP) choice = n ? (choice + n - 1) % n : -1;
+    if(a == ACT_RIGHT || a == ACT_DOWN) choice = n ? (choice + 1) % n : -1;
+    if(a == ACT_CROSS && n) return press(choice);
+    if(a == ACT_CIRCLE) {
+      // Esc: Not now, Cancel or Close, whichever there is.
+      const update::State s = update::poll();
+      if(s == update::AVAILABLE) return press(1);
+      if(s == update::DOWNLOADING || s == update::FAILED || s == update::HANDED_OFF) return press(0);
+    }
+    return true;
+  }
+
+  void focus(int a, int b) override {
+    (void)b;
+    choice = a;
+  }
+
+  void draw() override {
+    const update::State s = update::poll();
+    const update::Offer o = update::offer();
+    const std::vector<std::string> b = buttons();
+    if(choice < 0 || choice >= (int)b.size()) choice = (int)b.size() - 1;
+    std::string title, sub, progress_text;
+    std::vector<std::string> body;
+    float progress = -1;
+    if(s == update::AVAILABLE) {
+      title = trf("chiral-ftp {0} is available", {o.version});
+      sub = trf("You have {0}.", {VERSION_TAG});
+      if(o.cannot.empty()) {
+        body.push_back(tr("chiral-ftp downloads it, puts it in place of this copy and starts again. The servers stop for a moment; your settings stay."));
+      } else {
+        body.push_back(tr(o.cannot.c_str()));
+        body.push_back(tr("You can download it from the website instead."));
+      }
+    } else if(s == update::DOWNLOADING) {
+      title = trf("Downloading chiral-ftp {0}", {o.version});
+      long long done = 0, total = 0;
+      update::progress(&done, &total);
+      progress = total > 0 ? std::min(1.0f, (float)((double)done / (double)total)) : 0;
+      char buf[64];
+      if(total > 0) snprintf(buf, sizeof(buf), "%.1f / %.1f MB", done / 1048576.0, total / 1048576.0);
+      else snprintf(buf, sizeof(buf), "%.1f MB", done / 1048576.0);
+      progress_text = buf;
+    } else if(s == update::FAILED) {
+      title = tr("The update didn't work");
+      body.push_back(tr(update::error().c_str()));
+    } else if(s == update::HANDED_OFF) {
+      title = trf("Installing chiral-ftp {0}", {o.version});
+      body.push_back(tr("Confirm the update in the system's installer. chiral-ftp closes while it is replaced; open it again afterwards."));
+    } else {
+      title = trf("Installing chiral-ftp {0}", {o.version});
+      body.push_back(tr(update::restart_note()));
+      progress = 1;
+    }
+#if CHIRAL_UI_DESKTOP
+    if(desktop_ui()) {
+      draw_sheet_desktop(title, sub, body, progress, progress_text, b, choice);
+      return;
+    }
+#endif
+#if !CHIRAL_UI_DESKTOP || CHIRAL_UI_MOBILE
+    draw_sheet_console(title, sub, body, progress, progress_text, b, choice);
+#endif
+  }
+};
+
+/* The updater's news, whatever is on screen: an offer comes up once nothing
+   else is open; a check asked for in Settings says what it found. */
+void update_poll() {
+  bool open = false;
+  for(auto &o : g.overlays) if(o->kind() == OV_UPDATE) open = true;
+  switch(update::poll()) {
+  case update::AVAILABLE:
+    if(!open && (g.overlays.empty() || update::manual())) {
+      push(new UpdateDialog);
+      g_touch_dirty = true;
+    }
+    break;
+  case update::DOWNLOADING: case update::INSTALLING: case update::FAILED: case update::HANDED_OFF:
+    if(!open) {
+      push(new UpdateDialog);  // it was closed underneath; the download goes on
+      g_touch_dirty = true;
+    }
+    break;
+  case update::UP_TO_DATE:
+    show_toast(trf("chiral-ftp {0} is the latest version", {VERSION_TAG}));
+    update::dismiss();
+    break;
+  case update::CHECK_FAILED:
+    show_toast(tr("Could not check for updates. Try again later."), true);
+    update::dismiss();
+    break;
+  case update::RESTARTING:
+    g.quit = true;  // main starts the new version on the way out
+    break;
+  default:
+    break;
+  }
+}
+#else
+void update_poll() {}
+#endif
 
 /* ---------- file manager ---------- */
 
@@ -3515,6 +3955,14 @@ bool open_mode(Mode m) {
 }
 
 bool handle_home(Action a) {
+#if CHIRAL_UI_MOBILE
+  /* A TV's Back on the start screen: behind the home screen, as any app,
+     with the servers still running. */
+  if(a == ACT_CIRCLE) {
+    platform::to_background();
+    return true;
+  }
+#endif
   if(a == ACT_OPTIONS) {
     options_menu(false);
     return true;
@@ -3551,6 +3999,9 @@ bool handle_home(Action a) {
 
 #if CHIRAL_UI_DESKTOP
 #include "ui_desktop.inc"
+#endif
+#if CHIRAL_UI_MOBILE
+#include "ui_mobile.inc"
 #endif
 
 }  // namespace
@@ -3706,7 +4157,7 @@ void handle_pointer() {
   platform::Pointer p = platform::take_pointer();
   if(!p.moved && !p.clicked && !p.right_clicked && p.wheel == 0) return;
 #if CHIRAL_UI_DESKTOP
-  if(desk::pointer(p)) return;  // the desktop interface's own controls
+  if(desktop_ui() && desk::pointer(p)) return;  // the desktop interface's own controls
 #endif
   if(g_hits.empty()) g_touch_dirty = true;  // no rectangles yet: draw some
   const int top = (int)g.overlays.size();
@@ -3878,6 +4329,7 @@ void update() {
   handle_pointer();
   quick_requests();
   quick_outcome();
+  update_poll();
   quick_lifecycle();
   watch_connection();
   g_jobs.poll();
@@ -3908,6 +4360,12 @@ void handle(Action a) {
     g.quit = true;
     return;
   }
+#if CHIRAL_UI_MOBILE
+  if(a == ACT_NAV_LEFT || a == ACT_NAV_RIGHT) {
+    if(desktop_ui()) mob::show_nav(a == ACT_NAV_RIGHT, 5);
+    return;
+  }
+#endif
   /* The menu bar: straight there, from whatever is open. A text entry left
      open underneath would keep the keyboard for itself, so everything open
      closes first. */
@@ -3919,7 +4377,7 @@ void handle(Action a) {
     return;
   }
 #if CHIRAL_UI_DESKTOP
-  if(a >= ACT_CMD_HOME && desk::command(a)) return;  // pages, on the desktop
+  if(a >= ACT_CMD_HOME && desktop_ui() && desk::command(a)) return;  // pages, on the desktop
 #endif
   if(a >= ACT_CMD_HOME) {
     g.overlays.clear();
@@ -3956,7 +4414,9 @@ void handle(Action a) {
     if(!keep) g.overlays.erase(g.overlays.begin() + (depth - 1));
     return;
   }
-#if CHIRAL_UI_DESKTOP
+#if CHIRAL_UI_MOBILE
+  if(desktop_ui() && mob::key(a)) return;  // the mobile shell, which hands the pages' keys on to them
+#elif CHIRAL_UI_DESKTOP
   if(desk::key(a)) return;  // the desktop pages; the file manager and client take their own
 #endif
   switch(g.mode) {
@@ -4071,7 +4531,15 @@ void render() {
   platform::set_command_shown(ACT_CMD_CONNECT, mode_shown(MODE_CLIENT));
   g_hits.clear();
   g_hit_layer = 0;
-#if CHIRAL_UI_DESKTOP
+#if CHIRAL_UI_MOBILE
+  /* A phone or tablet: the mobile shell, fitted to the window (ui_mobile.inc).
+     A TV goes on to the console layout below. */
+  if(desktop_ui()) {
+    mob::render();
+    draw_overlays();
+    return;
+  }
+#elif CHIRAL_UI_DESKTOP
   /* A sidebar and pages instead of the start screen (ui_desktop.inc); the
      dialogs are the same ones, over it. */
   desk::render();
@@ -4139,11 +4607,14 @@ bool busy() {
   {
     discovery_outcome_t o;
     discovery_get_outcome(&o);
-    for(auto &ov : g.overlays) if(ov->kind() == OV_PROMPT || ov->kind() == OV_QUICK) return true;
+    for(auto &ov : g.overlays) if(ov->kind() == OV_PROMPT || ov->kind() == OV_QUICK || ov->kind() == OV_UPDATE) return true;
     if(o.state == DISCOVERY_ASKING) return true;
   }
 #if CHIRAL_UI_DESKTOP
   if(desk::editing()) return true;  // the caret blinks
+#endif
+#if CHIRAL_UI_MOBILE
+  if(desktop_ui() && mob::busy()) return true;  // a list still settling after a scroll
 #endif
   ftpd_stats_t st;
   server_stats(&st);

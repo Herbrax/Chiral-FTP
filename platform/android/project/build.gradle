@@ -1,0 +1,18 @@
+// Android Gradle plugin 8.5.2: from 8.5.1 an APK's native libraries are
+// aligned for 16 KB pages (Android 15 and up), which 8.1 didn't do.
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.5.2'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}

@@ -26,6 +26,8 @@ Two stepped arrows, one up and one down: the down arrow is the up arrow rotated 
 - `chiral-ftp-logo-dark.svg`: mark + wordmark, white `chiral` and gold `-ftp`, for dark backgrounds. Transparent.
 - `chiral-ftp-logo-light.svg`: mark + wordmark, black `chiral` and gold `-ftp`, for light backgrounds. Transparent.
 - `chiral-ftp-icon.svg`: 512 px app icon, rounded square `#0E0F11` with the mark centred.
+- `docs/screenshots/Mockups/ps5_background.png`: the PS5's launch picture (`platform/ps5/sce_sys/pic0.dds`/`pic1.dds`) as a PNG, 3840x2160.
+- `docs/screenshots/Mockups/mac_dmg_background.png`: the Mac disk image's window, the same picture lightened on the left (a muted `#C4BFB3`, so Finder's black icon names read), with "Ultimate FTP Client" as its tagline, deep-gold chevrons from chiral-ftp.app down to Applications, and a band at the bottom on opening an unsigned app (Privacy & Security › Open Anyway). Made by `tools/make-dmg-background.py`; `tools/make-dmg.sh` scales it to the 960x540 window and puts the icons where the picture expects them.
 
 The two lockup SVGs use live `<text>`, so they need IBM Plex Mono installed or loaded (e.g. via the Google Fonts link above) to render in the exact face. The mark files and icon contain no text and render identically everywhere.
 

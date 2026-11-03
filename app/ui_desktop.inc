@@ -791,6 +791,83 @@ void page_server(float x, float y, float w) {
   g_content_h = std::max(ly, ay) + P(28);
 }
 
+/* Where to get chiral-ftp for the other devices, under Quick connect's
+   list: the download page as a QR code, and the two pages as links that
+   open in the browser. qs is the code's size; returns the card's height.
+   The phone's page has it too. */
+/* An address over as many lines as the width needs, broken after a '/' where
+   it can be, and anywhere in a part too long for a line of its own. */
+std::vector<std::string> address_lines(const std::string &address, float size, float w) {
+  std::vector<std::string> out;
+  std::string line;
+  for(size_t i = 0; i < address.size();) {
+    const size_t slash = address.find('/', i);
+    const size_t end = slash == std::string::npos ? address.size() : slash + 1;
+    const std::string part = address.substr(i, end - i);
+    i = end;
+    if(!line.empty() && text_w(size, (line + part).c_str()) > w) {
+      out.push_back(line);
+      line.clear();
+    }
+    line += part;
+    while(line.size() > 1 && text_w(size, line.c_str()) > w) {
+      size_t n = line.size() - 1;
+      while(n > 1 && text_w(size, line.substr(0, n).c_str()) > w) n--;
+      out.push_back(line.substr(0, n));
+      line.erase(0, n);
+    }
+  }
+  if(!line.empty()) out.push_back(line);
+  return out;
+}
+
+float download_card(float x, float y, float w, float qs) {
+  const float pad = P(16), tx = x + pad + qs + P(20), tw = x + w - pad - tx;
+  /* Everything wraps rather than being cut short: a phone's narrow window has
+     room for neither the title nor the GitHub address on one line. The title
+     is bold, which runs wider than wrap_text measures. */
+  const std::vector<std::string> title = wrap_text(tr("chiral-ftp on your other devices"), F(15), tw * 0.9f);
+  const std::vector<std::string> lines =
+      wrap_text(tr("Free for Windows, Mac, Linux, Android, Nintendo Switch and PS5. Scan the code, or go to:"), F(13), tw);
+  std::vector<std::vector<std::string>> links;
+  float link_h = 0;
+  for(const char *page : {kDownloadPage, kReleasesPage}) {
+    links.push_back(address_lines(page, F(13), tw));
+    link_h += links.back().size() * P(20) + P(4);
+  }
+  const float lh = P(20), text_h = title.size() * P(22) + P(4) + lines.size() * lh + P(6) + link_h;
+  const float ch = std::max(qs, text_h) + 2 * pad;
+  card(x, y, w, ch);
+  download_qr(x + pad, y + (ch - qs) / 2, qs);
+  float ty = y + pad;
+  for(const std::string &l : title) {
+    text(tx, ty, F(15), TEXT, l.c_str(), true);
+    ty += P(22);
+  }
+  ty += P(4);
+  for(const std::string &l : lines) {
+    text(tx, ty, F(13), MUTED, l.c_str());
+    ty += lh;
+  }
+  ty += P(6);
+  const char *const pages[2] = {kDownloadPage, kReleasesPage};
+  for(int k = 0; k < 2; k++) {
+    /* One link however many lines it takes: hovering or clicking any of them
+       is the whole address. */
+    float lw = 0;
+    for(const std::string &l : links[k]) lw = std::max(lw, text_w(F(13), l.c_str()));
+    const Ctl c = control(tx, ty, lw, links[k].size() * P(20));
+    for(const std::string &l : links[k]) {
+      text(tx, ty, F(13), c.hot ? GOLD_LIGHT : GOLD, l.c_str());
+      if(c.hot || c.focus) hline(tx, ty + F(13) + P(1), text_w(F(13), l.c_str()), GOLD);
+      ty += P(20);
+    }
+    if(c.hit) platform::open_url((std::string("https://") + pages[k]).c_str());
+    ty += P(4);
+  }
+  return ch;
+}
+
 /* Quick connect: the devices nearby, each with Connect; then the wait for
    its answer, with the code to compare. */
 void page_quick(float x, float y, float w) {
@@ -852,7 +929,8 @@ void page_quick(float x, float y, float w) {
   char me[64];
   system_device_name(me, sizeof(me));
   text(x + P(4), y + P(8), F(13), MUTED, trf("This computer shows up on the others as \"{0}\".", {me}).c_str());
-  g_content_h = y + P(60);
+  y += P(44);
+  g_content_h = y + download_card(x, y, w, P(132)) + P(48);
 }
 
 void page_log(float x, float y, float w) {
@@ -897,7 +975,7 @@ void page_settings(float x, float y, float w) {
   // General
   system_net_t nets[16];
   const int nn = system_networks(nets, 16);
-  group(tr("GENERAL"), nn > 0 ? 2 : 1);
+  group(tr("GENERAL"), 1 + (nn > 0) + update::available());
   float yy = y;
   row_label(x, yy, rh, tr("Language"), "");
   if(chooser(rx - cw, yy + (rh - P(36)) / 2, cw, Settings::language_value())) {
@@ -926,6 +1004,20 @@ void page_settings(float x, float y, float w) {
         m->items.push_back({Settings::network_name(nets[i]), [name] { g.network = name; save_prefs(); ip_changed(); }});
       }
       push(m);
+    }
+    yy += rh;
+  }
+  if(update::available()) {
+    /* A test build (1.2-beta) never asks, so its switch stays off. */
+    const bool test = update::test_build();
+    sep(yy);
+    row_label(x, yy, rh, tr("Check for updates"),
+              test ? trf("Test builds ({0}) never check.", {VERSION_TAG}).c_str() : tr("At startup. Nothing is installed without asking."));
+    if(toggle(rx - P(52), yy + (rh - P(30)) / 2, !test && update::enabled(), !test)) update::set_enabled(!update::enabled());
+    const char *now_label = tr("Check now");
+    const float bx = rx - P(52) - P(16) - button_w(now_label, false);
+    if(button(bx, yy + (rh - P(36)) / 2, now_label, SECONDARY, -1, !test && update::poll() != update::CHECKING, P(36))) {
+      update::check(true);
     }
     yy += rh;
   }
@@ -1153,3 +1245,61 @@ void draw_quick_prompt_desktop(const discovery_request_t &r) {
   text(ax + (aw - text_w(F(14), allow, true)) / 2, by + (P(40) - F(14)) / 2, F(14), INK, allow, true);
   hit_add(HIT_MENU_ITEM, ax, by, aw, P(40), 1);
 }
+
+#if CHIRAL_HAS_UPDATER
+/* The update dialog's sheet (UpdateDialog in ui.cpp), the same look as the
+   one above: buttons right-aligned, the last one gold. */
+void draw_sheet_desktop(const std::string &title, const std::string &sub, const std::vector<std::string> &body,
+                        float progress, const std::string &progress_text,
+                        const std::vector<std::string> &buttons, int focus) {
+  using namespace desk;
+  rect(0, 0, W, H, IM_COL32(5, 6, 8, 150));
+  const float w = std::min(P(560), W - P(64)), x = (W - w) / 2, y = P(96);
+  std::vector<std::vector<std::string>> paras;
+  float lines = 0;
+  for(const std::string &b : body) {
+    paras.push_back(wrap_text(b, F(14), w - P(56)));
+    lines += (float)paras.back().size();
+  }
+  const float h = P(28) + P(30) + (sub.empty() ? 0 : P(26)) + P(14) + P(22) * lines + P(12) * (float)paras.size() +
+                  (progress >= 0 ? P(52) : 0) + (buttons.empty() ? P(8) : P(68));
+  card(x, y, w, h, CARD, BORDER, P(16));
+  hit_add(HIT_OVERLAY_BODY, x, y, w, h);
+  float ty = y + P(28);
+  text(x + P(28), ty, F(18), TEXT, fit_end(title, F(18), w - P(56)).c_str(), true);
+  ty += P(30);
+  if(!sub.empty()) {
+    text(x + P(28), ty, F(13), MUTED, sub.c_str());
+    ty += P(26);
+  }
+  ty += P(14);
+  for(const auto &para : paras) {
+    for(const std::string &l : para) {
+      text(x + P(28), ty, F(14), SOFT, l.c_str());
+      ty += P(22);
+    }
+    ty += P(12);
+  }
+  if(progress >= 0) {
+    const float bw = w - P(56);
+    rect(x + P(28), ty + P(4), bw, P(8), RAISED, P(4));
+    if(progress > 0) rect(x + P(28), ty + P(4), std::max(P(8), bw * progress), P(8), GOLD, P(4));
+    if(!progress_text.empty()) text(x + P(28), ty + P(20), F(12), MUTED, progress_text.c_str());
+    ty += P(52);
+  }
+  float bx = x + w - P(28);
+  const float by = y + h - P(28) - P(40);
+  for(int i = (int)buttons.size() - 1; i >= 0; i--) {
+    const char *label = buttons[i].c_str();
+    const float bw = button_w(label, false);
+    bx -= bw;
+    const bool main = i == (int)buttons.size() - 1, hot = over(bx, by, bw, P(40));
+    if(main) rect(bx, by, bw, P(40), hot ? GOLD_LIGHT : GOLD, P(10));
+    else card(bx, by, bw, P(40), hot ? SEG_ON : RAISED, BORDER, P(10));
+    text(bx + (bw - text_w(F(14), label, true)) / 2, by + (P(40) - F(14)) / 2, F(14), main ? INK : TEXT, label, true);
+    if(i == focus) focus_ring(bx, by, bw, P(40), P(10));
+    hit_add(HIT_MENU_ITEM, bx, by, bw, P(40), i);
+    bx -= P(10);
+  }
+}
+#endif

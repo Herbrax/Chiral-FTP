@@ -39,6 +39,15 @@ void pointer_hand(bool on);
 /* Opens url in the system's web browser -- the web app, on a computer.
    False where there is no browser to hand it to (a console). */
 bool open_url(const char *url);
+/* Hands a file on this device to the system's other apps: its default app
+   for that kind of file (OPEN_VIEW), the system's "open with" chooser
+   (OPEN_CHOOSE), or its share sheet (OPEN_SHARE). False when nothing here
+   can take it, or where there is no such thing (everywhere but Android). */
+bool open_file(const char *path, int how);
+/* Puts the app behind the home screen without ending it, as Back does on
+   an Android app's first screen; its servers keep running. False where
+   there is no such thing (everywhere but Android). */
+bool to_background();
 /* True while the app is what the person is looking at: in focus on a
    console, a focused and visible window on a computer. Quick connect only
    runs then. Where the platform can't tell, true. */
@@ -127,6 +136,9 @@ void pointer_wheel(float notches);  // positive scrolls up
 void pointer_leave();
 // A menu-bar command (ACT_CMD_*): queued even while a text entry is open.
 void command(Action a);
+/* A TV (CHIRAL_BUTTONS_REMOTE): whether the last button came from a
+   gamepad or the remote, for which glyphs the bottom bar draws. */
+void input_from_pad(bool pad);
 
 }  // namespace detail
 }  // namespace platform

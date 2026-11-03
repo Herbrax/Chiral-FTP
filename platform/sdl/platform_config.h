@@ -26,6 +26,7 @@
    (platform_common.cpp). */
 #define CHIRAL_BUTTONS_PLAYSTATION 0
 #define CHIRAL_BUTTONS_KEYBOARD 1
+#define CHIRAL_BUTTONS_REMOTE 0  /* a TV remote: Android only */
 
 /* The text calls this machine "this computer", not "the console" (ui.cpp). */
 #define CHIRAL_DEVICE_COMPUTER 1
@@ -39,3 +40,10 @@
    Windows and Linux alike. (The console layout is the consoles'; Android
    will have a third, its own.) */
 #define CHIRAL_UI_DESKTOP 1
+/* Not the mobile shell (Android only: app/ui_mobile.inc). */
+#define CHIRAL_UI_MOBILE 0
+
+/* Updates itself (app/update.h): asks chiral-ftp.com at startup, and puts a
+   new version in place of the .exe, the .app or the AppImage
+   (platform/sdl/update.cpp). */
+#define CHIRAL_HAS_UPDATER 1

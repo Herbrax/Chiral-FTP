@@ -6,13 +6,23 @@
 
   var $ = function (id) { return document.getElementById(id); };
   var state = { path: "", entries: [], selected: new Set(), jobsFinished: -1, polling: false };
-  var onComputer = false;  // set from /api/state
-  function dev(onConsole, onThisComputer) { return onComputer ? onThisComputer : onConsole; }
+  var onComputer = false, onPhone = false, onTV = false;  // set from /api/state
+  /* On Android the console wording, with "phone" (or "TV") for "console". */
+  function phone(s) {
+    return onTV ? s.replace(/console/g, "TV").replace(/Console/g, "TV")
+                : s.replace(/console/g, "phone").replace(/Console/g, "Phone");
+  }
+  function dev(onConsole, onThisComputer) { return onComputer ? onThisComputer : onPhone ? phone(onConsole) : onConsole; }
 
   /* On a computer (platform "host") the page names this machine "this
      computer", not "the console": the console wording is the default in the
      page, and each such element carries its computer version. */
   function applyDevice() {
+    if (onPhone) {
+      document.querySelectorAll("[data-computer]").forEach(function (el) { el.textContent = phone(el.textContent); });
+      document.querySelectorAll("[data-computer-title]").forEach(function (el) { el.title = phone(el.title); });
+      return;
+    }
     if (!onComputer) return;
     document.querySelectorAll("[data-computer]").forEach(function (el) { el.textContent = el.getAttribute("data-computer"); });
     document.querySelectorAll("[data-computer-title]").forEach(function (el) { el.title = el.getAttribute("data-computer-title"); });
@@ -528,6 +538,8 @@
   pollJobs();
   call("/api/state", {}, "GET").then(function (st) {
     onComputer = st.platform === "host";
+    onPhone = st.platform === "android";
+    onTV = st.kind === "androidtv";
     applyDevice();
   }).catch(function () { /* the console wording stays */ });
 })();

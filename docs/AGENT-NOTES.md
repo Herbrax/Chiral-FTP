@@ -151,6 +151,13 @@ sits under every SD access too, so test the SD card after touching it.
   `.deps/src`; the pinned commit and a clean tree for
   `ps5/.deps/lapy/PS5-Lapy-JB-Daemon-*`), so copying them from another
   checkout is safe.
+- **The Lapy commit has no home of its own (2026-10-30):** the boilerplate
+  fetched it from `blackbearreloaded/PS5-Lapy-JB-Daemon`, which is no longer
+  public, so a clean build failed asking for a GitHub login.
+  `ps5/tools/build-lapy-helper.py` now fetches the same pinned commit
+  (`57fcc19`) from `mpereiraesaa`'s fork. That fork's default branch doesn't
+  contain it (it is 5 commits ahead of it), so GitHub appears to serve it from
+  the storage forks share, which may not last. Keep a copy.
 
 ### 2.2 On Windows, with no admin rights and no virtualization
 
@@ -727,6 +734,14 @@ the banner, which exists because it is the one thing the user can change.
   a `\b(Switch|PS5)\b` substitution turned "Switch side" — meaning *swap the
   panes* — into "console side". Mechanical neutralisation needs reading
   afterwards, and roughly twenty strings still want a native speaker's eye.
+- **On Windows, C++ that includes `<cstdio>` loses `rename()` and
+  `fopen()` from win32/posix.h.** libstdc++'s `<cstdio>` `#undef`s them, so
+  calls go to the C library's own. That `rename()` refuses to replace a file
+  and neither one reads `/c/...` paths: the updater's first `update.json`
+  saved, and every later one failed with EEXIST. Read and write files through
+  the engine (`store_*`, `data_file_*`) or call Win32 directly.
+  `unlink()`, `stat()` and the rest survive, since `<cstdio>` doesn't
+  declare them.
 - **`app/ui.cpp`'s background work uses raw pthreads, not `std::thread`.**
   `std::thread`'s destructor calls `std::terminate` on a joinable thread,
   which is a bad way to find out your teardown order is wrong — and the
@@ -793,21 +808,117 @@ the banner, which exists because it is the one thing the user can change.
 
 ## 5b2. Releasing (1.1 onwards)
 
+### Making a release on GitHub, step by step
+
+Once, before the first one:
+
+1. The workflows on `main`. GitHub only shows "Run workflow" for a workflow
+   that is on the default branch; it then runs the copy on the branch picked
+   in its list. Without merging `dev`:
+   `git checkout main && git pull && git checkout dev -- .github/workflows tools/latest-version.py && git commit -m "Build workflows" && git push && git checkout dev`.
+2. The secret `ANDROID_DEBUG_KEYSTORE` (Settings > Secrets and variables >
+   Actions): the debug keystore in base64, in PowerShell
+   `[Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\.android\debug.keystore")) | Set-Clipboard`.
+   Without it each APK has a new signature and can't update an earlier install.
+
+For each release (say 1.3):
+
+1. **The notes:** a `## 1.3` section in `CHANGELOG.md` on `dev`, saying
+   what's new. It becomes the top of the release page; the install steps and
+   checksums are added after it, for the files the release has
+   (`tools/release-notes.py`). Without it New Release makes a draft with a
+   line to replace, and refuses to publish straight away.
+2. **Push `dev` and wait for the six builds to pass on that commit** (the
+   Actions tab). New Release builds the same way, so a red one here will be red
+   there.
+3. **Actions > New Release > Run workflow:** branch `dev`, version `1.3`,
+   tick the platforms, leave "Publish straight away" unticked for a draft to
+   read first. `VERSION` in the Makefile doesn't need to say 1.3: the tag gets
+   a commit of its own that sets it.
+4. **It checks, builds, and only if every ticked build succeeds makes the tag
+   `v1.3` and the release.** A failure leaves nothing behind: fix it, push,
+   run it again with the same version.
+5. **Releases page: read the draft.** Edit the text above `### Install` as
+   you like; later runs keep it.
+6. **Publish.** Tick "Set as the latest release" only if it has all six
+   platforms; the run's summary says which. A partial release as "latest"
+   would leave the download page and the PS5 homebrew catalog without the
+   rest.
+7. **Afterwards:** `latest_version.json` updates by itself (when New Release
+   ends, when a release changes, and every 6 hours). On `dev`, move `VERSION`
+   on when ready, with `platform/ps5/sce_sys/param.json` to match
+   (`python3 tools/content-version.py --sync <version> platform/ps5/sce_sys/param.json`),
+   or `make check` fails.
+
+**More platforms for the same version later:** run New Release again with
+`1.3` and tick them. They build from the `v1.3` tag, so they match the rest,
+and are added to its release; anything fixed on `dev` since then needs `1.3.1`.
+
+**Starting a version over:** delete the release **and** the tag `v1.3`. A tag
+left behind makes the next run with `1.3` add to it instead.
+
+**A first trial:** a draft at `0.0.1` with one quick platform (Switch), run
+again with another to see it add, then delete both draft and tag.
+
+### Details
+
 - `make PLATFORM=ps5 release && make PLATFORM=switch release && make
   PLATFORM=sdl release` fills `release/`: the PS5 zip, the `.nro`, the Mac
   app zipped with `ditto` (keeps the bundle's signature), `SHA256SUMS`, and
   `RELEASE_NOTES.md` from the version's CHANGELOG section (pictures get
   absolute raw.githubusercontent.com addresses).
+- **GitHub builds every platform** (`.github/workflows/`: `ps5`, `switch`,
+  `mac`, `windows`, `linux-appimage`, `android`) on a push to `dev` and by
+  hand; the files stay on the run. Pushing a tag builds nothing.
+- **Releases come from the New Release workflow** (`new-release.yml`): a
+  version, a tick per platform, and optionally "publish straight away"
+  (otherwise a draft). It builds the ticked platforms with the workflows above,
+  and only if all succeed `tools/ci-release.sh` makes the tag and one release
+  with every file, notes (`tools/release-notes.py`, from the version's CHANGELOG
+  section) and checksums. The tag is on a commit made for it that sets `VERSION`
+  (and `contentVersion` if the release has a PS5 file); the branch itself isn't
+  touched, so it keeps its old `VERSION` until someone moves it on.
+- **Running it again with the same version adds to that release:** the ticked
+  platforms build from the tag, so they are the same code, and fixes made since
+  need a new version. Files of the same name are replaced, notes keep what is
+  above `### Install`, and install steps and checksums are rewritten. A PS5 file
+  added this way moves the tag by one commit that only changes `contentVersion`.
+  Tags from before New Release (v1.1 and older) can't be built from here.
+- **"Latest":** only a release with every platform, and no newer one, becomes
+  GitHub's latest, because the download page and the PS5 homebrew catalog would
+  find the rest missing. It happens by itself when published; publishing a draft
+  by hand, that box is the person's to set (the run's summary says which way).
+- **A build can be given a version by hand:** Run workflow, type `1.2.1`.
+  `tools/ci-version.sh` rewrites the `VERSION` line in that run's checkout, so
+  everything follows it; nothing is committed. Everything must keep reading
+  `VERSION` for this to hold. GitHub only lists "Run workflow" for a workflow
+  that is also on `main`.
+- **`latest_version.json`** (`tools/latest-version.py`) is the website's list
+  of the newest download per platform. `latest-version.yml` commits it to the
+  `release-data` branch, never to `main`. It skips prereleases. The schedule
+  and the "when a build ends" trigger only work once the workflow is on `main`.
+- **The CI APK's signature:** without the `ANDROID_DEBUG_KEYSTORE` secret
+  (a keystore, base64) every run signs with a new key, and Android refuses to
+  update an earlier install with it.
 - **The PS5's `contentVersion` follows `VERSION`** (`tools/content-version.py`:
   1.1 → `01.001.000`, 1.1.2 → `01.001.002`): consoles and the PS5 homebrew
-  catalog find updates by it, not by the tag. `make PLATFORM=ps5` writes it
-  into the package and into the committed `platform/ps5/sce_sys/param.json`
-  (the copy the catalog reads at the release's tag), and `make check` fails
-  while that file is behind. Commit it before tagging. VERSION must be
-  MAJOR.MINOR or MAJOR.MINOR.PATCH.
+  catalog find updates by it, not by the tag. Every PS5 build makes it from
+  `VERSION` for the package's own `param.json`, so a 0.9 test build says
+  `00.009.000` whatever the repository holds. The build doesn't touch the
+  committed `platform/ps5/sce_sys/param.json`. That copy matters only at a
+  release's tag, where the catalog reads it, and New Release writes it on
+  the tag's own commit (only for a release with a PS5 file). Run on `main`,
+  New Release also commits it to `main` itself, only ever upwards. So
+  `main`'s file always says what the PS5 last got, and a release without a
+  PS5 file carries that into its tag. `dev` is never touched, and merging
+  `dev` into `main` doesn't undo it, since `dev` doesn't change the file. A release made
+  locally needs `tools/content-version.py --sync <version>
+  platform/ps5/sce_sys/param.json` committed before tagging. VERSION is
+  MAJOR.MINOR or MAJOR.MINOR.PATCH, with `-beta`, `-alpha` or `-dev` after it
+  for a test build, which the contentVersion leaves out.
 - **Linux** builds only on Linux: `tools/make-appimage.sh` (linuxdeploy), run
-  by `.github/workflows/linux-appimage.yml` on Ubuntu 22.04 for a `v*` tag or
-  by hand; then `tools/make-release.sh linux` adds it to `release/`. An
+  by `.github/workflows/linux-appimage.yml` on Ubuntu 22.04; locally,
+  `tools/make-release.sh linux` then adds it to `release/`. An
   AppImage keeps its settings in `$XDG_DATA_HOME/chiral-ftp`
   (`~/.local/share/chiral-ftp`; its parents are made, a new account may lack
   them). Linux links libstdc++ and libm, macOS libc++ (`CXX_LIB` in
@@ -821,10 +932,120 @@ the banner, which exists because it is the one thing the user can change.
   copy of linuxdeploy. The AppImage leaves out, on purpose, what every
   desktop has (X11/Wayland, FreeType, ALSA): a bare server can't start it,
   a desktop can. Tested: both start headless, render, and exit cleanly.
-- **The Mac app requires macOS 27 on Apple silicon**: its Homebrew libraries
-  were built for the build Mac. Building them with a lower
-  `MACOSX_DEPLOYMENT_TARGET` would widen that. It is ad-hoc signed, not
-  notarized: users choose "Open Anyway".
+- **The Mac app requires macOS 27 on Apple silicon** when built on the
+  maintainer's Mac: its Homebrew libraries were built for the build Mac. The
+  GitHub build runs on macOS 15, which may lower that (its `Info.plist` says,
+  from `minos`); not yet tried on an older Mac. Building them with a lower
+  `MACOSX_DEPLOYMENT_TARGET` would widen it too. It is ad-hoc signed, not
+  notarized: users choose "Open Anyway". `tools/make-macos-app.py` follows
+  `@rpath` and `@loader_path` names, which Homebrew's brotli uses.
+
+## 5b3. Updates (app/update.cpp, the computers only so far)
+
+At startup the app asks the maintainer's worker whether there's something
+newer, and offers it. Where it can, it replaces itself. Only where
+`CHIRAL_HAS_UPDATER` is 1 (platform_config.h): sdl, so Windows, Mac and
+Linux, Android (`platform/android/update.cpp`: Java's HttpsURLConnection
+over JNI, then the APK to Android's installer; state `HANDED_OFF`) and the
+PS5 (below).
+Everywhere else `app/update.cpp` compiles to stubs, and the UI calls
+it without asking.
+
+- **The question:** `POST https://chiral-ftp.com/api/v1/check` with
+  `{"platform","version","device"}`, on a thread of its own, once per
+  launch, 8 s at most. The platform keys are the ones in
+  `latest_version.json` (`windows-x64`, `windows-arm64`, `mac`,
+  `linux-x86_64`, `linux-aarch64`; `os::platform_key()`). The key is the
+  *machine*, not the build. An x64 `.exe` on an ARM PC asks as
+  `windows-arm64` (from `IsWow64Process2`; inside emulation everything else
+  says x64), adds `"build":"windows-x64"`, and moves onto the ARM `.exe` when
+  offered one (docs/AutoUpdate.md, Windows). The device ID is
+  16 random bytes in hex, made on first start. Anything but 200 with
+  `"update":true` shows nothing, unless the user pressed **Check now**.
+- **The answer is checked, not trusted:** it must be newer by the numbers
+  (1.10 > 1.9; letters ignored), the URL must start with
+  `https://github.com/Herbrax/Chiral-FTP/releases/download/`, the file
+  name must be plain, and the download must be the size the answer gave.
+  No checksum yet (the maintainer's call).
+- **What the user chose** goes in `update.json` in the data folder, written
+  through `data_file_write()` so the web app's store API can't reach it.
+  It holds the device ID, the Settings switch, `skip` (the version "Skip
+  this version" was pressed for) and `snooze_until` ("Not now": 7 days).
+  Check now ignores both.
+- **Test builds never ask:** a version with `-dev`, `-beta` or `-alpha`
+  in it (`update::test_build()`). `tools/ci-version.sh` accepts such
+  versions; the PS5's contentVersion, Android's versionCode, Windows' version
+  resource and the Mac's `CFBundleVersion` leave the suffix out. New Release
+  still refuses them.
+- **Putting it in place** (`platform/sdl/update.cpp`). The download goes
+  beside the copy, so the last step is a rename on the same drive.
+  - **Windows:** the running `.exe` can't be overwritten, but it can be
+    renamed. It becomes `<name>.old` and the new one takes its place. At
+    exit the new version starts with `--updated-from <old>`, and deletes the
+    `.old` once it can. Only a `.exe.old` in its own folder is deleted.
+  - **Mac:** the bundle is `[NSBundle mainBundle]`, wherever it is. The
+    `.app.zip` is unpacked with `ditto` beside it, `Contents/MacOS` gets
+    its x back (v1.1's zip was made on Windows and has no Unix modes, so
+    the app "can't be opened" without it), and the bundles are
+    swapped. The old bundle is deleted at exit, and `open -n` starts the
+    new one. A bundle under `/AppTranslocation/` (opened from Downloads
+    without being moved) can't update; the user is told to move it to
+    Applications.
+  - **Linux:** `$APPIMAGE` is replaced in one rename. HTTPS goes through
+    the system's `curl`, or `wget` without it, and nothing is linked.
+  - A file named for its version (`chiral-ftp-1.2-windows-x64.exe`) takes
+    the new file's name. Anything else keeps its name, and with it any
+    shortcut.
+  - Not writable, not the released file (a dev build, no `$APPIMAGE`), or
+    translocated: `os::target()` says why, and the dialog's main button
+    becomes the download page.
+- **The restart:** `RESTARTING` sets `g.quit`. Main stops everything as
+  usual, and `update::finish()` starts the new copy after
+  `platform::shutdown()`, so the two never hold the servers' ports at once.
+- **Threads:** raw pthreads, as in the rest of the app (§5). A check still
+  waiting on the network at exit is detached rather than waited for, so
+  what it touches is allocated once and never destroyed.
+- **Testing it:** build an old version (`make VERSION=0.9`) and run it.
+  The worker offers the real latest release. A headless run
+  (`--headless --script "wait=7000 CROSS ..."`) goes through the
+  download and the swap. The copy it restarts inherits
+  `SDL_VIDEODRIVER=dummy`, though, and says "Could not start the
+  display". Run without `--headless`, keeping `--script`, to see the
+  restart work. Each check counts a device in the worker's stats; for the
+  HTTP code alone, an unknown platform name gets `{"update":false}`.
+- **The PS5** (`platform/ps5/update.cpp`, docs/AutoUpdate.md): PacBrew's
+  libcurl for HTTPS (`sceSsl` refuses public sites once elevated), linked
+  by hand in `tools/build-ps5.sh`. The app finds the one copy (two folders
+  deep; "Duplicate copies found, update impossible") and sends
+  `self-updater.elf` to the loader on 9021. It streams the zip to the helper
+  and says "apply", then exits through `sceSystemServiceLoadExec("exit")`.
+  The helper is `platform/ps5/self-updater`, the boilerplate's self-update
+  helper with its own protocol (no SHA-256) and the deeper search. It
+  unpacks with miniz (`vendor/miniz`), sets 0777, and swaps the files inside
+  the mounted folder once the app is gone.
+- **The Switch** (`platform/switch/os_update.cpp`): `switch-curl` is curl
+  **7.69** built on **libnx's ssl service**, not mbedTLS (`--with-libnx` in
+  devkitPro's PKGBUILD). The service checks against the console's trusted
+  certificates by itself; `CURLOPT_SSL_CTX_FUNCTION` gets an `SslContext *`,
+  so mbedTLS code there corrupts memory. No `_STR` options (7.85+):
+  `CURLOPT_PROTOCOLS` with `CURLPROTO_HTTPS`. Objects are named after the
+  file alone, so the file isn't `update.cpp` (it would clash with
+  `app/update.cpp`). The path is argv[0] from hbmenu. The
+  download is `chiral-ftp.new.nro`; the old one goes to `.nro.old` (FAT
+  won't rename over a file). Then it just closes, as when quit: the
+  maintainer didn't want `envSetNextLoad()` starting the new one. A wrong
+  console date fails the check (the ssl service checks certificate dates).
+- **The Mac's release is a `.dmg`** (`chiral-ftp-<version>.dmg`, made by
+  `tools/make-dmg.sh` with an Applications link). The updater mounts it
+  read-only with `hdiutil attach -nobrowse` and copies the only `.app` out
+  (the `.background/` folder is skipped); a `.zip` still works. The window's
+  layout (background, icon places) is Finder's `.DS_Store`, written through
+  osascript; when Finder doesn't answer on the runner, the image is still
+  made, as a plain window, with a warning. Its picture is
+  `docs/screenshots/Mockups/mac_dmg_background.png`, drawn by
+  `tools/make-dmg-background.py` with chevrons where `make-dmg.sh` puts the
+  icons (960x540 points, the app at 160,88 and Applications at 160,330,
+  112 pt icons): the two hold the same numbers.
 
 ## 5c. Probe first
 

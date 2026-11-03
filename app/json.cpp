@@ -133,7 +133,8 @@ struct Parser {
     return skip();
   }
 
-  bool object(Object &o) {
+  // children: where the objects inside go, by key, rather than being skipped.
+  bool object(Object &o, std::map<std::string, Object> *children = nullptr) {
     ws();
     if(i >= t.size() || t[i] != '{') return false;
     i++;
@@ -150,8 +151,13 @@ struct Parser {
       ws();
       if(i >= t.size() || t[i] != ':') return false;
       i++;
-      if(!value(v)) return false;
-      o[key] = v;
+      ws();
+      if(children && i < t.size() && t[i] == '{') {
+        if(!object((*children)[key])) return false;
+      } else {
+        if(!value(v)) return false;
+        o[key] = v;
+      }
       ws();
       if(i < t.size() && t[i] == ',') {
         i++;
@@ -213,6 +219,11 @@ bool parse_array(const std::string &text, std::vector<Object> &out) {
     }
     return p.i < text.size() && text[p.i] == ']';
   }
+}
+
+bool parse_object(const std::string &text, Object &out, std::map<std::string, Object> *children) {
+  Parser p{text};
+  return p.object(out, children);
 }
 
 std::string dump_array(const std::vector<Object> &items) {

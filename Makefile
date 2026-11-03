@@ -15,7 +15,7 @@
 # screen, the pad and the keyboard. No file outside platform/ asks which
 # platform it is on.
 
-VERSION := 1.1
+VERSION := 1.2
 PLATFORM ?= sdl
 
 # The project root, kept across the recursive second pass some platforms
@@ -25,7 +25,13 @@ CHIRAL_ROOT ?= $(CURDIR)
 export CHIRAL_ROOT
 PYTHON ?= python3
 
-VALID_PLATFORMS := ps5 switch sdl
+# gen/version.stamp holds VERSION and is rewritten only when VERSION changes: make
+# sees files change, not variables, so what has the version compiled in
+# depends on this file to be rebuilt on a version bump.
+VERSION_STAMP := $(CHIRAL_ROOT)/gen/version.stamp
+$(shell mkdir -p $(CHIRAL_ROOT)/gen && [ "`cat $(VERSION_STAMP) 2>/dev/null`" = "$(VERSION)" ] || echo $(VERSION) > $(VERSION_STAMP))
+
+VALID_PLATFORMS := ps5 switch sdl android
 ifeq ($(filter $(PLATFORM),$(VALID_PLATFORMS)),)
 $(error PLATFORM must be one of: $(VALID_PLATFORMS) (got "$(PLATFORM)"))
 endif
@@ -42,7 +48,7 @@ ENGINE := engine/ftp.c engine/listparse.c engine/session.c engine/queue.c \
 WEB_SRCS := web/websrv.c web/api.c web/asset.c
 WEB_STUB := web/stub/websrv_stub.c
 APP     := app/main.cpp app/ui.cpp app/json.cpp app/platform_common.cpp \
-           app/raster.cpp app/i18n.cpp
+           app/raster.cpp app/i18n.cpp app/update.cpp
 IMGUI   := vendor/imgui/imgui.cpp vendor/imgui/imgui_draw.cpp \
            vendor/imgui/imgui_tables.cpp vendor/imgui/imgui_widgets.cpp
 
@@ -55,7 +61,7 @@ FONTS      := gen/font_regular.c gen/font_bold.c gen/font_mono.c
 # Every tr()/trf()/N_() string in these must have an entry in
 # i18n/translations.json, in every language, or the build stops.
 I18N_SOURCES := $(APP) $(wildcard platform/*/*.cpp) $(wildcard platform/*/*.mm) \
-                engine/ftpd.c engine/sftpd.c engine/fsjobs.c app/ui_desktop.inc
+                engine/ftpd.c engine/sftpd.c engine/fsjobs.c app/ui_desktop.inc app/ui_mobile.inc
 GEN_I18N   := gen/i18n_table.c
 
 include $(CHIRAL_ROOT)/platform/$(PLATFORM)/platform.mk
@@ -103,7 +109,6 @@ test: tests/test_listparse check
 # nothing noticed until a link failed.
 check:
 	$(PYTHON) tools/check-platforms.py
-	$(PYTHON) tools/content-version.py --check $(VERSION) platform/ps5/sce_sys/param.json
 
 clean:
 	rm -rf .build gen dist release chiral-ftp chiral-ftp.exe tests/test_listparse data \

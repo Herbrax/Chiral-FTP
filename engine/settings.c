@@ -223,3 +223,19 @@ store_write(const char *name, const char *data, size_t size) {
   if(!path || size > STORE_MAX) return -1;
   return write_file(path, data, size);
 }
+
+int
+data_file_read(const char *name, strbuf_t *out) {
+  char path[600];
+
+  if(strchr(name, '/')) return -1;
+  return read_file(data_path(path, sizeof(path), name), out);
+}
+
+int
+data_file_write(const char *name, const char *data, size_t size) {
+  char path[600];
+
+  if(strchr(name, '/') || size > STORE_MAX) return -1;
+  return write_file(data_path(path, sizeof(path), name), data, size);
+}

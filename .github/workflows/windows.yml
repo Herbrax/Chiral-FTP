@@ -1,0 +1,82 @@
+# The Windows .exe (x64), in MSYS2's UCRT64 environment. Runs on a push to dev
+# and by hand, with the .exe attached to the run; New Release (new-release.yml)
+# runs it to make a release.
+name: Windows
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, such as 1.2.1 (empty: the Makefile's)"
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: ""
+      ref:  # what to build, when it isn't what the run started from
+        type: string
+        default: ""
+  push:
+    branches: [dev]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "tools/latest-version.py"
+      - "tools/release-notes.py"
+      - ".github/workflows/latest-version.yml"
+      - ".github/workflows/new-release.yml"
+# A newer push replaces this build; a release or a run by hand is never replaced.
+concurrency:
+  group: windows-${{ github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      # Before the checkout: scripts with CRLF line endings don't run in bash.
+      - name: LF line endings
+        shell: pwsh
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make
+            curl
+            bzip2
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-SDL2
+            mingw-w64-ucrt-x86_64-libmicrohttpd
+            mingw-w64-ucrt-x86_64-libssh
+            mingw-w64-ucrt-x86_64-freetype
+      - name: Version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: bash tools/ci-version.sh
+      - name: libssh2 and Mbed TLS for the SFTP client
+        env:
+          CMAKE_GENERATOR: Ninja
+        run: ./tools/build-sftp-deps.sh host
+      - name: Build
+        run: make PLATFORM=sdl VERSION="$VERSION" -j"$(nproc)" dist
+      # The file itself, not in a zip; it names the artifact.
+      - uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: dist/chiral-ftp-*-windows-x64.exe
+          if-no-files-found: error

@@ -1,0 +1,78 @@
+# The PS5 zip, with the toolchain of ps5-native-app-boilerplate (ps5/), on
+# Linux. Runs on a push to dev and by hand, with the zip attached to the run;
+# New Release (new-release.yml) runs it to make a release.
+name: PS5
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, such as 1.2.1 (empty: the Makefile's)"
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: ""
+      ref:  # what to build, when it isn't what the run started from
+        type: string
+        default: ""
+  push:
+    branches: [dev]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "tools/latest-version.py"
+      - "tools/release-notes.py"
+      - ".github/workflows/latest-version.yml"
+      - ".github/workflows/new-release.yml"
+# A newer push replaces this build; a release or a run by hand is never replaced.
+concurrency:
+  group: ps5-${{ github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+permissions:
+  contents: read
+jobs:
+  ps5:
+    runs-on: ubuntu-24.04
+    env:
+      USE_CCACHE: 0  # the boilerplate's own tools: nothing to gain on a fresh machine
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 lld-18 llvm-18 ninja-build cmake make curl wget unzip python3 pkg-config
+          # Unversioned names (clang, llvm-ar, ld.lld), which the scripts also look for.
+          echo /usr/lib/llvm-18/bin >> "$GITHUB_PATH"
+      - name: Version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: bash tools/ci-version.sh
+      - uses: actions/cache@v4
+        with:
+          # ps5/.deps holds PacBrew's prebuilt ports too (the updater's libcurl),
+          # .deps/ps5-licenses the licence texts the package carries for them.
+          path: |
+            ps5/.deps
+            .deps/ps5
+            .deps/build-ps5
+            .deps/src
+            .deps/ps5-licenses
+          key: ps5-${{ hashFiles('tools/build-ps5-deps.sh', 'ps5/tools/setup-native-dependencies.sh', 'ps5/tools/setup-pacbrew-dependencies.sh') }}
+      - name: The boilerplate's SDK, tools and libc.prx
+        working-directory: ps5
+        run: |
+          bash tools/setup-native-dependencies.sh
+          make libc
+      - name: Build
+        run: make PLATFORM=ps5 VERSION="$VERSION"
+      - name: Name the zip
+        run: cp "dist/chiral-ftp-$VERSION.zip" "dist/chiral-ftp-ps5-$VERSION.zip"
+      # The file itself, not in a zip; it names the artifact.
+      - uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: dist/chiral-ftp-ps5-*.zip
+          if-no-files-found: error

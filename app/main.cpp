@@ -23,6 +23,7 @@
 #include "json.h"
 #include "platform.h"
 #include "ui.h"
+#include "update.h"
 
 extern "C" {
 #include "config.h"
@@ -125,6 +126,8 @@ int main(int argc, char **argv) {
     unlink(data_path(path, sizeof(path), STARTUP_NAME));
   }
   startup_trace("%s %s starting, data in %s", APP_NAME, VERSION_TAG, data_dir());
+  /* The device id on a first start, and what the last update left behind. */
+  update::init(argc, argv);
 
   /* What the platform managed to bring up before main ran. It has no log
      to write to that early, so it reports here. */
@@ -167,6 +170,10 @@ int main(int argc, char **argv) {
       ui::set_startup_notice(ok, line, detail, status);
     }
   }
+
+  /* Is there a newer version? Asked on a thread of its own; the answer, if
+     there is one worth showing, comes up as a dialog (ui.cpp). */
+  update::check(false);
 
   bool running = true;
   std::uint64_t last_draw = 0;
@@ -241,8 +248,12 @@ int main(int argc, char **argv) {
   ui::stop_workers();
   fsjob_stop();
   session_stop_keepalive();
+  update::stop();
 
   platform::shutdown();
+  /* After an update: the new version, now that this one has let go of
+     everything. */
+  update::finish();
   startup_trace("Exiting");
   return 0;
 }

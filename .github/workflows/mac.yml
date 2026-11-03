@@ -1,0 +1,64 @@
+# The Mac app, on Apple silicon (there is no Intel build). Runs on a push to
+# dev and by hand, with chiral-ftp.app.zip attached to the run; New Release
+# (new-release.yml) runs it to make a release. Zipped with ditto, which keeps
+# the bundle's symlinks and ad hoc signature.
+name: Mac
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, such as 1.2.1 (empty: the Makefile's)"
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: ""
+      ref:  # what to build, when it isn't what the run started from
+        type: string
+        default: ""
+  push:
+    branches: [dev]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "tools/latest-version.py"
+      - "tools/release-notes.py"
+      - ".github/workflows/latest-version.yml"
+      - ".github/workflows/new-release.yml"
+# A newer push replaces this build; a release or a run by hand is never replaced.
+concurrency:
+  group: mac-${{ github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+permissions:
+  contents: read
+jobs:
+  mac:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Packages
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+        run: brew install cmake pkg-config sdl2 libmicrohttpd libssh freetype
+      - name: Version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: bash tools/ci-version.sh
+      - name: libssh2 and Mbed TLS for the SFTP client
+        run: ./tools/build-sftp-deps.sh host
+      - name: Build
+        run: make PLATFORM=sdl VERSION="$VERSION" -j"$(sysctl -n hw.ncpu)" app
+      # chiral-ftp-<version>.dmg: chiral-ftp.app beside a link to Applications,
+      # on the brand background, to drag it onto (tools/make-dmg.sh).
+      - name: Disk image
+        run: bash tools/make-dmg.sh dist/chiral-ftp.app "dist/chiral-ftp-$VERSION.dmg"
+      # The file itself, not in a zip; it names the artifact.
+      - uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: dist/chiral-ftp-*.dmg
+          if-no-files-found: error

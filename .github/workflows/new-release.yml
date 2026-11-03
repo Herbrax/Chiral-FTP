@@ -1,0 +1,173 @@
+# Makes a release, or adds to one: Actions > New Release > Run workflow, with the
+# version and a tick for each platform this run is for.
+#
+# The request is checked first, then the ticked platforms are built with their
+# own workflows. Only if all of them succeed is anything changed, by
+# tools/ci-release.sh. A failed build leaves everything as it was; fix it and run
+# this again.
+#
+# A new version gets a tag and one release holding every file, its notes from
+# CHANGELOG.md and its checksums. The tag points at a commit made for it on top of
+# the branch being released, which sets VERSION to this version (and the PS5's
+# contentVersion, for a release with a PS5 file). That commit is on the tag only:
+# the branch isn't touched, so a branch still being worked on can't conflict. Move
+# its VERSION on when you like. One exception: run on main with a PS5 file, main's
+# own param.json takes the new contentVersion too (never a lower one), so the
+# repository always says what the PS5 last got.
+#
+# A version that already has a tag: the ticked platforms are built from that tag,
+# so they are the same code as the rest, and their files are added to its release.
+# Fixes made on the branch since then need a new version.
+#
+# Only a release with every platform is marked as GitHub's "latest": whatever
+# reads that (download links, the PS5 homebrew catalog) would find the others
+# missing. latest_version.json takes each platform's newest file from any published
+# release, so it lists these anyway.
+name: New Release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version, such as 1.3 or 1.3.1"
+        required: true
+        type: string
+      ps5:
+        description: PS5
+        type: boolean
+        default: false
+      switch:
+        description: Switch
+        type: boolean
+        default: false
+      mac:
+        description: Mac
+        type: boolean
+        default: false
+      windows:
+        description: Windows
+        type: boolean
+        default: false
+      linux:
+        description: Linux (x86_64 and ARM)
+        type: boolean
+        default: false
+      android:
+        description: Android
+        type: boolean
+        default: false
+      publish:
+        description: Publish straight away (otherwise a draft, to read first)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      ref: ${{ steps.check.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the request
+        id: check
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          ANY_PLATFORM: ${{ inputs.ps5 || inputs.switch || inputs.mac || inputs.windows || inputs.linux || inputs.android }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          version="${INPUT_VERSION#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Version '$INPUT_VERSION' isn't usable: write MAJOR.MINOR or MAJOR.MINOR.PATCH, such as 1.3.1"
+            exit 1
+          fi
+          if [[ "$ANY_PLATFORM" != true ]]; then
+            echo "::error::Tick at least one platform."
+            exit 1
+          fi
+          ref=""
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            git fetch -q --depth=1 origin "refs/tags/v$version:refs/tags/v$version"
+            if ! git cat-file -e "refs/tags/v$version:tools/ci-version.sh" 2>/dev/null; then
+              echo "::error::v$version was made before New Release, so it can't be built from here. Upload its files by hand."
+              exit 1
+            fi
+            ref="refs/tags/v$version"
+            echo "::notice::v$version exists: these platforms are built from that tag and added to its release."
+          elif ! grep -qxF "## $version" CHANGELOG.md; then
+            if [[ "$PUBLISH" == true ]]; then
+              echo "::error::CHANGELOG.md has no '## $version' section, so there are no notes to publish. Add one, or make a draft."
+              exit 1
+            fi
+            echo "::warning::CHANGELOG.md has no '## $version' section: the draft's notes need writing by hand."
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+  ps5:
+    needs: prepare
+    if: inputs.ps5
+    uses: ./.github/workflows/ps5.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      ref: ${{ needs.prepare.outputs.ref }}
+  switch:
+    needs: prepare
+    if: inputs.switch
+    uses: ./.github/workflows/switch.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      ref: ${{ needs.prepare.outputs.ref }}
+  mac:
+    needs: prepare
+    if: inputs.mac
+    uses: ./.github/workflows/mac.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      ref: ${{ needs.prepare.outputs.ref }}
+  windows:
+    needs: prepare
+    if: inputs.windows
+    uses: ./.github/workflows/windows.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      ref: ${{ needs.prepare.outputs.ref }}
+  linux:
+    needs: prepare
+    if: inputs.linux
+    uses: ./.github/workflows/linux-appimage.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      ref: ${{ needs.prepare.outputs.ref }}
+  android:
+    needs: prepare
+    if: inputs.android
+    uses: ./.github/workflows/android.yml
+    with:
+      version: ${{ needs.prepare.outputs.version }}
+      ref: ${{ needs.prepare.outputs.ref }}
+    secrets: inherit
+  release:
+    needs: [prepare, ps5, switch, mac, windows, linux, android]
+    # Platforms not ticked are "skipped", which would otherwise skip this too.
+    if: ${{ !cancelled() && needs.prepare.result == 'success' && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      WITH_PS5: ${{ inputs.ps5 }}
+      PUBLISH: ${{ inputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Each artifact is one file, named after it (chiral-ftp.nro included).
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: chiral-ftp*
+          path: release-files
+          merge-multiple: true
+      - name: The tag and the release
+        run: bash tools/ci-release.sh release-files

@@ -31,6 +31,7 @@
    Triangle, L1/R1/L2/R2, OPTIONS and TOUCHPAD (platform_common.cpp). */
 #define CHIRAL_BUTTONS_PLAYSTATION 1
 #define CHIRAL_BUTTONS_KEYBOARD 0
+#define CHIRAL_BUTTONS_REMOTE 0  /* a TV remote: Android only */
 
 /* The text calls this machine "the console" (ui.cpp). */
 #define CHIRAL_DEVICE_COMPUTER 0
@@ -40,3 +41,10 @@
 
 /* The console layout, for a TV and a pad (app/ui.cpp). */
 #define CHIRAL_UI_DESKTOP 0
+/* Not the mobile shell (Android only: app/ui_mobile.inc). */
+#define CHIRAL_UI_MOBILE 0
+
+/* Updates itself (app/update.h): asks chiral-ftp.com at startup, and the
+   release zip goes to self-updater.elf, which puts it in place once chiral-ftp
+   has closed (platform/ps5/update.cpp). */
+#define CHIRAL_HAS_UPDATER 1

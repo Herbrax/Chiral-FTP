@@ -32,7 +32,9 @@ else
   WEB_GEN :=
 endif
 
-PLATFORM_CPP := platform/switch/backend.cpp
+# The updater (app/update.h): HTTPS through devkitPro's libcurl (switch-curl),
+# whose TLS is the console's ssl service: -lcurl needs only -lz and -lnx.
+PLATFORM_CPP := platform/switch/backend.cpp platform/switch/os_update.cpp
 PLATFORM_C   := platform/switch/system.c platform/switch/init.c platform/switch/net.c platform/switch/usb_drives.c
 
 GENERATED := $(FONTS) $(WEB_GEN) $(GEN_I18N)
@@ -48,7 +50,7 @@ LDFLAGS  := -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir 
 # with the NTFS-3G and lwext4 portlibs (dkp-pacman -S switch-ntfs-3g switch-lwext4).
 USB_LIB  := -lusbhsfs -lntfs-3g -llwext4
 USB_DEP  := .deps/switch/lib/libusbhsfs.a
-LIBS     := -lssh2 $(MHD_LIB) $(USB_LIB) -lmbedtls -lmbedx509 -lmbedcrypto -lz -lnx
+LIBS     := -lssh2 $(MHD_LIB) $(USB_LIB) -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -lz -lnx
 LIBDIRS  := $(PORTLIBS) $(LIBNX) $(CURDIR)/.deps/switch
 
 .deps/switch/lib/libmicrohttpd.a:
@@ -72,6 +74,12 @@ CPPFILES := $(notdir $(APP)) $(notdir $(IMGUI)) $(notdir $(PLATFORM_CPP))
 
 export LD := $(CXX)
 export OFILES := $(CPPFILES:.cpp=.o) $(CFILES:.c=.o)
+# Objects are named after the file alone and found through VPATH, so two
+# sources with one name (app/update.cpp, platform/switch/update.cpp) would
+# both build the first and link it twice.
+ifneq ($(words $(OFILES)),$(words $(sort $(OFILES))))
+$(error two Switch sources share a file name: $(sort $(foreach o,$(OFILES),$(if $(filter-out 1,$(words $(filter $(o),$(OFILES)))),$(o)))))
+endif
 export INCLUDE := $(foreach d,app engine web vendor/imgui gen platform/switch,-I$(CURDIR)/$(d)) \
                   $(foreach d,$(LIBDIRS),-I$(d)/include) -I$(CURDIR)/$(BUILD)
 export LIBPATHS := $(foreach d,$(LIBDIRS),-L$(d)/lib)

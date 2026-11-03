@@ -129,7 +129,9 @@ api_state(req_t *r) {
   }
   strbuf_append(&b, ",\"settings\":");
   settings_json(&b);
-  strbuf_printf(&b, ",\"platform\":\"%s\"}", CHIRAL_PLATFORM_ID);
+  /* kind: which device of the platform ("androidtv" or "android"), for the
+     page's wording. */
+  strbuf_printf(&b, ",\"platform\":\"%s\",\"kind\":\"%s\"}", CHIRAL_PLATFORM_ID, system_device_kind());
   return send_json(r->conn, MHD_HTTP_OK, &b);
 }
 

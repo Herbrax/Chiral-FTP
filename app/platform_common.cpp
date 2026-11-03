@@ -218,7 +218,9 @@ const float TV_W = 1920, TV_H = 1080;
 const float UNITS_PER_POINT = 1.5f;
 /* The least room the layout fits in. A window smaller than this, in units,
    gets fewer units per point instead of a layout that overlaps itself. */
+#if !CHIRAL_UI_MOBILE
 const float MIN_W = 1600, MIN_H = 1000;
+#endif
 float W = TV_W, H = TV_H;
 float g_zoom = 1.0f;
 float g_units_per_point = UNITS_PER_POINT;
@@ -233,6 +235,9 @@ float g_density = 1.0f;  // pixels per layout unit, this frame
    A window on a computer sets them every frame to its own pixels. */
 int RENDER_W = CHIRAL_RENDER_W, RENDER_H = CHIRAL_RENDER_H;
 bool g_windowed = false;  // a computer's window: the layout follows it
+#if CHIRAL_BUTTONS_REMOTE
+bool g_pad_glyphs = false;  // a TV: the last button pressed was a gamepad's, not the remote's
+#endif
 const std::uint64_t REPEAT_DELAY = 380;
 const std::uint64_t REPEAT_RATE = 70;
 
@@ -413,6 +418,10 @@ void command(Action a) {
   g_queue.push_back(a);
 }
 
+#if CHIRAL_BUTTONS_REMOTE
+void input_from_pad(bool pad) { g_pad_glyphs = pad; }
+#endif
+
 }  // namespace detail
 
 bool init(bool headless) {
@@ -517,7 +526,9 @@ void begin_frame() {
   float density = 1.0f;
   if(g_windowed) {
     float upp = UNITS_PER_POINT / g_zoom;
+#if !CHIRAL_UI_MOBILE
     upp = std::max(upp, std::max(MIN_W / (float)pw, MIN_H / (float)ph));
+#endif  // a phone's window is the layout at any size: the mobile shell fits itself to it
     g_units_per_point = upp;
     W = (float)pw * upp;
     H = (float)ph * upp;
@@ -545,6 +556,10 @@ void begin_frame() {
 
 float view_width() {
   return W;
+}
+
+bool windowed() {
+  return g_windowed;
 }
 
 float view_height() {
@@ -652,6 +667,14 @@ void pointer_hand(bool on) {
 
 bool open_url(const char *url) {
   return backend::open_url(url);
+}
+
+bool open_file(const char *path, OpenHow how) {
+  return backend::open_file(path, (int)how);
+}
+
+bool to_background() {
+  return backend::to_background();
 }
 
 bool in_foreground() {
@@ -823,13 +846,98 @@ void frame(float x, float y, float w, float h, ImU32 col, float rounding, float 
 }
 
 float button(float x, float y, float s, Action a) {
+#if CHIRAL_UI_MOBILE
+  /* A phone or tablet has no buttons to draw: a hint is its word alone,
+     tapped like a button. (A TV, from the same build, keeps its glyphs.) */
+  if(platform::windowed()) return 0;
+#endif
   ImDrawList *d = dl();
   float r = s / 2;
   ImVec2 c(x + r, y + r);
   const char *label = nullptr;
 
   switch(a) {
-#if CHIRAL_BUTTONS_PLAYSTATION
+#if CHIRAL_BUTTONS_REMOTE
+  /* A TV: the remote's own buttons until a gamepad is used, then the
+     gamepad's, lettered where an Xbox pad has them (A bottom, B right, X
+     left, Y top: the backend maps by position). What a remote hasn't got
+     comes back 0, and draw::hint leaves that hint out: those actions are
+     in the menu. Colours by meaning, as on the consoles. */
+  case ACT_CROSS: case ACT_CIRCLE: case ACT_CIRCLE_LONG: case ACT_SQUARE: case ACT_TRIANGLE: {
+    const bool back = a == ACT_CIRCLE || a == ACT_CIRCLE_LONG;
+    if(!platform::g_pad_glyphs && a == ACT_TRIANGLE) return 0;
+    const ImU32 col = a == ACT_CROSS ? IM_COL32(124, 168, 255, 255)
+                      : back         ? IM_COL32(255, 107, 129, 255)
+                      : a == ACT_SQUARE ? IM_COL32(241, 154, 222, 255)
+                                        : IM_COL32(63, 224, 181, 255);
+    d->AddCircleFilled(c, r, IM_COL32(32, 44, 70, 255), 32);
+    d->AddCircle(c, r - 1.5f, col, 32, 2.0f);
+    const float k = r * 0.42f;
+    if(platform::g_pad_glyphs || a == ACT_CROSS) {
+      const char *letter = !platform::g_pad_glyphs ? "OK" : a == ACT_CROSS ? "A" : back ? "B" : a == ACT_SQUARE ? "X" : "Y";
+      const float fs = s * (letter[1] ? 0.40f : 0.58f);
+      ImVec2 ts = text_size(fs, letter, true);
+      d->AddText(platform::font_bold, fs, ImVec2(c.x - ts.x / 2, c.y - ts.y / 2), col, letter);
+    } else if(back) {
+      // The remote's Back: an arrow pointing left that bends round below.
+      const float yt = c.y - k * 0.5f;
+      d->PathClear();
+      d->PathLineTo(ImVec2(c.x - k * 0.5f, yt));
+      d->PathArcTo(ImVec2(c.x + k * 0.15f, c.y + k * 0.1f), k * 0.6f, -1.5707963f, 1.5707963f, 12);  // the right half, top to bottom
+      d->PathLineTo(ImVec2(c.x - k * 0.6f, c.y + k * 0.7f));
+      d->PathStroke(col, ImDrawFlags_None, 3.0f);
+      d->AddTriangleFilled(ImVec2(c.x - k * 1.1f, yt), ImVec2(c.x - k * 0.45f, yt - k * 0.5f),
+                           ImVec2(c.x - k * 0.45f, yt + k * 0.5f), col);
+    } else {
+      // Mark is Play/Pause, on the remotes that have one.
+      d->AddTriangleFilled(ImVec2(c.x - k * 0.95f, c.y - k * 0.7f), ImVec2(c.x - k * 0.95f, c.y + k * 0.7f),
+                           ImVec2(c.x + k * 0.05f, c.y), col);
+      d->AddRectFilled(ImVec2(c.x + k * 0.3f, c.y - k * 0.7f), ImVec2(c.x + k * 0.5f, c.y + k * 0.7f), col);
+      d->AddRectFilled(ImVec2(c.x + k * 0.75f, c.y - k * 0.7f), ImVec2(c.x + k * 0.95f, c.y + k * 0.7f), col);
+    }
+    return s;
+  }
+  case ACT_L1: if(!platform::g_pad_glyphs) return 0; label = "LB"; break;
+  case ACT_R1: if(!platform::g_pad_glyphs) return 0; label = "RB"; break;
+  // Page up and down: a remote's rewind and fast-forward (a pad's triggers aren't mapped).
+  case ACT_L2: case ACT_R2: {
+    if(platform::g_pad_glyphs) return 0;
+    const float h = s * 0.80f, top = y + (s - h) / 2, w = s * 1.30f;
+    const float cy = top + h / 2, k = h * 0.22f, dir = a == ACT_L2 ? -1.0f : 1.0f;
+    const ImU32 face = IM_COL32(206, 216, 232, 255), ink = IM_COL32(16, 24, 40, 255);
+    d->AddRectFilled(ImVec2(x, top), ImVec2(x + w, top + h), face, h * 0.34f);
+    for(int i = 0; i < 2; i++) {
+      const float bx = x + w / 2 + (i - 0.5f) * k * 1.2f;
+      d->AddTriangleFilled(ImVec2(bx - k * 0.6f * dir, cy - k), ImVec2(bx - k * 0.6f * dir, cy + k),
+                           ImVec2(bx + k * 0.6f * dir, cy), ink);
+    }
+    return w;
+  }
+  case ACT_OPTIONS: case ACT_TOUCHPAD: {
+    /* The Menu is a held OK on a remote (most have no Menu button any
+       more) and Start on a pad, drawn as the three lines it carries; the
+       transfer queue is the pad's View button and the remote's menu. */
+    if(!platform::g_pad_glyphs) {
+      if(a == ACT_TOUCHPAD) return 0;
+      label = tr("Hold OK");
+      break;
+    }
+    const ImU32 face = IM_COL32(206, 216, 232, 255), ink = IM_COL32(16, 24, 40, 255);
+    d->AddCircleFilled(c, r, face, 32);
+    const float arm = s * 0.24f, bar = s * 0.09f;
+    if(a == ACT_OPTIONS) {
+      for(int i = -1; i <= 1; i++) {
+        const float ly = c.y + i * s * 0.16f;
+        d->AddRectFilled(ImVec2(c.x - arm, ly - bar / 2), ImVec2(c.x + arm, ly + bar / 2), ink, bar * 0.4f);
+      }
+    } else {
+      const float q = s * 0.15f;
+      d->AddRect(ImVec2(c.x - q * 1.4f, c.y - q * 1.2f), ImVec2(c.x + q * 0.6f, c.y + q * 0.4f), ink, 2.0f, 0, 2.5f);
+      d->AddRectFilled(ImVec2(c.x - q * 0.6f, c.y - q * 0.4f), ImVec2(c.x + q * 1.4f, c.y + q * 1.2f), ink, 2.0f);
+    }
+    return s;
+  }
+#elif CHIRAL_BUTTONS_PLAYSTATION
   // The four face buttons as their symbols, in their usual colours.
   case ACT_CROSS: case ACT_CIRCLE: case ACT_CIRCLE_LONG: case ACT_SQUARE: case ACT_TRIANGLE: {
     d->AddCircleFilled(c, r, IM_COL32(32, 44, 70, 255), 32);
@@ -998,6 +1106,9 @@ float hint_lr(float x, float y, const char *caption) {
 float hint(float x, float y, Action a, const char *caption) {
   float s = 38;
   float w = button(x, y, s, a);
+#if CHIRAL_BUTTONS_REMOTE
+  if(w == 0 && !platform::windowed()) return 0;  // not on this remote: it's in the menu
+#endif
   text(x + w + 10, y + (s - 26) / 2 - 1, 26, MUTED, caption);
   return w + 10 + text_size(26, caption).x + 34;
 }

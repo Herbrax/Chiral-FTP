@@ -1,0 +1,90 @@
+# The Android APK (phones, tablets, foldables and TVs), on Linux. Runs on a
+# push to dev and by hand, with the APK attached to the run; New Release
+# (new-release.yml) runs it to make a release.
+#
+# The APK is debug-signed (tools/build-android.sh). Android only installs an
+# update signed with the same key, and a fresh runner invents a new key every
+# time, so set the secret ANDROID_DEBUG_KEYSTORE to a keystore in base64 to
+# keep one. Without it the APK works, but won't update an earlier install.
+name: Android
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, such as 1.2.1 (empty: the Makefile's)"
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        default: ""
+      ref:  # what to build, when it isn't what the run started from
+        type: string
+        default: ""
+  push:
+    branches: [dev]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "tools/latest-version.py"
+      - "tools/release-notes.py"
+      - ".github/workflows/latest-version.yml"
+      - ".github/workflows/new-release.yml"
+# A newer push replaces this build; a release or a run by hand is never replaced.
+concurrency:
+  group: android-${{ github.event_name == 'push' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Android SDK
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          for attempt in 1 2 3; do
+            "$sdkmanager" "ndk;28.2.13676358" "cmake;3.31.6" "platforms;android-35" "build-tools;35.0.1" && exit 0
+            echo "sdkmanager failed (attempt $attempt)"
+            sleep 20
+          done
+          exit 1
+      - name: Version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: bash tools/ci-version.sh
+      - name: The signing key, if there is one
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_DEBUG_KEYSTORE }}
+        run: |
+          if [ -n "$KEYSTORE" ]; then
+            mkdir -p ~/.android
+            echo "$KEYSTORE" | base64 -d > ~/.android/debug.keystore
+          else
+            echo "::warning::No ANDROID_DEBUG_KEYSTORE secret: this APK won't update an earlier install."
+          fi
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .deps/android
+            .deps/src
+          key: android-${{ hashFiles('tools/build-android-deps.sh', 'tools/build-android-libssh.sh', 'tools/build-android-mhd.sh') }}
+      # chmod: a commit made on Windows can lose the scripts' executable bit.
+      - name: Build
+        run: |
+          chmod +x tools/*.sh
+          ./tools/build-android.sh
+      # The file itself, not in a zip; it names the artifact.
+      - uses: actions/upload-artifact@v7
+        with:
+          archive: false
+          path: dist/chiral-ftp-*-android.apk
+          if-no-files-found: error
